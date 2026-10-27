@@ -40,6 +40,31 @@ import { formatDateTime } from "../utils/format";
 import { DictFillSelect } from "../components/dict-fill-select";
 import { getProjects, type ProjectItem } from "../services/projects";
 
+/** 列表展示用：仅保留协议与主机，隐藏路径/查询中的密钥段。 */
+function maskWebhookURL(raw?: string): string {
+  const s = String(raw || "").trim();
+  if (!s) return "—";
+  try {
+    const u = new URL(s);
+    const path = u.pathname && u.pathname !== "/" ? "/***" : "";
+    return `${u.protocol}//${u.host}${path}${u.search ? "?***" : ""}`;
+  } catch {
+    return s.length <= 8 ? "***" : `${s.slice(0, 4)}***${s.slice(-4)}`;
+  }
+}
+
+/** 投递回执/错误原文展示前脱敏，避免回显通道密钥。 */
+function maskReceiptText(input?: string): string {
+  if (!input) return "";
+  let text = input;
+  text = text.replace(
+    /("?(?:password|passwd|pwd|secret|token|access_token|api_key|apikey|authorization|sign)"?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;&]+)/gi,
+    '$1"***"',
+  );
+  text = text.replace(/([?&](?:access_token|token|key|secret|sign|signature)=)[^&\s]+/gi, "$1***");
+  return text.length > 2000 ? `${text.slice(0, 2000)}…（已截断）` : text;
+}
+
 export function AlertChannelsPage() {
   const [list, setList] = useState<AlertChannelItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -397,7 +422,16 @@ export function AlertChannelsPage() {
           columns={[
             { title: "名称", dataIndex: "name", width: 180 },
             { title: "类型", dataIndex: "type", width: 140 },
-            { title: "Webhook URL", dataIndex: "url", ellipsis: true },
+            {
+              title: "Webhook URL",
+              dataIndex: "url",
+              ellipsis: true,
+              render: (v: string) => (
+                <Typography.Text type="secondary" title="已隐藏路径与查询中的密钥，编辑可查看完整地址">
+                  {maskWebhookURL(v)}
+                </Typography.Text>
+              ),
+            },
             { title: "超时(ms)", dataIndex: "timeout_ms", width: 110 },
             {
               title: "状态",
@@ -751,10 +785,10 @@ export function AlertChannelsPage() {
                   HTTP {testReceipt.http_status_code ?? "-"} · {testReceipt.success ? "成功" : "失败"}
                 </Typography.Paragraph>
                 {testReceipt.error_message ? (
-                  <Typography.Text type="danger">{testReceipt.error_message}</Typography.Text>
+                  <Typography.Text type="danger">{maskReceiptText(testReceipt.error_message)}</Typography.Text>
                 ) : null}
                 {testReceipt.response_body ? (
-                  <Input.TextArea rows={4} readOnly value={testReceipt.response_body} />
+                  <Input.TextArea rows={4} readOnly value={maskReceiptText(testReceipt.response_body)} />
                 ) : null}
               </Form.Item>
             ) : null}

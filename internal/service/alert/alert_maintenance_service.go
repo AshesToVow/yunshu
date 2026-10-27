@@ -34,15 +34,19 @@ type AlertMaintenanceUpsertRequest struct {
 }
 
 type AlertMaintenanceService struct {
-	repo interfaces.AlertMaintenanceWindowRepository
+	repo       interfaces.AlertMaintenanceWindowRepository
+	memberRepo interfaces.ProjectMemberRepository
 }
 
-func NewAlertMaintenanceService(repo interfaces.AlertMaintenanceWindowRepository) *AlertMaintenanceService {
-	return &AlertMaintenanceService{repo: repo}
+func NewAlertMaintenanceService(repo interfaces.AlertMaintenanceWindowRepository, memberRepo interfaces.ProjectMemberRepository) *AlertMaintenanceService {
+	return &AlertMaintenanceService{repo: repo, memberRepo: memberRepo}
 }
 
 func (s *AlertMaintenanceService) List(ctx context.Context, q AlertMaintenanceListQuery) ([]model.AlertMaintenanceWindow, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, q.ProjectID); err != nil {
+		return nil, 0, page, pageSize, err
+	}
 	list, total, err := s.repo.ListPaged(ctx, q.ProjectID, q.Keyword, (page-1)*pageSize, pageSize)
 	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.maintenance", "List", err)
@@ -51,6 +55,9 @@ func (s *AlertMaintenanceService) List(ctx context.Context, q AlertMaintenanceLi
 }
 
 func (s *AlertMaintenanceService) Create(ctx context.Context, userID uint, req AlertMaintenanceUpsertRequest) (*model.AlertMaintenanceWindow, error) {
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+		return nil, err
+	}
 	if _, err := ParseSilenceMatchersJSON(req.MatchersJSON); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.maintenance", "Create", err)
 	}
@@ -98,6 +105,14 @@ func (s *AlertMaintenanceService) Update(ctx context.Context, id uint, req Alert
 		}
 		return nil, bizerrors.Pass(ctx, "alert.maintenance", "Update", err)
 	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
+	}
+	if req.ProjectID > 0 && req.ProjectID != row.ProjectID {
+		if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := ParseSilenceMatchersJSON(req.MatchersJSON); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.maintenance", "Update", err)
 	}
@@ -133,6 +148,16 @@ func (s *AlertMaintenanceService) Update(ctx context.Context, id uint, req Alert
 }
 
 func (s *AlertMaintenanceService) Delete(ctx context.Context, id uint) error {
+	row, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg(constants.ErrMsgde63e900b907)
+		}
+		return bizerrors.Pass(ctx, "alert.maintenance", "Delete", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return err
+	}
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return bizerrors.Pass(ctx, "alert.maintenance", "Delete", err)
 	}

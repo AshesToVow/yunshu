@@ -24,6 +24,7 @@ export function CrdsPage() {
     <YamlCrudPage<CrdItem, CrdDetail>
       title="CRD 管理"
       columns={columns}
+      deleteWarning="删除 CRD 将同时删除该类型的所有自定义资源（CR）与关联数据，且不可恢复。请确认业务影响。"
       api={{
         list: async ({ clusterId, keyword }) => await listCrds(clusterId, keyword),
         detail: async ({ clusterId, name }) => await getCrdDetail(clusterId, name),

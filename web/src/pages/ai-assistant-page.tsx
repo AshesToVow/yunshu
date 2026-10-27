@@ -8,7 +8,7 @@ import {
   SendOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, List, Select, Space, Switch, Tag, Typography, message, theme } from "antd";
+import { Alert, Button, Card, Input, List, Popconfirm, Select, Space, Switch, Tag, Typography, message, theme } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   chatAIStream,
@@ -114,6 +114,8 @@ export function AiAssistantPage() {
   const [investigateLoading, setInvestigateLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // 会话视图序号：切换/新建会话或取消发送时自增，用于丢弃过期的异步响应与流式事件
+  const sessionReqRef = useRef(0);
 
   const providerOptions = useMemo(() => {
     const list = status?.providers || [];
@@ -207,8 +209,10 @@ export function AiAssistantPage() {
   }
 
   async function openSession(id: number) {
+    const req = ++sessionReqRef.current;
     try {
       const detail = await getAISession(id);
+      if (req !== sessionReqRef.current) return; // 已切换到其他会话，丢弃过期响应
       setSessionId(detail.session.id);
       if (detail.session.cluster_id) setClusterId(detail.session.cluster_id);
       else setClusterId(undefined);
@@ -252,6 +256,7 @@ export function AiAssistantPage() {
   }
 
   async function handleNewSession() {
+    const req = ++sessionReqRef.current;
     try {
       const sess = await createAISession({
         provider: provider || undefined,
@@ -260,6 +265,7 @@ export function AiAssistantPage() {
         enable_tools: enableTools,
         enable_write: enableWrite,
       });
+      if (req !== sessionReqRef.current) return;
       setSessionId(sess.id);
       setMessages([]);
       setLastSteps([]);
@@ -321,6 +327,7 @@ export function AiAssistantPage() {
 
   function handleCancelSend() {
     abortRef.current?.abort();
+    sessionReqRef.current++; // 使发送中的流式回调失效（含流尚未启动的窗口期）
     setSending(false);
     setLiveTimeline((prev) => [...prev.slice(-40), "已取消"]);
   }
@@ -358,6 +365,8 @@ export function AiAssistantPage() {
   async function handleSend() {
     const text = input.trim();
     if (!text || sending) return;
+    const sendReq = sessionReqRef.current;
+    setSending(true); // 入口检查通过后立即置位，防止等待期间重复发送
     await syncSessionPrefs();
     let sid = sessionId;
     if (!sid) {
@@ -369,19 +378,28 @@ export function AiAssistantPage() {
           enable_tools: enableTools,
           enable_write: enableWrite,
         });
+        if (sendReq !== sessionReqRef.current) {
+          // 等待期间用户切换了会话/取消发送，放弃本次发送
+          setSending(false);
+          return;
+        }
         sid = sess.id;
         setSessionId(sid);
         setSessions((prev) => [sess, ...prev]);
       } catch (e) {
         message.error(extractApiErrorMessage(e, "创建会话失败"));
+        setSending(false);
         return;
       }
+    }
+    if (sendReq !== sessionReqRef.current) {
+      setSending(false);
+      return;
     }
     const userMsg: Bubble = { id: `u-${Date.now()}`, role: "user", content: text };
     const next = [...messages, userMsg];
     setMessages(next);
     setInput("");
-    setSending(true);
     setLiveTimeline(["开始对话…"]);
     setLastSteps([]);
     setLastRag([]);
@@ -411,6 +429,7 @@ export function AiAssistantPage() {
           enable_write_tools: enableWrite,
         },
         (ev: AIChatStreamEvent) => {
+          if (sendReq !== sessionReqRef.current) return; // 会话已切换，忽略过期流事件
           if (ev.session_id) finalSid = ev.session_id;
           switch (ev.type) {
             case "progress":
@@ -446,6 +465,7 @@ export function AiAssistantPage() {
         ac.signal,
       );
 
+      if (sendReq !== sessionReqRef.current) return; // 会话已切换，丢弃过期流结果
       if (finalSid && finalSid !== sid) {
         setSessionId(finalSid);
         sid = finalSid;
@@ -499,9 +519,9 @@ export function AiAssistantPage() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "stretch" }}>
+    <div className="ai-assistant-layout">
       <Card
-        className="table-card"
+        className="table-card ai-assistant-sessions-card"
         size="small"
         title="会话"
         extra={
@@ -509,8 +529,7 @@ export function AiAssistantPage() {
             新建
           </Button>
         }
-        style={{ width: 260, flexShrink: 0 }}
-        styles={{ body: { padding: 0, maxHeight: 720, overflow: "auto" } }}
+        styles={{ body: { padding: 0, overflow: "auto" } }}
       >
         <List
           loading={sessionsLoading}
@@ -525,17 +544,19 @@ export function AiAssistantPage() {
               }}
               onClick={() => void openSession(item.id)}
               actions={[
-                <Button
+                <Popconfirm
                   key="del"
-                  type="text"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleDeleteSession(item.id);
-                  }}
-                />,
+                  title="删除该会话后不可恢复，确定删除？"
+                  onConfirm={() => void handleDeleteSession(item.id)}
+                >
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </Popconfirm>,
               ]}
             >
               <List.Item.Meta
@@ -555,8 +576,12 @@ export function AiAssistantPage() {
         />
       </Card>
 
-      <Card className="table-card" style={{ flex: 1, minWidth: 0 }}>
-        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+      <Card
+        className="table-card ai-assistant-main-card"
+        style={{ flex: 1, minWidth: 0 }}
+        styles={{ body: { display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", flex: 1, minWidth: 0, minHeight: 0 }}>
           <Space wrap style={{ width: "100%", justifyContent: "space-between" }}>
             <Space>
               <RobotOutlined />
@@ -662,7 +687,8 @@ export function AiAssistantPage() {
           <div
             ref={listRef}
             style={{
-              height: 420,
+              flex: 1,
+              minHeight: 420,
               overflow: "auto",
               padding: 12,
               background: token.colorFillAlter,
@@ -806,7 +832,7 @@ export function AiAssistantPage() {
               </Button>
             ) : null}
           </Space>
-        </Space>
+        </div>
       </Card>
     </div>
   );

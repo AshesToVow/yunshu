@@ -52,6 +52,7 @@ const (
 	DbTicketStatusExecuting       = "executing"
 	DbTicketStatusSuccess         = "success"
 	DbTicketStatusFailed          = "failed"
+	DbTicketStatusResultUnknown   = "result_unknown" // 执行超时/中断，是否生效未知，禁止直接重试
 	DbTicketStatusRejected        = "rejected"
 	DbTicketStatusPendingExecution = "pending_execution"
 
@@ -139,6 +140,9 @@ type DbAccessGrant struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	Remark    string     `json:"remark" gorm:"size:512"`
 
+	// SourceRequestID 来自权限申请的授权唯一键，保证同一申请重复终审不会生成重复授权。
+	SourceRequestID *uint `json:"source_request_id,omitempty" gorm:"uniqueIndex:uk_db_grant_source_request"`
+
 	CreatedByUserID *uint     `json:"created_by_user_id,omitempty"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -188,6 +192,9 @@ type DbAccessRequest struct {
 	Status string `json:"status" gorm:"size:32;not null;default:'pending';index"`
 
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// ProvisionError 自动建库/授权落地失败回写，便于审批人在申请列表中看到未完成事项。
+	ProvisionError string `json:"provision_error,omitempty" gorm:"size:1024"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

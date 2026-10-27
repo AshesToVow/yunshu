@@ -6,6 +6,7 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -410,7 +411,12 @@ func (s *Service) CreateKBDocument(ctx context.Context, userID uint, req KBDocUp
 	if req.Enabled != nil {
 		row.Enabled = *req.Enabled
 	}
-	if err := s.repo.CreateKBDocument(ctx, &row); err != nil {
+	if err := s.repo.Transaction(ctx, func(r repository.AiRepo) error {
+		if err := r.CreateKBDocument(ctx, &row); err != nil {
+			return err
+		}
+		return rechunkDocumentWith(r, ctx, &row)
+	}); err != nil {
 		return nil, err
 	}
 	return &row, nil
@@ -436,8 +442,17 @@ func (s *Service) UpdateKBDocument(ctx context.Context, id uint, req KBDocUpsert
 	if err := s.repo.UpdateKBDocument(ctx, id, updates); err != nil {
 		return nil, err
 	}
-	_ = s.repo.DeleteKBDocumentChunks(ctx, id)
-	return s.repo.GetKBDocumentByID(ctx, id)
+	doc, err := s.repo.GetKBDocumentByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	// 内容变更后重建切片，保证 RAG 检索使用最新内容
+	if err := s.repo.Transaction(ctx, func(r repository.AiRepo) error {
+		return rechunkDocumentWith(r, ctx, doc)
+	}); err != nil {
+		return nil, err
+	}
+	return doc, nil
 }
 
 func (s *Service) DeleteKBDocument(ctx context.Context, id uint) error {

@@ -39,11 +39,26 @@ func (s *K8sPodService) GetLogs(ctx context.Context, query PodLogsQuery) (string
 		return "", constants.ErrInternalWithMsg(constants.ErrMsgf53aee0dab26)
 	}
 	defer stream.Close()
+	// 未指定 tail 时日志可能极大，限制单次读取上限，避免一次性把整段日志读进内存。
+	const maxPodLogBytes = 32 << 20
 	var buf bytes.Buffer
-	if _, err = io.Copy(&buf, stream); err != nil {
+	if _, err = io.Copy(&buf, io.LimitReader(stream, maxPodLogBytes+1)); err != nil {
 		return "", bizerrors.Internalf(ctx, "k8s.pod", "api", err, constants.ErrFmt8e15ae24a3a1)
 	}
-	return k8sutil.FilterLogLines(buf.String(), query.Keyword, query.StartTime, query.EndTime), nil
+	truncated := buf.Len() > maxPodLogBytes
+	raw := buf.Bytes()
+	if truncated {
+		raw = raw[:maxPodLogBytes]
+		if idx := bytes.LastIndexByte(raw, '\n'); idx > 0 {
+			raw = raw[:idx+1]
+		}
+	}
+	text := strings.ToValidUTF8(string(raw), "")
+	filtered := k8sutil.FilterLogLines(text, query.Keyword, query.StartTime, query.EndTime)
+	if truncated {
+		filtered += "\n... 日志内容超过 32 MiB，仅展示前 32 MiB，可使用 tail 或时间范围缩小查询"
+	}
+	return filtered, nil
 }
 
 // StreamLogs 执行对应的业务逻辑。

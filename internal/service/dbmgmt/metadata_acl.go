@@ -24,7 +24,7 @@ type metadataScope struct {
 
 func (s *Service) resolveMetadataScope(ctx context.Context, projectID uint, inst *model.DbInstance, actor *auth.CurrentUser) (*metadataScope, error) {
 	out := &metadataScope{dbs: map[string]*dbMetaAccess{}}
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		out.unrestricted = true
 		return out, nil
 	}

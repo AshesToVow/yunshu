@@ -141,16 +141,16 @@ func (s *K8sWorkloadService) ListDaemonSetRevisions(ctx context.Context, q Deplo
 	if err := k.WithContext(ctx).Resource(&appsv1.ControllerRevision{}).Namespace(ns).List(&crList).Error; err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.workload.revisions", "list_cr", err, "列出 ControllerRevision 失败")
 	}
-	owned := filterOwnedDaemonSetControllerRevisions(crList, &ds)
-	curRev := ds.Status.CurrentNumberScheduled // placeholder; mark highest as current by name match
-	out := make([]DeploymentRevisionItem, 0, len(owned))
-	_ = curRev
+	owned := filterOwnedControllerRevisions(crList, &ds)
+	// DaemonSetStatus 不暴露当前 ControllerRevision 名称；控制器每次模板变更（含回滚）都会
+	// 新建一条 Revision = 当前最大值 + 1 的 ControllerRevision，因此最高 revision 即当前版本。
 	var maxRev int64
 	for i := range owned {
 		if owned[i].Revision > maxRev {
 			maxRev = owned[i].Revision
 		}
 	}
+	out := make([]DeploymentRevisionItem, 0, len(owned))
 	for i := range owned {
 		cr := owned[i]
 		var created *time.Time
@@ -166,14 +166,4 @@ func (s *K8sWorkloadService) ListDaemonSetRevisions(ctx context.Context, q Deplo
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Revision > out[j].Revision })
 	return out, nil
-}
-
-func filterOwnedDaemonSetControllerRevisions(items []appsv1.ControllerRevision, ds *appsv1.DaemonSet) []appsv1.ControllerRevision {
-	out := make([]appsv1.ControllerRevision, 0)
-	for i := range items {
-		if metav1.IsControlledBy(&items[i], ds) {
-			out = append(out, items[i])
-		}
-	}
-	return out
 }

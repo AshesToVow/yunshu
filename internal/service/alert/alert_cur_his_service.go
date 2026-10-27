@@ -86,8 +86,16 @@ func (s *AlertService) ListCurEvents(ctx context.Context, q AlertCurEventListQue
 	if s == nil || s.curHisRepo == nil {
 		return nil, 0, page, pageSize, nil
 	}
+	projectID, projectIDs, denyAll, err := resolveAlertEventScope(ctx, s.memberRepo, q.ProjectID)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.cur", "ListCurEvents", err)
+	}
+	if denyAll {
+		return []AlertCurEventView{}, 0, page, pageSize, nil
+	}
 	list, total, err := s.curHisRepo.ListCurEvents(ctx, repository.AlertCurEventListFilter{
-		ProjectID:    q.ProjectID,
+		ProjectID:    projectID,
+		ProjectIDs:   projectIDs,
 		DatasourceID: q.DatasourceID,
 		Severity:     q.Severity,
 		Keyword:      q.Keyword,
@@ -97,7 +105,6 @@ func (s *AlertService) ListCurEvents(ctx context.Context, q AlertCurEventListQue
 	}
 	return s.enrichCurEventViews(ctx, list), total, page, pageSize, nil
 }
-
 func (s *AlertService) enrichCurEventViews(ctx context.Context, list []model.AlertCurEvent) []AlertCurEventView {
 	out := make([]AlertCurEventView, 0, len(list))
 	if len(list) == 0 {
@@ -195,8 +202,16 @@ func (s *AlertService) ListHisEvents(ctx context.Context, q AlertHisEventListQue
 	if s == nil || s.curHisRepo == nil {
 		return nil, 0, page, pageSize, nil
 	}
+	projectID, projectIDs, denyAll, err := resolveAlertEventScope(ctx, s.memberRepo, q.ProjectID)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.his", "ListHisEvents", err)
+	}
+	if denyAll {
+		return []model.AlertHisEvent{}, 0, page, pageSize, nil
+	}
 	list, total, err := s.curHisRepo.ListHisEvents(ctx, repository.AlertHisEventListFilter{
-		ProjectID:    q.ProjectID,
+		ProjectID:    projectID,
+		ProjectIDs:   projectIDs,
 		DatasourceID: q.DatasourceID,
 		Severity:     q.Severity,
 		Keyword:      q.Keyword,

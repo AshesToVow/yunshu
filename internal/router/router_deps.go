@@ -206,7 +206,7 @@ func assembleRouteDeps(
 	}
 
 	authMiddleware := middleware.Auth(app.Config.Auth.JWTSecret, app.Redis, repos.User, app.Logger, app.DB)
-	wsAuthMiddleware := middleware.WSAuth(app.Redis, repos.User, app.Logger)
+	wsAuthMiddleware := middleware.WSAuth(app.Redis, repos.User, app.Logger, app.DB)
 	authorize := middleware.Authorize(app.Enforcer, app.Logger, repos.K8sClusterAccess)
 	k8sScopeAuthorize := middleware.K8sScopeAuthorize(
 		app.Logger,
@@ -304,10 +304,10 @@ func assembleRouteDeps(
 		esmgmtHandler:         handlers.Esmgmt,
 		kafkamgmtSvc:          svcs.Kafkamgmt,
 		kafkamgmtHandler:      handlers.Kafkamgmt,
-		platformFeatures:      handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate),
+		platformFeatures:      handler.NewPlatformFeaturesHandler(svcs.AlertMonitorRule, repos.AlertRuleChange, repos.PromqlSavedQuery, repos.K8sCrTemplate, repos.ProjectMember),
 		workflowHandler: handler.NewWorkflowHandler(func() *service.WorkflowService {
 			wf := service.NewWorkflowService(
-				repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User,
+				repos.Workflow, repos.UserGroup, repos.AlertDuty, repos.User, repos.ProjectMember,
 			)
 			wf.SetAlertEventRepo(repos.AlertEvent)
 			return wf

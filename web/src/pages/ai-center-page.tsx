@@ -1,5 +1,6 @@
 import { PlusOutlined, ReloadOutlined, SyncOutlined, DownOutlined } from "@ant-design/icons";
 import {
+  Alert,
   Button,
   Card,
   Dropdown,
@@ -7,6 +8,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Select,
   Space,
   Switch,
@@ -100,6 +102,8 @@ export function AiCenterPage() {
     results: Array<Record<string, unknown>>;
   } | null>(null);
   const [runtimeHealth, setRuntimeHealth] = useState<Record<string, unknown> | null>(null);
+  const [listsLoading, setListsLoading] = useState(false);
+  const [listsError, setListsError] = useState<string | null>(null);
 
   const [modelModalOpen, setModelModalOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<AILLMModelItem | null>(null);
@@ -151,23 +155,39 @@ export function AiCenterPage() {
     try {
       const r = await listAICenterModels();
       setModels(r?.list || []);
-    } catch {
-      /* ignore */
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载模型失败"));
     }
   }
 
   async function refreshLists() {
-    const tasks = [
-      listAICenterPrompts().then((r) => setPrompts(r?.list || [])),
-      listAICenterTools().then((r) => setTools(r?.list || [])),
-      listAICenterCases().then((r) => setCases(r?.list || [])),
-      listAICenterSOPs().then((r) => setSops(r?.list || [])),
-      listAICenterKBs().then((r) => setKbs(r?.list || [])),
-      listAIEvalCases().then((r) => setEvalCases(r?.list || [])),
-      listAIEvalRuns(20).then((r) => setEvalRuns(r?.list || [])),
-      refreshModels(),
-    ];
-    await Promise.all(tasks.map((p) => p.catch(() => undefined)));
+    setListsLoading(true);
+    const errors: string[] = [];
+    const collect = (label: string, task: Promise<void>) =>
+      task.catch((e) => {
+        errors.push(`${label}: ${extractApiErrorMessage(e, "加载失败")}`);
+      });
+    try {
+      await Promise.all([
+        collect("Prompt", listAICenterPrompts().then((r) => setPrompts(r?.list || []))),
+        collect("Tools", listAICenterTools().then((r) => setTools(r?.list || []))),
+        collect("案例", listAICenterCases().then((r) => setCases(r?.list || []))),
+        collect("SOP", listAICenterSOPs().then((r) => setSops(r?.list || []))),
+        collect("知识库", listAICenterKBs().then((r) => setKbs(r?.list || []))),
+        collect("Evaluation 用例", listAIEvalCases().then((r) => setEvalCases(r?.list || []))),
+        collect("Evaluation 运行", listAIEvalRuns(20).then((r) => setEvalRuns(r?.list || []))),
+        refreshModels(),
+      ]);
+    } finally {
+      setListsLoading(false);
+    }
+    if (errors.length > 0) {
+      const text = errors.join("；");
+      setListsError(text);
+      message.error(`部分列表加载失败：${text}`);
+    } else {
+      setListsError(null);
+    }
   }
 
   useEffect(() => {
@@ -344,6 +364,7 @@ export function AiCenterPage() {
               {evalResult.id ? ` · run #${String(evalResult.id)}` : ""}）
             </Typography.Paragraph>
           ) : null}
+          {listsError ? <Alert type="error" showIcon message={`部分列表加载失败：${listsError}`} /> : null}
 
           <Tabs
             items={[
@@ -370,6 +391,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={prompts}
+                      loading={listsLoading}
+                      scroll={{ x: 1000 }}
                       pagination={{ pageSize: 20, showSizeChanger: true }}
                       columns={[
                         { title: "ID", dataIndex: "id", width: 60 },
@@ -387,15 +410,17 @@ export function AiCenterPage() {
                                 type="link"
                                 size="small"
                                 onClick={() => {
-                                  void getAICenterPrompt(Number(row.id)).then((detail) => {
-                                    setEditingPrompt(detail || row);
-                                    const cur = (detail?.current_version || {}) as Row;
-                                    promptForm.setFieldsValue({
-                                      ...detail,
-                                      content: cur.content || "",
-                                    });
-                                    setPromptModalOpen(true);
-                                  });
+                                  void getAICenterPrompt(Number(row.id))
+                                    .then((detail) => {
+                                      setEditingPrompt(detail || row);
+                                      const cur = (detail?.current_version || {}) as Row;
+                                      promptForm.setFieldsValue({
+                                        ...detail,
+                                        content: cur.content || "",
+                                      });
+                                      setPromptModalOpen(true);
+                                    })
+                                    .catch((e) => message.error(extractApiErrorMessage(e, "加载 Prompt 失败")));
                                 }}
                               >
                                 编辑
@@ -414,11 +439,13 @@ export function AiCenterPage() {
                                       label: "发布新版",
                                       onClick: () => {
                                         setSelectedPromptId(Number(row.id));
-                                        void getAICenterPrompt(Number(row.id)).then((detail) => {
-                                          const cur = (detail?.current_version || {}) as Row;
-                                          publishForm.setFieldsValue({ content: cur.content || "", changelog: "" });
-                                          setPublishOpen(true);
-                                        });
+                                        void getAICenterPrompt(Number(row.id))
+                                          .then((detail) => {
+                                            const cur = (detail?.current_version || {}) as Row;
+                                            publishForm.setFieldsValue({ content: cur.content || "", changelog: "" });
+                                            setPublishOpen(true);
+                                          })
+                                          .catch((e) => message.error(extractApiErrorMessage(e, "加载 Prompt 失败")));
                                       },
                                     },
                                     {
@@ -455,6 +482,7 @@ export function AiCenterPage() {
                           rowKey="id"
                           size="small"
                           dataSource={versions}
+                          scroll={{ x: 800 }}
                           pagination={{ pageSize: 20, showSizeChanger: true }}
                           columns={[
                             { title: "Ver", dataIndex: "version", width: 60 },
@@ -466,10 +494,9 @@ export function AiCenterPage() {
                               width: 100,
                               render: (_, row) =>
                                 row.is_current ? null : (
-                                  <Button
-                                    type="link"
-                                    size="small"
-                                    onClick={() => {
+                                  <Popconfirm
+                                    title={`确认回滚到版本 ${String(row.version)}？当前内容将被该版本覆盖。`}
+                                    onConfirm={() => {
                                       void rollbackAICenterPrompt(selectedPromptId, Number(row.id))
                                         .then(() => {
                                           message.success("已回滚");
@@ -478,8 +505,10 @@ export function AiCenterPage() {
                                         .catch((e) => message.error(extractApiErrorMessage(e, "回滚失败")));
                                     }}
                                   >
-                                    回滚
-                                  </Button>
+                                    <Button type="link" size="small">
+                                      回滚
+                                    </Button>
+                                  </Popconfirm>
                                 ),
                             },
                           ]}
@@ -616,6 +645,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={tools}
+                      loading={listsLoading}
+                      scroll={{ x: 1200 }}
                       pagination={{ pageSize: 20 }}
                       columns={[
                         { title: "名称", dataIndex: "name" },
@@ -800,6 +831,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={cases}
+                      loading={listsLoading}
+                      scroll={{ x: 900 }}
                       columns={[
                         { title: "CaseID", dataIndex: "case_id", width: 180 },
                         { title: "标题", dataIndex: "title" },
@@ -943,6 +976,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={sops}
+                      loading={listsLoading}
+                      scroll={{ x: 800 }}
                       columns={[
                         { title: "Code", dataIndex: "code", width: 180 },
                         { title: "标题", dataIndex: "title" },
@@ -1081,6 +1116,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={kbs}
+                      loading={listsLoading}
+                      scroll={{ x: 800 }}
                       columns={[
                         { title: "Code", dataIndex: "code" },
                         { title: "名称", dataIndex: "name" },
@@ -1329,6 +1366,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={models}
+                      loading={listsLoading}
+                      scroll={{ x: 1200 }}
                       columns={[
                         { title: "名称", dataIndex: "name" },
                         { title: "Provider", dataIndex: "provider", width: 120 },
@@ -1512,6 +1551,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={evalRuns}
+                      loading={listsLoading}
+                      scroll={{ x: 900 }}
                       locale={{ emptyText: "暂无评估运行" }}
                       pagination={false}
                       columns={[
@@ -1557,6 +1598,8 @@ export function AiCenterPage() {
                       rowKey="id"
                       size="small"
                       dataSource={evalCases}
+                      loading={listsLoading}
+                      scroll={{ x: 800 }}
                       columns={[
                         { title: "Code", dataIndex: "case_code", width: 140 },
                         { title: "标题", dataIndex: "title" },

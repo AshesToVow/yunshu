@@ -28,7 +28,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   bootstrapLoggie,
   deployLoggieConfig,
@@ -50,6 +50,7 @@ import {
   type LoggieStatusItem,
   type ProjectItem,
 } from "../services/log-platform";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 const DEFAULT_YUNSHU_URL =
@@ -73,6 +74,8 @@ export function LoggieStatusPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addServerId, setAddServerId] = useState<number>();
+  const loadSeqRef = useRef(0);
+  const sourcesSeqRef = useRef(0);
   const [form] = Form.useForm();
 
   const projectOptions = useMemo(
@@ -89,28 +92,53 @@ export function LoggieStatusPage() {
   );
 
   const reload = useCallback(async (pid?: number) => {
-    if (!pid) return;
+    const seq = ++loadSeqRef.current;
+    if (!pid) {
+      setRows([]);
+      setEsCfg(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [status, cfg] = await Promise.all([getLoggieStatus(pid), getESConfigPreview().catch(() => null)]);
+      if (seq !== loadSeqRef.current) return;
       setRows(status.list);
       setEsCfg(cfg);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载 Agent 状态失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void (async () => {
-      const data = await getProjects({ page: 1, page_size: 1000 });
-      setProjects(data.list);
-      const pid = data.list[0]?.id;
-      setProjectId(pid);
-      if (pid) await reload(pid);
+      try {
+        const data = await getProjects({ page: 1, page_size: 1000 });
+        setProjects(data.list);
+        const pid = data.list[0]?.id;
+        setProjectId(pid);
+        if (pid) await reload(pid);
+      } catch (e: unknown) {
+        message.error(extractApiErrorMessage(e, "加载项目列表失败"));
+      }
     })();
   }, [reload]);
+
+  const handleProjectChange = (pid: number) => {
+    loadSeqRef.current += 1;
+    sourcesSeqRef.current += 1;
+    setProjectId(pid);
+    setRows([]);
+    setEsCfg(null);
+    setActionLoading(null);
+    setBootstrapOpen(false);
+    setBootstrapResult(null);
+    setBootstrapServer(null);
+    void reload(pid);
+  };
 
   const openBootstrap = async (row: LoggieStatusItem) => {
     setBootstrapServer(row);
@@ -124,12 +152,16 @@ export function LoggieStatusPage() {
       log_paths: "",
     });
     setBootstrapOpen(true);
+    const seq = ++sourcesSeqRef.current;
     if (projectId && row.server_id > 0) {
       try {
         const res = await getLoggieBootstrapSources(projectId, row.server_id);
+        if (seq !== sourcesSeqRef.current) return;
         setBootstrapSources(res.list ?? []);
-      } catch {
+      } catch (e: unknown) {
+        if (seq !== sourcesSeqRef.current) return;
         setBootstrapSources([]);
+        message.warning(extractApiErrorMessage(e, "加载日志源预览失败"));
       }
     } else {
       setBootstrapSources([]);
@@ -137,19 +169,19 @@ export function LoggieStatusPage() {
   };
 
   const submitBootstrap = async () => {
-    if (!projectId || !bootstrapServer?.server_id) return;
-    const values = await form.validateFields();
-    const autoFrom = values.auto_from_log_sources !== false;
-    const paths = String(values.log_paths ?? "")
-      .split("\n")
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-    if (!autoFrom && paths.length === 0) {
-      message.error("未启用自动读取日志源时，请填写日志路径");
-      return;
-    }
+    if (!projectId || !bootstrapServer?.server_id || bootstrapLoading) return;
     setBootstrapLoading(true);
     try {
+      const values = await form.validateFields();
+      const autoFrom = values.auto_from_log_sources !== false;
+      const paths = String(values.log_paths ?? "")
+        .split("\n")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      if (!autoFrom && paths.length === 0) {
+        message.error("未启用自动读取日志源时，请填写日志路径");
+        return;
+      }
       const res = await bootstrapLoggie(projectId, {
         server_id: bootstrapServer.server_id,
         log_paths: autoFrom ? undefined : paths,
@@ -170,7 +202,8 @@ export function LoggieStatusPage() {
       }
       await reload(projectId);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      if (typeof e === "object" && e !== null && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "引导配置失败"));
     } finally {
       setBootstrapLoading(false);
     }
@@ -179,7 +212,7 @@ export function LoggieStatusPage() {
   type AgentAction = "sync" | "deploy" | "restart" | "start" | "stop" | "install" | "uninstall";
 
   const runDeployAction = async (row: LoggieStatusItem, action: AgentAction) => {
-    if (!projectId || !row.server_id) return;
+    if (!projectId || !row.server_id || actionLoading) return;
     const key = `${action}-${row.server_id}`;
     setActionLoading(key);
     try {
@@ -210,17 +243,51 @@ export function LoggieStatusPage() {
       else message.error(res.message || "操作失败");
       await reload(projectId);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e, "操作失败"));
     } finally {
       setActionLoading(null);
     }
   };
 
+  const confirmAgentAction = (row: LoggieStatusItem, action: "install" | "start" | "stop" | "restart") => {
+    const meta = {
+      install: {
+        title: "安装 Agent？",
+        content:
+          "将上传离线包到目标机部署目录并启用 Loggie 与心跳；会覆盖部署目录中的同名二进制与配置，不删除业务日志文件。",
+        okText: "安装",
+      },
+      start: {
+        title: "启动 Agent？",
+        content: "将在目标机启动 Loggie；不会删除任何文件。",
+        okText: "启动",
+      },
+      stop: {
+        title: "停止 Agent？",
+        content: "将停止目标机 Loggie 采集；不会删除任何文件，恢复需手动启动。",
+        okText: "停止",
+      },
+      restart: {
+        title: "重启 Agent？",
+        content: "将重启目标机 Loggie；不会删除任何文件，重启期间采集中断数秒。",
+        okText: "重启",
+      },
+    }[action];
+    Modal.confirm({
+      title: meta.title,
+      content: meta.content,
+      okText: meta.okText,
+      cancelText: "取消",
+      okButtonProps: { danger: action === "stop" },
+      onOk: () => runDeployAction(row, action),
+    });
+  };
+
   const forceUnregister = async (row: LoggieStatusItem) => {
-    if (!projectId || !row.server_id) return;
+    if (!projectId || !row.server_id || actionLoading) return;
     Modal.confirm({
       title: "仅清除平台登记？",
-      content: "不会对远端服务器做任何操作，仅删除本平台的 Agent 登记记录。",
+      content: "不会对远端服务器做任何操作，也不会删除任何文件，仅删除本平台的 Agent 登记记录。",
       okText: "清除登记",
       okButtonProps: { danger: true },
       onOk: async () => {
@@ -235,7 +302,7 @@ export function LoggieStatusPage() {
           else message.error(res.message || "操作失败");
           await reload(projectId);
         } catch (e: unknown) {
-          message.error(String((e as Error)?.message ?? e));
+          message.error(extractApiErrorMessage(e, "清除登记失败"));
         } finally {
           setActionLoading(null);
         }
@@ -302,16 +369,31 @@ export function LoggieStatusPage() {
       render: (_, r) => {
         const busy = (a: AgentAction) => actionLoading === `${a}-${r.server_id}`;
         const more = [
-          { key: "start", label: "启动", disabled: !r.registered, onClick: () => void runDeployAction(r, "start") },
-          { key: "stop", label: "停止", disabled: !r.registered, onClick: () => void runDeployAction(r, "stop") },
-          { key: "restart", label: "重启", disabled: !r.registered, onClick: () => void runDeployAction(r, "restart") },
+          {
+            key: "start",
+            label: "启动",
+            disabled: !r.registered || actionLoading != null,
+            onClick: () => confirmAgentAction(r, "start"),
+          },
+          {
+            key: "stop",
+            label: "停止",
+            disabled: !r.registered || actionLoading != null,
+            onClick: () => confirmAgentAction(r, "stop"),
+          },
+          {
+            key: "restart",
+            label: "重启",
+            disabled: !r.registered || actionLoading != null,
+            onClick: () => confirmAgentAction(r, "restart"),
+          },
           {
             key: "pipelines",
             label: "下载 pipelines",
             disabled: !r.registered,
             onClick: () =>
               void downloadLoggieFile(projectId!, r.server_id, "pipelines").catch((e: unknown) =>
-                message.error(String((e as Error)?.message ?? e)),
+                message.error(extractApiErrorMessage(e, "下载 pipelines 失败")),
               ),
           },
           {
@@ -332,7 +414,8 @@ export function LoggieStatusPage() {
               type="link"
               icon={<PoweroffOutlined />}
               loading={busy("install")}
-              onClick={() => void runDeployAction(r, "install")}
+              disabled={actionLoading != null}
+              onClick={() => confirmAgentAction(r, "install")}
             >
               安装
             </Button>
@@ -340,7 +423,7 @@ export function LoggieStatusPage() {
               size="small"
               type="link"
               icon={<SyncOutlined />}
-              disabled={!r.registered}
+              disabled={!r.registered || actionLoading != null}
               loading={busy("sync")}
               onClick={() => void runDeployAction(r, "sync")}
             >
@@ -348,25 +431,26 @@ export function LoggieStatusPage() {
             </Button>
             <Popconfirm
               title="删除 Agent"
-              description="将停止并卸载远端 Loggie（含部署目录），并清除平台登记。是否继续？"
+              description="将停止并卸载远端 Loggie，删除远端部署目录（/export/loggie）及配置，并清除平台登记。是否继续？"
               okText="删除"
-              okButtonProps={{ danger: true }}
+              okButtonProps={{ danger: true, loading: busy("uninstall") }}
               cancelText="取消"
-              disabled={!r.registered}
-              onConfirm={() => void runDeployAction(r, "uninstall")}
+              disabled={!r.registered || actionLoading != null}
+              onConfirm={() => runDeployAction(r, "uninstall")}
             >
               <Button
                 size="small"
                 type="link"
                 danger
                 icon={<DeleteOutlined />}
-                disabled={!r.registered}
+                disabled={!r.registered || actionLoading != null}
                 loading={busy("uninstall")}
               >
                 删除
               </Button>
             </Popconfirm>
             <Dropdown
+              disabled={actionLoading != null}
               menu={{
                 items: more.map((m) => ({
                   key: m.key,
@@ -397,19 +481,14 @@ export function LoggieStatusPage() {
 
   return (
     <div className="loggie-status-page">
-      <Card
-        className="table-card"
-        title="Agent 管理"
-        extra={
+      <Card className="table-card" title="Agent 管理">
+        <div className="toolbar">
           <Space wrap>
             <Select
               style={{ minWidth: 180, maxWidth: 260 }}
               options={projectOptions}
               value={projectId}
-              onChange={(v) => {
-                setProjectId(v);
-                void reload(v);
-              }}
+              onChange={handleProjectChange}
             />
             <Button
               type="primary"
@@ -427,8 +506,7 @@ export function LoggieStatusPage() {
               刷新
             </Button>
           </Space>
-        }
-      >
+        </div>
         {esCfg ? (
           <Space wrap size={[8, 8]} style={{ marginBottom: 12, maxWidth: "100%" }}>
             <Tag icon={<CloudServerOutlined />} color={esCfg.enabled ? "blue" : "default"}>
@@ -486,7 +564,9 @@ export function LoggieStatusPage() {
         className="loggie-bootstrap-modal"
         title={bootstrapServer ? `Agent 引导 — ${bootstrapServer.server_name}` : "Agent 引导"}
         open={bootstrapOpen}
-        onCancel={() => setBootstrapOpen(false)}
+        onCancel={() => {
+          if (!bootstrapLoading && actionLoading == null) setBootstrapOpen(false);
+        }}
         width={820}
         styles={{ body: { maxWidth: "100%", overflowX: "hidden" } }}
         destroyOnHidden
@@ -503,15 +583,20 @@ export function LoggieStatusPage() {
               <Button
                 icon={<PoweroffOutlined />}
                 loading={actionLoading?.startsWith("install-")}
-                onClick={() => bootstrapServer && void runDeployAction(bootstrapServer, "install")}
+                disabled={actionLoading != null}
+                onClick={() => bootstrapServer && confirmAgentAction(bootstrapServer, "install")}
               >
                 一键安装
               </Button>
-              <Button onClick={() => setBootstrapOpen(false)}>关闭</Button>
+              <Button disabled={bootstrapLoading || actionLoading != null} onClick={() => setBootstrapOpen(false)}>
+                关闭
+              </Button>
             </Space>
           ) : (
             <Space>
-              <Button onClick={() => setBootstrapOpen(false)}>取消</Button>
+              <Button onClick={() => setBootstrapOpen(false)} disabled={bootstrapLoading}>
+                取消
+              </Button>
               <Button type="primary" loading={bootstrapLoading} onClick={() => void submitBootstrap()}>
                 生成并保存配置
               </Button>

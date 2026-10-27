@@ -357,17 +357,18 @@ type AlertMetricsUpdater struct {
 
 // NewAlertMetricsUpdater 创建指标更新器
 func NewAlertMetricsUpdater(metrics *AlertMetrics, inhibitionSvc *AlertInhibitionService) *AlertMetricsUpdater {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &AlertMetricsUpdater{
 		metrics:       metrics,
 		inhibitionSvc: inhibitionSvc,
-		ctx:           ctx,
-		cancel:        cancel,
 	}
 }
 
-// Start 启动定期更新
-func (u *AlertMetricsUpdater) Start() {
+// Start 启动定期更新；ctx 结束（服务停机）时自动退出。
+func (u *AlertMetricsUpdater) Start(ctx context.Context) {
+	if u == nil {
+		return
+	}
+	u.ctx, u.cancel = context.WithCancel(ctx)
 	ticker := time.NewTicker(30 * time.Second)
 	lifecycle.Go("alert.metrics-updater", func() {
 		defer ticker.Stop()
@@ -384,6 +385,9 @@ func (u *AlertMetricsUpdater) Start() {
 
 // Stop 停止更新器
 func (u *AlertMetricsUpdater) Stop() {
+	if u == nil || u.cancel == nil {
+		return
+	}
 	u.cancel()
 }
 

@@ -15,7 +15,7 @@ import {
   Typography,
   message,
 } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatusTag } from "../components/status-tag";
 import { createRole, deleteRole, getRoles, getRole, updateRole } from "../services/roles";
 import { getUsers } from "../services/users";
@@ -31,6 +31,7 @@ export function RolesPage() {
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState(defaultQuery);
   const [loading, setLoading] = useState(false);
+  const listSeqRef = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm<RolePayload>();
@@ -38,6 +39,7 @@ export function RolesPage() {
   const [assignTarget, setAssignTarget] = useState<RoleItem | null>(null);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [checkedUserIds, setCheckedUserIds] = useState<number[]>([]);
+  const [assignInitialIds, setAssignInitialIds] = useState<number[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<RoleItem | null>(null);
   const [detailSubmitting, setDetailSubmitting] = useState(false);
@@ -53,13 +55,15 @@ export function RolesPage() {
   }, []);
 
   async function loadRoles(nextQuery = query) {
+    const seq = ++listSeqRef.current;
     setLoading(true);
     try {
       const result = await getRoles(nextQuery);
+      if (seq !== listSeqRef.current) return;
       setList(result.list);
       setTotal(result.total);
     } finally {
-      setLoading(false);
+      if (seq === listSeqRef.current) setLoading(false);
     }
   }
 
@@ -84,40 +88,70 @@ export function RolesPage() {
   }
 
   async function handleDelete(record: RoleItem) {
-    await deleteRole(record.id);
-    message.success(`已删除模板 ${record.name}`);
-    void loadRoles();
+    try {
+      await deleteRole(record.id);
+      message.success(`已删除模板 ${record.name}`);
+      void loadRoles();
+    } catch {
+      /* interceptor */
+    }
   }
 
   async function loadUsers() {
-    const result = await getUsers({ page: 1, page_size: 1000 });
-    setUsers(result.list);
+    try {
+      const result = await getUsers({ page: 1, page_size: 1000 });
+      setUsers(result.list);
+      return result.list;
+    } catch {
+      /* interceptor */
+      return [];
+    }
   }
 
   function openAssignUsers(record: RoleItem) {
     setAssignTarget(record);
     const userIds = users.filter((user) => user.roles.some((role) => role.id === record.id)).map((user) => user.id);
     setCheckedUserIds(userIds);
+    setAssignInitialIds(userIds);
     setAssignOpen(true);
   }
 
   async function submitAssignUsers() {
     if (!assignTarget) return;
+    const roleId = assignTarget.id;
+    const initial = new Set(assignInitialIds);
+    const checked = new Set(checkedUserIds);
+    const ops: Array<{ userId: number; add: boolean }> = [];
+    for (const user of users) {
+      const had = initial.has(user.id);
+      const want = checked.has(user.id);
+      if (want && !had) ops.push({ userId: user.id, add: true });
+      if (!want && had) ops.push({ userId: user.id, add: false });
+    }
+    if (ops.length === 0) {
+      message.info("用户角色未发生变化");
+      setAssignOpen(false);
+      return;
+    }
     setSubmitting(true);
     try {
-      const promises = checkedUserIds.map((userId) => {
-        const user = users.find((u) => u.id === userId);
-        if (user) {
-          const roleIds = user.roles.map((r) => r.id);
-          if (!roleIds.includes(assignTarget.id)) {
-            return assignUserRoles(userId, { role_ids: [...roleIds, assignTarget.id] });
-          }
-        }
-        return Promise.resolve();
-      });
-      await Promise.all(promises);
-      message.success("用户角色已更新");
+      const results = await Promise.allSettled(
+        ops.map(({ userId, add }) => {
+          const user = users.find((u) => u.id === userId);
+          const current = (user?.roles ?? []).map((r) => r.id).filter((id) => id !== roleId);
+          return assignUserRoles(userId, { role_ids: add ? [...current, roleId] : current });
+        }),
+      );
+      const failed = results.filter((r) => r.status === "rejected").length;
+      const added = ops.filter((o) => o.add).length;
+      const removed = ops.length - added;
       setAssignOpen(false);
+      setCheckedUserIds([]);
+      if (failed > 0) {
+        message.error(`用户角色更新完成：成功 ${ops.length - failed} 个，失败 ${failed} 个，请刷新后重试`);
+      } else {
+        message.success(`用户角色已更新（新增 ${added} 个，移除 ${removed} 个）`);
+      }
       void loadUsers();
     } finally {
       setSubmitting(false);
@@ -175,6 +209,7 @@ export function RolesPage() {
           rowKey="id"
           loading={loading}
           dataSource={list}
+          scroll={{ x: 900 }}
           pagination={{
             current: query.page,
             pageSize: query.page_size,

@@ -21,6 +21,13 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 		return nil, err
 	}
 	cases, _ := s.repo.ListEnabledEvalCases(ctx)
+	// 套件内所有用例复用同一会话并免用户级限流，避免用例间相互污染与误判
+	var suiteSessionID uint
+	if uid > 0 {
+		if sess, err := s.CreateSession(ctx, uid, SessionCreateRequest{Title: "评估套件"}); err == nil {
+			suiteSessionID = sess.ID
+		}
+	}
 	total, max := 0.0, 0.0
 	for _, c := range cases {
 		max += float64(c.ScoreWeight)
@@ -32,6 +39,8 @@ func (s *Service) RunEvalSuite(ctx context.Context, user *auth.CurrentUser, live
 				Messages:    []ChatMessage{{Role: "user", Content: c.InputQuestion}},
 				EnableTools: &enableTools,
 				DisableRAG:  false,
+				SessionID:   suiteSessionID,
+				bypassRate:  true,
 			})
 			if err == nil && res != nil {
 				reply = res.Reply

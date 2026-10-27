@@ -226,6 +226,12 @@ func (s *MenuService) Update(ctx context.Context, id uint, payload MenuUpdatePay
 	}
 	targetParentID := menu.ParentID
 	if payload.ParentID != nil {
+		if *payload.ParentID == menu.ID {
+			return nil, constants.ErrBadRequestWithMsg("菜单父级不能是自身")
+		}
+		if err := s.ensureParentNotDescendant(ctx, menu.ID, *payload.ParentID); err != nil {
+			return nil, err
+		}
 		targetParentID = payload.ParentID
 	}
 	sortVal, err := s.ensureUniqueSiblingSort(ctx, targetParentID, payload.Sort, menu.ID)
@@ -249,6 +255,34 @@ func (s *MenuService) Update(ctx context.Context, id uint, payload MenuUpdatePay
 	return menu, nil
 }
 
+// ensureParentNotDescendant 防止把菜单挂到自己的子孙节点下形成环。
+func (s *MenuService) ensureParentNotDescendant(ctx context.Context, menuID, newParentID uint) error {
+	all, err := s.menuRepo.ListAll(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "menu", "ensureParentNotDescendant", err)
+	}
+	parentOf := make(map[uint]*uint, len(all))
+	for i := range all {
+		parentOf[all[i].ID] = all[i].ParentID
+	}
+	seen := make(map[uint]struct{}, len(all))
+	for cur := newParentID; cur != 0; {
+		if cur == menuID {
+			return constants.ErrBadRequestWithMsg("菜单父级不能是其子菜单")
+		}
+		if _, ok := seen[cur]; ok {
+			return constants.ErrBadRequestWithMsg("菜单层级存在环")
+		}
+		seen[cur] = struct{}{}
+		next := parentOf[cur]
+		if next == nil {
+			break
+		}
+		cur = *next
+	}
+	return nil
+}
+
 // Delete 删除相关的业务逻辑。
 func (s *MenuService) Delete(ctx context.Context, id uint) error {
 	count, err := s.menuRepo.CountChildren(ctx, id)
@@ -258,14 +292,10 @@ func (s *MenuService) Delete(ctx context.Context, id uint) error {
 	if count > 0 {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsga70ebaf6959d)
 	}
-	if err := s.menuRepo.Delete(ctx, id); err != nil {
+	if err := s.menuRepo.DeleteWithBindings(ctx, id); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return constants.ErrMenuNotFound
 		}
-		return bizerrors.Pass(ctx, "menu", "Delete", err)
-	}
-	// 清理该菜单遗留的权限绑定，避免孤儿 menu_permission_bindings 行。
-	if err := s.menuRepo.ReplacePermissionBindings(ctx, id, nil); err != nil {
 		return bizerrors.Pass(ctx, "menu", "Delete", err)
 	}
 	s.invalidateCache()

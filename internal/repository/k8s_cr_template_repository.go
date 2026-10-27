@@ -22,6 +22,13 @@ func (r *K8sCrTemplateRepository) List(ctx context.Context, f K8sCrTemplateListF
 	if f.ProjectID > 0 {
 		q = q.Where("project_id IN (0, ?)", f.ProjectID)
 	}
+	if f.VisibleOnly {
+		if len(f.ProjectIDs) == 0 {
+			q = q.Where("project_id = 0")
+		} else {
+			q = q.Where("project_id = 0 OR project_id IN ?", f.ProjectIDs)
+		}
+	}
 	if k := strings.TrimSpace(f.Kind); k != "" {
 		q = q.Where("gvk_kind = ?", k)
 	}

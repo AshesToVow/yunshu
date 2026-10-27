@@ -33,13 +33,27 @@ func (s *K8sRuntimeService) ListNamespacesViaKom(ctx context.Context, clusterID 
 	if regErr := s.registerClusterIfNeeded(cid, kc, true); regErr != nil {
 		return nil, regErr
 	}
-	return s.listNamespacesKomOnce(ctx, clusterID)
+	// 直接复用刚用主凭证注册的实例：GetClusterKubectl 会按请求意图重新注册只读实例，
+	// 只读凭据本身失效时重试仍会 401。
+	return s.listNamespacesWithKom(ctx, cid, clusterID)
 }
 
 func (s *K8sRuntimeService) listNamespacesKomOnce(ctx context.Context, clusterID uint) ([]corev1.Namespace, error) {
 	_, k, err := s.GetClusterKubectl(ctx, clusterID)
 	if err != nil {
 		return nil, err
+	}
+	var list []corev1.Namespace
+	if listErr := k.WithContext(ctx).Resource(&corev1.Namespace{}).List(&list).Error; listErr != nil {
+		return nil, k8sFail(ctx, "k8s.runtime", "ListNamespacesViaKom", listErr, "cluster_id", clusterID)
+	}
+	return list, nil
+}
+
+func (s *K8sRuntimeService) listNamespacesWithKom(ctx context.Context, regID string, clusterID uint) ([]corev1.Namespace, error) {
+	k := kom.Cluster(regID)
+	if k == nil {
+		return nil, constants.ErrInternalWithMsg(constants.ErrMsg5248c9e19a3f)
 	}
 	var list []corev1.Namespace
 	if listErr := k.WithContext(ctx).Resource(&corev1.Namespace{}).List(&list).Error; listErr != nil {

@@ -13,6 +13,7 @@ type RoleRepo interface {
 	Delete(ctx context.Context, role *model.Role) (error)
 	GetByID(ctx context.Context, id uint) (*model.Role, error)
 	GetByIDs(ctx context.Context, ids []uint) ([]model.Role, error)
+	ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error)
 	List(ctx context.Context, params RoleListParams) ([]model.Role, int64, error)
 	ListAll(ctx context.Context) ([]model.Role, error)
 }
@@ -40,6 +41,7 @@ type MenuRepo interface {
 	GetByID(ctx context.Context, id uint) (*model.Menu, error)
 	Update(ctx context.Context, menu *model.Menu) (error)
 	Delete(ctx context.Context, id uint) (error)
+	DeleteWithBindings(ctx context.Context, id uint) (error)
 	ListAll(ctx context.Context) ([]model.Menu, error)
 	Tree(ctx context.Context) ([]model.Menu, error)
 	CountChildren(ctx context.Context, parentID uint) (int64, error)

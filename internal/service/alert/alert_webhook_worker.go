@@ -2,6 +2,9 @@ package alert
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +21,7 @@ const (
 	redisKeyAlertWebhookQueue      = "alert:webhook:queue"
 	redisKeyAlertWebhookProcessing = "alert:webhook:processing"
 	redisKeyAlertWebhookDead       = "alert:webhook:dead"
+	redisKeyAlertWebhookLease      = "alert:webhook:lease:"
 )
 
 // 原子入队：在队列长度未达上限时 RPush，避免 LLen+RPush 竞态突破 maxLen。
@@ -30,10 +34,75 @@ redis.call('RPUSH', KEYS[1], ARGV[2])
 return 1
 `)
 
+// 回收遗留 processing 条目：仅当条目仍存在时才放回队列；队列已满则原样保留。
+var luaRequeueAlertWebhook = redis.NewScript(`
+local removed = redis.call('LREM', KEYS[1], 1, ARGV[1])
+if removed == 0 then
+  return 0
+end
+local n = redis.call('LLEN', KEYS[2])
+if n >= tonumber(ARGV[2]) then
+  redis.call('LPUSH', KEYS[1], ARGV[1])
+  return -1
+end
+redis.call('RPUSH', KEYS[2], ARGV[1])
+return 1
+`)
+
+// 仅租约持有者可释放，避免副本误删他人租约。
+var luaReleaseAlertWebhookLease = redis.NewScript(`
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`)
+
 const (
 	alertWebhookMaxAttempts = 3
 	alertWebhookBRPopWait   = 5 * time.Second
+	alertWebhookLeaseTTL    = 10 * time.Minute
 )
+
+// alertWebhookQueueItem 队列包装：id 用于租约，payload 保留原始 payload。
+type alertWebhookQueueItem struct {
+	ID       string          `json:"id"`
+	QueuedAt int64           `json:"queued_at"`
+	Payload  json.RawMessage `json:"payload"`
+}
+
+func newAlertWebhookItemID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().Unix())
+	}
+	return hex.EncodeToString(b[:])
+}
+
+func wrapAlertWebhookPayload(payload []byte) (string, error) {
+	bs, err := json.Marshal(alertWebhookQueueItem{
+		ID:       newAlertWebhookItemID(),
+		QueuedAt: time.Now().Unix(),
+		Payload:  json.RawMessage(payload),
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(bs), nil
+}
+
+// parseAlertWebhookItem 兼容旧版裸 payload（无 id/payload 字段时按 sha1 生成稳定 id）。
+func parseAlertWebhookItem(raw string) alertWebhookQueueItem {
+	var item alertWebhookQueueItem
+	if err := json.Unmarshal([]byte(raw), &item); err != nil || item.ID == "" || len(item.Payload) == 0 {
+		sum := sha1.Sum([]byte(raw))
+		return alertWebhookQueueItem{ID: hex.EncodeToString(sum[:]), Payload: json.RawMessage(raw)}
+	}
+	return item
+}
+
+func alertWebhookLeaseKey(id string) string {
+	return redisKeyAlertWebhookLease + id
+}
 
 func (s *AlertService) shouldEnqueueAlertmanagerWebhook() bool {
 	return s.redis != nil && !s.cfg.WebhookAsyncDisabled
@@ -45,11 +114,15 @@ func (s *AlertService) enqueueAlertmanagerWebhook(ctx context.Context, payload A
 		msg := constants.ErrMsg39d72e4b8516
 		return bizerrors.InternalCtx(ctx, fmt.Errorf("%s", msg), "api: "+msg)
 	}
+	wrapped, err := wrapAlertWebhookPayload(bs)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.webhook", "enqueueAlertmanagerWebhook", err)
+	}
 	maxLen := s.cfg.WebhookQueueMaxLen
 	if maxLen <= 0 {
 		maxLen = 10000
 	}
-	ok, err := luaEnqueueAlertWebhook.Run(ctx, s.redis, []string{redisKeyAlertWebhookQueue}, maxLen, string(bs)).Int()
+	ok, err := luaEnqueueAlertWebhook.Run(ctx, s.redis, []string{redisKeyAlertWebhookQueue}, maxLen, wrapped).Int()
 	if err != nil {
 		return bizerrors.Pass(ctx, "alert.webhook", "enqueueAlertmanagerWebhook", err)
 	}
@@ -110,25 +183,55 @@ func (s *AlertService) ingestWebhookPayloadWithRetry(ctx context.Context, payloa
 	return lastErr
 }
 
-// reclaimWebhookProcessing 将上次崩溃遗留在 processing 列表的消息拨回主队列。
+// claimWebhookLease 抢占处理租约；失败说明其他副本正在处理同一条消息。
+func (s *AlertService) claimWebhookLease(ctx context.Context, id string) bool {
+	ok, err := s.redis.SetNX(ctx, alertWebhookLeaseKey(id), s.webhookWorkerID, alertWebhookLeaseTTL).Result()
+	if err != nil {
+		s.logWebhookWarn("Alert webhook lease claim failed", "error", err)
+		return false
+	}
+	return ok
+}
+
+func (s *AlertService) releaseWebhookLease(ctx context.Context, id string) {
+	if err := luaReleaseAlertWebhookLease.Run(ctx, s.redis, []string{alertWebhookLeaseKey(id)}, s.webhookWorkerID).Err(); err != nil {
+		s.logWebhookWarn("Alert webhook lease release failed", "error", err)
+	}
+}
+
+// reclaimWebhookProcessing 回收崩溃遗留的 processing 条目；持有租约的条目视为在途，跳过。
 func (s *AlertService) reclaimWebhookProcessing(ctx context.Context) {
 	if s.redis == nil {
 		return
 	}
+	entries, err := s.redis.LRange(ctx, redisKeyAlertWebhookProcessing, 0, 9999).Result()
+	if err != nil {
+		s.logWebhookWarn("Alert webhook reclaim scan failed", "error", err)
+		return
+	}
+	maxLen := s.cfg.WebhookQueueMaxLen
+	if maxLen <= 0 {
+		maxLen = 10000
+	}
 	reclaimed := 0
-	for {
-		raw, err := s.redis.RPopLPush(ctx, redisKeyAlertWebhookProcessing, redisKeyAlertWebhookQueue).Result()
-		if errors.Is(err, redis.Nil) || raw == "" {
-			break
+	for _, raw := range entries {
+		item := parseAlertWebhookItem(raw)
+		leased, lerr := s.redis.Exists(ctx, alertWebhookLeaseKey(item.ID)).Result()
+		if lerr != nil {
+			s.logWebhookWarn("Alert webhook reclaim lease check failed", "error", lerr)
+			continue
 		}
-		if err != nil {
-			s.logWebhookWarn("Alert webhook reclaim processing failed", "error", err)
-			break
+		if leased > 0 {
+			continue
 		}
-		reclaimed++
-		if reclaimed >= 10000 {
-			s.logWebhookWarn("Alert webhook reclaim capped", "reclaimed", reclaimed)
-			break
+		ok, rerr := luaRequeueAlertWebhook.Run(ctx, s.redis,
+			[]string{redisKeyAlertWebhookProcessing, redisKeyAlertWebhookQueue}, raw, maxLen).Int()
+		if rerr != nil {
+			s.logWebhookWarn("Alert webhook reclaim requeue failed", "error", rerr)
+			continue
+		}
+		if ok > 0 {
+			reclaimed++
 		}
 	}
 	if reclaimed > 0 {
@@ -136,21 +239,29 @@ func (s *AlertService) reclaimWebhookProcessing(ctx context.Context) {
 	}
 }
 
-func (s *AlertService) ackWebhookProcessing(ctx context.Context, raw string) {
+func (s *AlertService) ackWebhookProcessing(ctx context.Context, raw, leaseID string) {
 	if s.redis == nil || raw == "" {
 		return
 	}
 	if err := s.redis.LRem(ctx, redisKeyAlertWebhookProcessing, 1, raw).Err(); err != nil {
 		s.logWebhookWarn("Alert webhook ack processing failed", "error", err)
 	}
+	if leaseID != "" {
+		s.releaseWebhookLease(ctx, leaseID)
+	}
 }
 
-func (s *AlertService) deadLetterWebhook(ctx context.Context, raw string) {
+func (s *AlertService) deadLetterWebhook(ctx context.Context, raw, leaseID string) {
 	if s.redis == nil || raw == "" {
 		return
 	}
 	_ = s.redis.LRem(ctx, redisKeyAlertWebhookProcessing, 1, raw).Err()
-	if err := s.redis.RPush(ctx, redisKeyAlertWebhookDead, raw).Err(); err != nil {
+	if leaseID != "" {
+		s.releaseWebhookLease(ctx, leaseID)
+	}
+	item := parseAlertWebhookItem(raw)
+	deadPayload := string(item.Payload)
+	if err := s.redis.RPush(ctx, redisKeyAlertWebhookDead, deadPayload).Err(); err != nil {
 		s.logWebhookWarn("Alert webhook dead-letter push failed", "error", err)
 		// 保底：塞回主队列，避免彻底丢失
 		_ = s.redis.RPush(ctx, redisKeyAlertWebhookQueue, raw).Err()
@@ -191,20 +302,26 @@ func (s *AlertService) runAlertWebhookIngestWorker(ctx context.Context) {
 			if raw == "" {
 				continue
 			}
+			item := parseAlertWebhookItem(raw)
+			if !s.claimWebhookLease(ctx, item.ID) {
+				// 其他副本已持有租约：移除重复副本，避免重复处理。
+				_ = s.redis.LRem(ctx, redisKeyAlertWebhookProcessing, 1, raw).Err()
+				continue
+			}
 			var payload AlertManagerPayload
-			if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+			if err := json.Unmarshal(item.Payload, &payload); err != nil {
 				s.logWebhookWarn("Failed to unmarshal alert webhook queue payload", "error", err, "bytes", len(raw))
-				s.deadLetterWebhook(context.Background(), raw)
+				s.deadLetterWebhook(context.Background(), raw, item.ID)
 				continue
 			}
 			procCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			ingestErr := s.ingestWebhookPayloadWithRetry(procCtx, payload)
 			cancel()
 			if ingestErr != nil {
-				s.deadLetterWebhook(context.Background(), raw)
+				s.deadLetterWebhook(context.Background(), raw, item.ID)
 				continue
 			}
-			s.ackWebhookProcessing(context.Background(), raw)
+			s.ackWebhookProcessing(context.Background(), raw, item.ID)
 		}
 	})
 }

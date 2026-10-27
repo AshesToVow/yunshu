@@ -56,7 +56,7 @@ func RegisterDbmgmtRoutes(api *gin.RouterGroup, d DbmgmtRouteDeps) {
 
 	g.GET("/instances/:instanceId/mysql-users", h.ListInstanceMySQLUsers)
 	g.GET("/instances/:instanceId/mysql-user-privileges", h.GetInstanceMySQLUserPrivileges)
-	g.GET("/instances/:instanceId/accounts/:accountId/password", h.GetInstanceAccountPassword)
+	g.POST("/instances/:instanceId/accounts/:accountId/password", h.GetInstanceAccountPassword)
 
 	g.GET("/tickets", h.ListTickets)
 	g.GET("/tickets/:ticketId", h.GetTicket)

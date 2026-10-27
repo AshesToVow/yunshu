@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"yunshu/internal/config"
+	"yunshu/internal/pkg/validateutil"
 )
 
 // LoggiePipelineOptions 生成 pipeline.yml 所需参数。
@@ -33,18 +34,27 @@ type LoggiePipelineBundle struct {
 	PipelineCount     int    `json:"pipeline_count"`
 }
 
-func defaultLogPaths(paths []string) []string {
+// sanitizeLogPaths 丢弃未通过白名单校验的路径，避免把系统凭据文件渲染进采集配置。
+func sanitizeLogPaths(paths []string) []string {
 	out := make([]string, 0, len(paths))
 	for _, p := range paths {
 		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
+		if p == "" {
+			continue
 		}
-	}
-	if len(out) == 0 {
-		return []string{"/var/log/myapp/*.log"}
+		if err := validateutil.ValidateLogCollectPath(p); err != nil {
+			continue
+		}
+		out = append(out, p)
 	}
 	return out
+}
+
+func defaultLogPaths(paths []string) []string {
+	if out := sanitizeLogPaths(paths); len(out) > 0 {
+		return out
+	}
+	return []string{"/var/log/myapp/*.log"}
 }
 
 func defaultMonitorPort(port int) int {

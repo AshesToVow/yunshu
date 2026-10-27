@@ -193,6 +193,14 @@ func (s *Service) checkRate(userID uint) error {
 		return constants.ErrBadRequestWithMsg("请求过于频繁，请稍后再试")
 	}
 	s.rateMap[userID] = time.Now()
+	// 定期清理过期条目，防止长期运行缓慢增长
+	if len(s.rateMap) > 1024 {
+		for uid, t := range s.rateMap {
+			if time.Since(t) > 10*time.Second {
+				delete(s.rateMap, uid)
+			}
+		}
+	}
 	return nil
 }
 
@@ -342,6 +350,9 @@ type ChatRequest struct {
 	EnableTools *bool         `json:"enable_tools"`
 	EnableWrite bool          `json:"enable_write_tools"`
 	DisableRAG  bool          `json:"disable_rag"`
+
+	// bypassRate 内部批量调用（如评估套件）跳过用户级限流；不参与 JSON 序列化。
+	bypassRate bool
 }
 
 type ChatResponse struct {
@@ -397,9 +408,11 @@ func (s *Service) chatWithEmit(
 		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
 		return nil, err
 	}
-	if err := s.checkRate(userID); err != nil {
-		fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
-		return nil, err
+	if !req.bypassRate {
+		if err := s.checkRate(userID); err != nil {
+			fire(ChatEvent{Type: "error", Error: err.Error(), Message: err.Error()})
+			return nil, err
+		}
 	}
 	actor = resolveActor(ctx, actor)
 	if actor == nil && userID > 0 {
@@ -503,7 +516,7 @@ func (s *Service) chatWithEmit(
 
 	tools := []llm.ToolDefinition(nil)
 	if enableTools {
-		tools = s.toolDefinitions(req.EnableWrite)
+		tools = s.toolDefinitions(ctx, req.EnableWrite)
 	}
 	tc := toolContext{
 		ClusterID: req.ClusterID,
@@ -634,9 +647,7 @@ func (s *Service) AnalyzePodDiagnose(ctx context.Context, userID uint, req PodDi
 	}
 
 	ctxJSON, _ := json.Marshal(diag)
-	if len(ctxJSON) > 60_000 {
-		ctxJSON = ctxJSON[:60_000]
-	}
+	ctxJSON = truncateBytes(ctxJSON, 60_000)
 	prompt, err := s.loadPromptContent(ctx, "diagnosis/k8s-pod", map[string]string{"context_json": string(ctxJSON)})
 	if err != nil {
 		return nil, err
@@ -812,7 +823,20 @@ func (s *Service) AnalyzeAlertExplain(ctx context.Context, userID uint, req Aler
 	if s.alertSvc == nil {
 		return nil, constants.ErrBadRequestWithMsg("告警服务不可用")
 	}
+	// 项目成员校验：防跨项目枚举告警投递信息（超管放行）
+	if err := s.assertProjectMember(ctx, nil, req.ProjectID); err != nil {
+		return nil, err
+	}
 	fp := strings.TrimSpace(req.Fingerprint)
+	_, total, _, _, err := s.alertSvc.ListEvents(ctx, alert.AlertEventListQuery{
+		ProjectID: req.ProjectID, Fingerprint: fp, Page: 1, PageSize: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if total == 0 {
+		return nil, constants.ErrBadRequestWithMsg("fingerprint 不存在或不属于该项目")
+	}
 	explain, err := s.alertSvc.ExplainFingerprintDelivery(ctx, fp)
 	if err != nil {
 		return nil, err
@@ -944,7 +968,12 @@ func truncateBytes(b []byte, max int) []byte {
 	if max <= 0 || len(b) <= max {
 		return b
 	}
-	return b[:max]
+	b = b[:max]
+	// 回退到 UTF-8 字符边界，避免切碎多字节字符
+	for len(b) > 0 && !utf8.Valid(b) {
+		b = b[:len(b)-1]
+	}
+	return b
 }
 
 func parseAIJSON(raw string) map[string]any {

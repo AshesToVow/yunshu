@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -18,7 +19,7 @@ func MigrateLegacyTickets(ctx context.Context, db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
-	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil)
+	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil, nil)
 	log := slog.Default().With("component", "workflow.migrate_tickets")
 	if err := EnsureDefaultAIToolApprovalDefinitionDB(ctx, db); err != nil {
 		log.Warn("ensure AI tool approval definition failed", "error", err)
@@ -124,7 +125,9 @@ func migratePendingExecutionSqlTickets(ctx context.Context, svc *Service, db *go
 			// 若已有关联工单但仍为 pending，对齐为已通过
 			ticket, err := svc.GetTicketByRef(ctx, model.WorkflowRefDbSqlTicket, row.ID)
 			if err == nil && ticket != nil && ticket.Status == model.WorkflowTicketStatusPending {
-				_ = markWorkflowTicketApproved(ctx, db, ticket.ID, now)
+				if err := markWorkflowTicketApproved(ctx, db, ticket.ID, now); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -152,14 +155,16 @@ func migratePendingExecutionSqlTickets(ctx context.Context, svc *Service, db *go
 }
 
 func markWorkflowTicketApproved(ctx context.Context, db *gorm.DB, ticketID uint, now time.Time) error {
-	if err := db.WithContext(ctx).Model(&model.WorkflowTicket{}).Where("id = ?", ticketID).Updates(map[string]any{
-		"status": model.WorkflowTicketStatusApproved, "closed_at": now,
-	}).Error; err != nil {
-		return err
-	}
-	return db.WithContext(ctx).Model(&model.WorkflowTicketStep{}).Where("ticket_id = ?", ticketID).Updates(map[string]any{
-		"status": model.WorkflowStepApproved, "reviewed_at": now,
-	}).Error
+	return db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.WorkflowTicket{}).Where("id = ?", ticketID).Updates(map[string]any{
+			"status": model.WorkflowTicketStatusApproved, "closed_at": now,
+		}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.WorkflowTicketStep{}).Where("ticket_id = ?", ticketID).Updates(map[string]any{
+			"status": model.WorkflowStepApproved, "reviewed_at": now,
+		}).Error
+	})
 }
 
 func migratePendingAccessRequests(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
@@ -225,14 +230,22 @@ func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, l
 	}
 	for i := range rows {
 		row := rows[i]
-		if svc.HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease) {
+		releaseTicket, err := svc.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil && releaseTicket != nil {
+			// 工单已存在：补齐此前回填失败的关联字段
+			if err := backfillReleaseRunTicketRefs(ctx, svc, db, &row, releaseTicket); err != nil {
+				return err
+			}
 			continue
 		}
 		submitter := uint(0)
 		if row.SubmitterUserID != nil {
 			submitter = *row.SubmitterUserID
 		}
-		releaseTicket, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
+		created, err := svc.CreateLinkedTicket(ctx, LinkedTicketInput{
 			Domain: model.WorkflowDomainCicd, TicketType: model.WorkflowTicketTypeRelease,
 			ProjectID: row.ProjectID, Title: row.Title, SubmitterUserID: submitter,
 			RefType: model.WorkflowRefCicdReleaseRun, RefID: row.ID,
@@ -244,6 +257,7 @@ func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, l
 			}
 			return err
 		}
+		releaseTicket = created
 		changeID := row.ChangeWorkflowTicketID
 		if changeID == nil || *changeID == 0 {
 			changeTicket, err := svc.CreateInfoTicket(ctx, LinkedTicketInput{
@@ -266,6 +280,43 @@ func migratePendingReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, l
 	return nil
 }
 
+// backfillReleaseRunTicketRefs 工单已存在但业务表关联字段缺失时补写（迁移中断后重跑的修复路径）。
+func backfillReleaseRunTicketRefs(ctx context.Context, svc *Service, db *gorm.DB, row *model.CicdReleaseRun, releaseTicket *model.WorkflowTicket) error {
+	updates := map[string]any{}
+	if row.WorkflowTicketID == nil || *row.WorkflowTicketID != releaseTicket.ID {
+		updates["workflow_ticket_id"] = releaseTicket.ID
+	}
+	changeID := row.ChangeWorkflowTicketID
+	if changeID == nil || *changeID == 0 {
+		changeTicket, err := svc.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseChange, row.ID, model.WorkflowTicketTypeChange)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			submitter := uint(0)
+			if row.SubmitterUserID != nil {
+				submitter = *row.SubmitterUserID
+			}
+			changeTicket, err = svc.CreateInfoTicket(ctx, LinkedTicketInput{
+				Domain: model.WorkflowDomainOps, TicketType: model.WorkflowTicketTypeChange,
+				ProjectID: row.ProjectID, Title: "变更单 · " + strings.TrimSpace(row.Title), SubmitterUserID: submitter,
+				RefType: model.WorkflowRefCicdReleaseChange, RefID: row.ID,
+				Payload: map[string]any{"release_run_id": row.ID, "release_ticket_id": releaseTicket.ID},
+			}, model.WorkflowTicketStatusApproved)
+		}
+		if err != nil {
+			return err
+		}
+		if changeTicket != nil {
+			changeID = &changeTicket.ID
+		}
+	}
+	if changeID != nil && (row.ChangeWorkflowTicketID == nil || *row.ChangeWorkflowTicketID != *changeID) {
+		updates["change_workflow_ticket_id"] = *changeID
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return db.WithContext(ctx).Model(row).Updates(updates).Error
+}
+
 // migratePendingExecutionReleaseRuns 将「待执行」发布单回填为已通过的统一工单，便于提交人在待办中执行。
 func migratePendingExecutionReleaseRuns(ctx context.Context, svc *Service, db *gorm.DB, log *slog.Logger) error {
 	var rows []model.CicdReleaseRun
@@ -275,10 +326,18 @@ func migratePendingExecutionReleaseRuns(ctx context.Context, svc *Service, db *g
 	now := time.Now()
 	for i := range rows {
 		row := rows[i]
-		if svc.HasLinkedTicketType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease) {
-			ticket, err := svc.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease)
-			if err == nil && ticket != nil && ticket.Status == model.WorkflowTicketStatusPending {
-				_ = markWorkflowTicketApproved(ctx, db, ticket.ID, now)
+		ticket, err := svc.GetTicketByRefType(ctx, model.WorkflowRefCicdReleaseRun, row.ID, model.WorkflowTicketTypeRelease)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		if err == nil && ticket != nil {
+			if ticket.Status == model.WorkflowTicketStatusPending {
+				if err := markWorkflowTicketApproved(ctx, db, ticket.ID, now); err != nil {
+					return err
+				}
+			}
+			if err := backfillReleaseRunTicketRefs(ctx, svc, db, &row, ticket); err != nil {
+				return err
 			}
 			continue
 		}

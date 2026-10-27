@@ -312,17 +312,7 @@ func (s *K8sRBACService) Apply(ctx context.Context, req RbacApplyRequest) error 
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	// Apply 成功但返回 strings 的兼容逻辑已在 dyn.ApplyManifest 中处理
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		// 粗略判断：若 manifest 中提到了 rbac 资源且已存在，则视为成功
-		refs := extractRbacRefs(req.Manifest)
-		for _, ref := range refs {
-			if _, e := s.dyn.GetByGVK(c, k, ref.GVK, ref.Namespace, ref.Name); e != nil {
-				return false
-			}
-		}
-		return len(refs) > 0
-	}); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.rbac", "api", err)
 	}
 	recordK8sChange(ctx, cluster, "rbac_apply", "RBAC", "", "", map[string]any{"manifest_len": len(req.Manifest)})

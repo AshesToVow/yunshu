@@ -3,7 +3,9 @@ package dbmgmt
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
@@ -114,14 +116,34 @@ func (s *Service) finalizeSqlTicketApproval(ctx context.Context, projectID, tick
 	return s.repo.UpdateSqlTicket(ctx, ticket)
 }
 
-func (s *Service) finalizeAccessRequestApproval(ctx context.Context, projectID, requestID uint) error {
+func (s *Service) finalizeAccessRequestApproval(ctx context.Context, projectID, requestID uint, expiresAt *time.Time) error {
 	req, err := s.repo.GetAccessRequestInProject(ctx, projectID, requestID)
 	if err != nil {
 		return err
 	}
-	req.Status = model.DbAccessRequestStatusApproved
-	if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
+	fields := map[string]any{"status": model.DbAccessRequestStatusApproved, "updated_at": time.Now()}
+	if expiresAt != nil {
+		fields["expires_at"] = expiresAt
+	}
+	n, err := s.repo.UpdateAccessRequestFieldsIfStatus(ctx, requestID, model.DbAccessRequestStatusPending, fields)
+	if err != nil {
 		return err
+	}
+	if n == 0 {
+		// 重复终审：状态已是 approved 时只补齐授权，保持幂等。
+		latest, getErr := s.repo.GetAccessRequestInProject(ctx, projectID, requestID)
+		if getErr != nil {
+			return getErr
+		}
+		if latest.Status != model.DbAccessRequestStatusApproved {
+			return constants.ErrBadRequestWithMsg("申请状态已变更，请刷新后重试")
+		}
+		req = latest
+	} else {
+		req.Status = model.DbAccessRequestStatusApproved
+		if expiresAt != nil {
+			req.ExpiresAt = expiresAt
+		}
 	}
 	return s.grantFromAccessRequest(ctx, req)
 }
@@ -131,10 +153,25 @@ func (s *Service) finalizeAppUserRequestApproval(ctx context.Context, projectID,
 	if err != nil {
 		return err
 	}
-	req.Status = model.DbAccessRequestStatusApproved
-	if err := s.repo.UpdateAppUserRequest(ctx, req); err != nil {
+	n, err := s.repo.UpdateAppUserRequestFieldsIfStatus(ctx, requestID, model.DbAccessRequestStatusPending, map[string]any{
+		"status": model.DbAccessRequestStatusApproved, "updated_at": time.Now(),
+	})
+	if err != nil {
 		return err
 	}
+	if n == 0 {
+		// 重复终审：已终态则不再重复执行 GRANT/REVOKE，避免 REVOKE 二次执行报错。
+		latest, getErr := s.repo.GetAppUserRequestInProject(ctx, projectID, requestID)
+		if getErr != nil {
+			return getErr
+		}
+		if latest.Status != model.DbAccessRequestStatusApproved {
+			return constants.ErrBadRequestWithMsg("申请状态已变更，请刷新后重试")
+		}
+		slog.Default().With("component", "dbmgmt").Warn("app user request already finalized, skip execution", "request_id", requestID)
+		return nil
+	}
+	req.Status = model.DbAccessRequestStatusApproved
 	return s.executeAppUserRequest(ctx, req)
 }
 

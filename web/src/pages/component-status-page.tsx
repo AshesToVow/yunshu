@@ -1,6 +1,6 @@
 import { EyeOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Empty, Input, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getClusters, listComponentStatuses, type ComponentStatusItem, type ClusterItem } from "../services/clusters";
 
 export function ComponentStatusPage() {
@@ -10,6 +10,7 @@ export function ComponentStatusPage() {
   const [selectedClusterId, setSelectedClusterId] = useState<number>();
   const [keyword, setKeyword] = useState("");
   const [list, setList] = useState<ComponentStatusItem[]>([]);
+  const listSeqRef = useRef(0);
 
   useEffect(() => {
     void loadClusters();
@@ -34,16 +35,19 @@ export function ComponentStatusPage() {
   }
 
   async function loadComponentStatuses(clusterId: number) {
+    const seq = ++listSeqRef.current;
     setLoading(true);
     try {
       const result = await listComponentStatuses(clusterId);
+      if (seq !== listSeqRef.current) return;
       setList(result.list ?? []);
     } catch (error) {
+      if (seq !== listSeqRef.current) return;
       const msg = error instanceof Error ? error.message : "加载组件状态失败";
       message.error(msg || "加载组件状态失败");
       setList([]);
     } finally {
-      setLoading(false);
+      if (seq === listSeqRef.current) setLoading(false);
     }
   }
 

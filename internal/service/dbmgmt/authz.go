@@ -17,7 +17,7 @@ func (s *Service) projectMemberRole(ctx context.Context, projectID uint, actor *
 	if actor == nil || actorUserID(actor) == 0 {
 		return "", false, constants.ErrForbidden
 	}
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		return "owner", true, nil
 	}
 	if s.memberRepo == nil {
@@ -56,7 +56,7 @@ func (s *Service) requireProjectAdminOrOwner(ctx context.Context, projectID uint
 }
 
 func (s *Service) requireInstanceManage(ctx context.Context, projectID, instanceID uint, actor *auth.CurrentUser) error {
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		return nil
 	}
 	if ok, _ := s.isProjectAdminOrOwner(ctx, projectID, actor); ok {
@@ -146,7 +146,7 @@ func (s *Service) canViewTicketSQL(ctx context.Context, projectID uint, ticket *
 	if actor == nil || ticket == nil {
 		return false
 	}
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		return true
 	}
 	if ticket.SubmitterUserID == actorUserID(actor) {
@@ -160,6 +160,37 @@ func (s *Service) canViewTicketSQL(ctx context.Context, projectID uint, ticket *
 		return true
 	}
 	return false
+}
+
+// ticketSQLVisibility 批量判定工单 SQL 可见性（口径同 canViewTicketSQL）：
+// 项目角色只查一次，实例 Manage 权限按实例 ID 缓存，避免列表逐条查询。
+func (s *Service) ticketSQLVisibility(ctx context.Context, projectID uint, actor *auth.CurrentUser, tickets []model.DbSqlTicket) []bool {
+	out := make([]bool, len(tickets))
+	if actor == nil {
+		return out
+	}
+	super := auth.IsSuperAdminRole(actor.RoleCodes)
+	projectAdmin := false
+	if !super {
+		projectAdmin, _ = s.isProjectAdminOrOwner(ctx, projectID, actor)
+	}
+	uid := actorUserID(actor)
+	manageCache := make(map[uint]bool, 4)
+	for i := range tickets {
+		t := &tickets[i]
+		if super || t.SubmitterUserID == uid || projectAdmin {
+			out[i] = true
+			continue
+		}
+		canManage, ok := manageCache[t.InstanceID]
+		if !ok {
+			perm, err := s.GetEffectivePermission(ctx, projectID, t.InstanceID, actor)
+			canManage = err == nil && perm != nil && perm.CanManage
+			manageCache[t.InstanceID] = canManage
+		}
+		out[i] = canManage
+	}
+	return out
 }
 
 func timeNow() time.Time {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"yunshu/internal/config"
@@ -15,18 +16,21 @@ import (
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/esclient"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
 const globalRetentionProjectID uint = 0
 
 type LogRetentionService struct {
-	es   *ElasticsearchProvider
-	repo interfaces.LogRetentionRepository
+	es             *ElasticsearchProvider
+	repo           interfaces.LogRetentionRepository
+	redis          *redis.Client
+	cleanupRunning atomic.Bool
 }
 
-func NewLogRetentionService(es *ElasticsearchProvider, repo interfaces.LogRetentionRepository) *LogRetentionService {
-	return &LogRetentionService{es: es, repo: repo}
+func NewLogRetentionService(es *ElasticsearchProvider, repo interfaces.LogRetentionRepository, rdb *redis.Client) *LogRetentionService {
+	return &LogRetentionService{es: es, repo: repo, redis: rdb}
 }
 
 type LogRetentionItem struct {
@@ -340,6 +344,19 @@ func validateRetentionIndexPattern(pattern string) error {
 	return nil
 }
 
+// ensureRetentionIndexPatternInScope 保留策略的清理面限定在平台命名空间（yunshu- 前缀）
+// 或当前 ES 配置的索引模式内，避免全局策略通过自定义 glob 删除业务索引。
+func ensureRetentionIndexPatternInScope(pattern, configured string) error {
+	p := strings.ToLower(strings.TrimSpace(pattern))
+	if p == "" || p == "*" || strings.HasPrefix(p, "yunshu-") {
+		return nil
+	}
+	if c := strings.ToLower(strings.TrimSpace(configured)); c != "" && p == c {
+		return nil
+	}
+	return constants.ErrBadRequestWithMsg("索引模式必须位于平台命名空间（yunshu- 前缀）或与当前 ES 索引模式一致")
+}
+
 // matchIndexPattern 简易 glob：仅支持 * 通配（与 ES index_pattern 常见写法一致），大小写不敏感。
 func matchIndexPattern(name, pattern string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
@@ -378,7 +395,7 @@ func (s *LogRetentionService) RunCleanup(ctx context.Context) (*LogRetentionClea
 	}
 	cli, cfg, err := s.es.Client(ctx)
 	if err != nil {
-		return &LogRetentionCleanupResult{Message: err.Error()}, nil
+		return nil, bizerrors.Pass(ctx, "logretention", "RunCleanup", fmt.Errorf("Elasticsearch 客户端初始化失败: %w", err))
 	}
 	policies, err := s.repo.List(ctx)
 	if err != nil {
@@ -566,6 +583,9 @@ func (s *LogRetentionService) upsert(ctx context.Context, projectID, serverID ui
 	it.Enabled = req.Enabled
 	if req.IndexPattern != nil {
 		if err := validateRetentionIndexPattern(*req.IndexPattern); err != nil {
+			return LogRetentionItem{}, err
+		}
+		if err := ensureRetentionIndexPatternInScope(*req.IndexPattern, cfg.IndexPattern); err != nil {
 			return LogRetentionItem{}, err
 		}
 		it.IndexPattern = normalizeRetentionIndexPattern(*req.IndexPattern)

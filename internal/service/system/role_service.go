@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"errors"
+	"strings"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -37,9 +38,21 @@ func (s *RoleService) Create(ctx context.Context, req RoleCreateRequest) (*RoleI
 		status = model.StatusEnabled
 	}
 
+	code, err := normalizeRoleCode(req.Code)
+	if err != nil {
+		return nil, err
+	}
+	exists, err := s.roleRepo.ExistsByCode(ctx, code, 0)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "role", "Create", err)
+	}
+	if exists {
+		return nil, constants.ErrConflictWithMsg("角色编码已存在")
+	}
+
 	role := model.Role{
 		Name:        req.Name,
-		Code:        req.Code,
+		Code:        code,
 		Description: req.Description,
 		Status:      status,
 	}
@@ -66,12 +79,35 @@ func (s *RoleService) Update(ctx context.Context, id uint, req RoleUpdateRequest
 		role.Name = *req.Name
 	}
 	if req.Code != nil {
-		role.Code = *req.Code
+		newCode := strings.TrimSpace(*req.Code)
+		if newCode != role.Code {
+			if isBuiltinSuperAdminRole(role.Code) {
+				return nil, constants.ErrForbiddenWithMsg("内置超级管理员角色编码不可修改")
+			}
+			code, err := normalizeRoleCode(newCode)
+			if err != nil {
+				return nil, err
+			}
+			exists, err := s.roleRepo.ExistsByCode(ctx, code, role.ID)
+			if err != nil {
+				return nil, bizerrors.Pass(ctx, "role", "Update", err)
+			}
+			if exists {
+				return nil, constants.ErrConflictWithMsg("角色编码已存在")
+			}
+			role.Code = code
+		}
 	}
 	if req.Description != nil {
 		role.Description = *req.Description
 	}
 	if req.Status != nil {
+		if *req.Status != model.StatusEnabled && *req.Status != model.StatusDisabled {
+			return nil, constants.ErrBadRequestWithMsg("角色状态仅支持 1（启用）或 0（禁用）")
+		}
+		if *req.Status == model.StatusDisabled && isBuiltinSuperAdminRole(role.Code) {
+			return nil, constants.ErrForbiddenWithMsg("内置超级管理员角色不可禁用")
+		}
 		role.Status = *req.Status
 	}
 
@@ -114,6 +150,9 @@ func (s *RoleService) Delete(ctx context.Context, id uint) error {
 		return bizerrors.Pass(ctx, "role", "Delete", err)
 	}
 
+	if isBuiltinSuperAdminRole(role.Code) {
+		return constants.ErrForbiddenWithMsg("内置超级管理员角色不可删除")
+	}
 	if err = s.roleRepo.Delete(ctx, role); err != nil {
 		return bizerrors.Pass(ctx, "role", "Delete", err)
 	}

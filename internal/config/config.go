@@ -43,6 +43,9 @@ type HTTPConfig struct {
 	IdleTimeoutSeconds       int `mapstructure:"idle_timeout_seconds"`
 	// ShutdownTimeoutSeconds 优雅关闭 HTTP Server 的最长等待。
 	ShutdownTimeoutSeconds int `mapstructure:"shutdown_timeout_seconds"`
+	// TrustedProxies 允许设置 X-Forwarded-For 的反向代理 IP/CIDR 列表。
+	// 未配置时仅信任回环地址；显式配置空列表表示完全不信任转发头。
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
 }
 
 type LogConfig struct {
@@ -58,18 +61,18 @@ type LogConfig struct {
 
 // DatabaseConfig 关系型数据库连接（支持 mysql、postgres、dameng）。
 type DatabaseConfig struct {
-	Driver                 string `mapstructure:"driver"` // mysql（默认）、postgres、dameng
-	Host                   string `mapstructure:"host"`
-	Port                   int    `mapstructure:"port"`
-	User                   string `mapstructure:"user"`
-	Password               string `mapstructure:"password"`
-	DBName                 string `mapstructure:"db_name"`
-	Charset                string `mapstructure:"charset"`  // MySQL
-	Loc                    string `mapstructure:"loc"`      // MySQL parseTime loc
-	SSLMode                string `mapstructure:"sslmode"`  // PostgreSQL
-	TimeZone               string `mapstructure:"timezone"` // PostgreSQL
+	Driver   string `mapstructure:"driver"` // mysql（默认）、postgres、dameng
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	DBName   string `mapstructure:"db_name"`
+	Charset  string `mapstructure:"charset"`  // MySQL
+	Loc      string `mapstructure:"loc"`      // MySQL parseTime loc
+	SSLMode  string `mapstructure:"sslmode"`  // PostgreSQL
+	TimeZone string `mapstructure:"timezone"` // PostgreSQL
 	// Schema 达梦登录后当前模式（缺省用 db_name，再回退 user，常见 SYSDBA）。
-	Schema string `mapstructure:"schema"`
+	Schema                 string `mapstructure:"schema"`
 	MaxIdleConns           int    `mapstructure:"max_idle_conns"`
 	MaxOpenConns           int    `mapstructure:"max_open_conns"`
 	ConnMaxLifetimeSeconds int    `mapstructure:"conn_max_lifetime_seconds"`
@@ -212,6 +215,9 @@ func Load(path string) (*Config, error) {
 // applyLoadedDefaults 按域补齐零值；依赖 viper.IsSet 的项在此统一处理。
 func (cfg *Config) applyLoadedDefaults(v *viper.Viper) {
 	cfg.Auth.ApplyDefaults(cfg.App.Env)
+	if !v.IsSet("http.trusted_proxies") {
+		cfg.HTTP.TrustedProxies = []string{"127.0.0.1", "::1"}
+	}
 	cfg.Log.ApplyDefaults(v.IsSet("log.compress"))
 	cfg.Alert.ApplyDefaults()
 	// 未显式配置时默认 true：外部 AM 已做 group_wait/interval/repeat，避免 Yunshu 二次节流。
@@ -303,6 +309,8 @@ func bindEnv(v *viper.Viper) error {
 		"http.read_timeout_seconds":                nil,
 		"http.write_timeout_seconds":               nil,
 		"http.idle_timeout_seconds":                nil,
+		"http.shutdown_timeout_seconds":            nil,
+		"http.trusted_proxies":                     nil,
 		"log.level":                                nil,
 		"log.format":                               nil,
 		"log.output":                               nil,

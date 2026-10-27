@@ -16,7 +16,7 @@ import {
   message,
 } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createMaintenanceWindow,
   deleteMaintenanceWindow,
@@ -24,6 +24,7 @@ import {
   updateMaintenanceWindow,
   type AlertMaintenanceWindowItem,
 } from "../services/alert-maintenance";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -51,6 +52,8 @@ export function AlertMaintenancePage() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [deletingId, setDeletingId] = useState<number>();
   const [current, setCurrent] = useState<AlertMaintenanceWindowItem | null>(null);
   const [form] = Form.useForm();
 
@@ -60,8 +63,12 @@ export function AlertMaintenancePage() {
   );
 
   async function loadProjects() {
-    const res = await getProjects({ page: 1, page_size: 500 });
-    setProjects(res.list ?? []);
+    try {
+      const res = await getProjects({ page: 1, page_size: 500 });
+      setProjects(res.list ?? []);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "加载项目列表失败"));
+    }
   }
 
   async function load(nextPage = page, nextSize = pageSize) {
@@ -77,6 +84,8 @@ export function AlertMaintenancePage() {
       setTotal(res.total ?? 0);
       setPage(res.page ?? nextPage);
       setPageSize(res.page_size ?? nextSize);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "加载维护窗口失败"));
     } finally {
       setLoading(false);
     }
@@ -120,7 +129,13 @@ export function AlertMaintenancePage() {
   }
 
   async function submit() {
-    const v = await form.validateFields();
+    if (savingRef.current) return;
+    let v: Record<string, unknown>;
+    try {
+      v = (await form.validateFields()) as Record<string, unknown>;
+    } catch {
+      return;
+    }
     const matchers = v.matchers as MatcherForm[];
     const payload = {
       name: String(v.name || "").trim(),
@@ -131,6 +146,7 @@ export function AlertMaintenancePage() {
       project_id: Number(v.project_id || 0),
       enabled: Boolean(v.enabled),
     };
+    savingRef.current = true;
     setSaving(true);
     try {
       if (current) {
@@ -142,8 +158,25 @@ export function AlertMaintenancePage() {
       }
       setOpen(false);
       await load(page, pageSize);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "保存维护窗口失败"));
     } finally {
+      savingRef.current = false;
       setSaving(false);
+    }
+  }
+
+  async function remove(row: AlertMaintenanceWindowItem) {
+    if (deletingId != null) return;
+    setDeletingId(row.id);
+    try {
+      await deleteMaintenanceWindow(row.id);
+      message.success("已删除");
+      await load(page, pageSize);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除维护窗口失败"));
+    } finally {
+      setDeletingId(undefined);
     }
   }
 
@@ -230,9 +263,11 @@ export function AlertMaintenancePage() {
                 </Button>
                 <Popconfirm
                   title="删除该维护窗口？"
-                  onConfirm={() => void deleteMaintenanceWindow(r.id).then(() => load(page, pageSize))}
+                  okButtonProps={{ loading: deletingId === r.id }}
+                  disabled={deletingId != null}
+                  onConfirm={() => void remove(r)}
                 >
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  <Button type="link" size="small" danger loading={deletingId === r.id} icon={<DeleteOutlined />}>
                     删除
                   </Button>
                 </Popconfirm>
@@ -285,7 +320,23 @@ export function AlertMaintenancePage() {
           <Form.Item name="starts_at" label="开始时间" rules={[{ required: true }]}>
             <DatePicker showTime style={{ width: "100%" }} />
           </Form.Item>
-          <Form.Item name="ends_at" label="结束时间" rules={[{ required: true }]}>
+          <Form.Item
+            name="ends_at"
+            label="结束时间"
+            dependencies={["starts_at"]}
+            rules={[
+              { required: true },
+              ({ getFieldValue }) => ({
+                validator: async (_, value: dayjs.Dayjs | null | undefined) => {
+                  const start = getFieldValue("starts_at") as dayjs.Dayjs | null | undefined;
+                  if (!value || !start) return;
+                  if (!value.isAfter(start)) {
+                    throw new Error("结束时间必须晚于开始时间");
+                  }
+                },
+              }),
+            ]}
+          >
             <DatePicker showTime style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item name="comment" label="说明">

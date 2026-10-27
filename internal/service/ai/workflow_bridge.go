@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.workflowRepo, nil, nil, nil)
+	return workflowsvc.NewService(s.workflowRepo, nil, nil, nil, nil)
 }
 
 func (s *Service) createAIWorkflowTicket(ctx context.Context, row *model.AiToolApproval) error {

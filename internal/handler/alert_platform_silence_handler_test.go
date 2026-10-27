@@ -42,6 +42,15 @@ func (f *silenceRepoFake) Create(ctx context.Context, row *model.AlertSilence) e
 	return nil
 }
 
+func (f *silenceRepoFake) CreateBatch(ctx context.Context, rows []*model.AlertSilence) error {
+	for _, row := range rows {
+		if err := f.Create(ctx, row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (f *silenceRepoFake) GetByID(ctx context.Context, id uint) (*model.AlertSilence, error) {
 	for i := range f.rows {
 		if f.rows[i].ID == id {
@@ -64,7 +73,7 @@ func (f *silenceRepoFake) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (f *silenceRepoFake) ListPaged(ctx context.Context, projectID uint, keyword string, offset, limit int) ([]model.AlertSilence, int64, error) {
+func (f *silenceRepoFake) ListPaged(ctx context.Context, projectID uint, projectIDs []uint, keyword string, offset, limit int) ([]model.AlertSilence, int64, error) {
 	return append([]model.AlertSilence{}, f.rows...), int64(len(f.rows)), nil
 }
 
@@ -102,9 +111,9 @@ func (m *memberRepoFake) GetByProjectAndUser(ctx context.Context, projectID uint
 }
 
 func (m *memberRepoFake) Create(ctx context.Context, row *model.ProjectMember) error { return nil }
-func (m *memberRepoFake) Save(ctx context.Context, row *model.ProjectMember) error  { return nil }
-func (m *memberRepoFake) DeleteByID(ctx context.Context, id uint) error             { return nil }
-func (m *memberRepoFake) DeleteByProject(ctx context.Context, projectID uint) error { return nil }
+func (m *memberRepoFake) Save(ctx context.Context, row *model.ProjectMember) error   { return nil }
+func (m *memberRepoFake) DeleteByID(ctx context.Context, id uint) error              { return nil }
+func (m *memberRepoFake) DeleteByProject(ctx context.Context, projectID uint) error  { return nil }
 
 func (m *memberRepoFake) ListDisplayByProject(ctx context.Context, projectID uint) ([]repository.ProjectMemberListRow, error) {
 	return nil, nil

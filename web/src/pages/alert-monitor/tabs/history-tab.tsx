@@ -68,6 +68,11 @@ export function HistoryTab() {
   const [detail, setDetail] = useState<AlertEventDetailTarget | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [ackActingIds, setAckActingIds] = useState<Set<number>>(() => new Set());
+  const ackActingRef = useRef<Set<number>>(new Set());
+  const silenceActingRef = useRef(false);
+  const ticketActingRef = useRef(false);
+  const loadSeqRef = useRef(0);
   const deepOpenedRef = useRef(false);
   const deepHisTriedRef = useRef(false);
 
@@ -108,6 +113,7 @@ export function HistoryTab() {
 
   const loadCur = useCallback(
     async (page: number, pageSize: number, kw: string) => {
+      const seq = ++loadSeqRef.current;
       setLoading(true);
       try {
         const r = await listCurEvents({
@@ -116,14 +122,16 @@ export function HistoryTab() {
           page,
           page_size: pageSize,
         });
+        if (seq !== loadSeqRef.current) return;
         setCurRows(r.list ?? r.items ?? []);
         setCurTotal(r.total ?? 0);
         setCurPage(r.page ?? page);
         setCurPageSize(r.page_size ?? pageSize);
       } catch (e) {
+        if (seq !== loadSeqRef.current) return;
         message.error(extractApiErrorMessage(e, "加载当前告警失败"));
       } finally {
-        setLoading(false);
+        if (seq === loadSeqRef.current) setLoading(false);
       }
     },
     [ctx.projectContextId],
@@ -131,6 +139,7 @@ export function HistoryTab() {
 
   const loadHis = useCallback(
     async (page: number, pageSize: number, kw: string) => {
+      const seq = ++loadSeqRef.current;
       setLoading(true);
       try {
         const r = await listHisEvents({
@@ -139,14 +148,16 @@ export function HistoryTab() {
           page,
           page_size: pageSize,
         });
+        if (seq !== loadSeqRef.current) return;
         setHisRows(r.list ?? r.items ?? []);
         setHisTotal(r.total ?? 0);
         setHisPage(r.page ?? page);
         setHisPageSize(r.page_size ?? pageSize);
       } catch (e) {
+        if (seq !== loadSeqRef.current) return;
         message.error(extractApiErrorMessage(e, "加载历史告警失败"));
       } finally {
-        setLoading(false);
+        if (seq === loadSeqRef.current) setLoading(false);
       }
     },
     [ctx.projectContextId],
@@ -243,6 +254,8 @@ export function HistoryTab() {
       message.warning("缺少指纹，无法静默");
       return;
     }
+    if (silenceActingRef.current) return;
+    silenceActingRef.current = true;
     setSilenceLoadingFp(row.fingerprint);
     try {
       await createAlertSilence({
@@ -258,6 +271,7 @@ export function HistoryTab() {
     } catch (e) {
       message.error(extractApiErrorMessage(e, "创建静默失败"));
     } finally {
+      silenceActingRef.current = false;
       setSilenceLoadingFp("");
     }
   }
@@ -267,6 +281,8 @@ export function HistoryTab() {
       message.warning("缺少指纹，无法转工单");
       return;
     }
+    if (ticketActingRef.current) return;
+    ticketActingRef.current = true;
     setTicketLoadingFp(row.fingerprint);
     try {
       const ticket = await createIncidentFromAlert({
@@ -280,6 +296,7 @@ export function HistoryTab() {
       const msg = extractApiErrorMessage(e, "转工单失败");
       message.error(msg.includes("流程未配置") ? `${msg}；可在流程中心配置 incident 故障单` : msg);
     } finally {
+      ticketActingRef.current = false;
       setTicketLoadingFp("");
     }
   }
@@ -289,6 +306,9 @@ export function HistoryTab() {
       message.warning("缺少指纹，无法认领");
       return;
     }
+    if (ackActingRef.current.has(row.id)) return;
+    ackActingRef.current.add(row.id);
+    setAckActingIds(new Set(ackActingRef.current));
     try {
       if (row.acked) {
         await clearAlertAck(row.fingerprint);
@@ -305,6 +325,9 @@ export function HistoryTab() {
       await loadCur(curPage, curPageSize, keyword);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "认领操作失败"));
+    } finally {
+      ackActingRef.current.delete(row.id);
+      setAckActingIds(new Set(ackActingRef.current));
     }
   }
 
@@ -337,7 +360,8 @@ export function HistoryTab() {
         message="正在告警 / 已恢复 / 通知记录"
         description="正在告警：还没恢复的实例。已恢复：曾经响过并恢复的记录（没恢复过的不会出现在这里）。通知记录：发给谁、为何没发。点一行可看时间线。"
       />
-      <Space wrap>
+      <div className="toolbar">
+        <Space wrap>
         <Segmented
           value={view}
           onChange={(v) => setView(v as EventView)}
@@ -376,7 +400,8 @@ export function HistoryTab() {
             ) : null}
           </>
         ) : null}
-      </Space>
+        </Space>
+      </div>
 
       {view === "current" ? (
         <ResizableTable
@@ -469,7 +494,15 @@ export function HistoryTab() {
                     icon: <StopOutlined />,
                     label: "静默 2 小时",
                     disabled: !r.fingerprint,
-                    onClick: () => void quickSilence2h(r),
+                    onClick: () => {
+                      Modal.confirm({
+                        title: "确认静默该告警 2 小时？",
+                        content: `告警：${r.alertname || r.fingerprint}`,
+                        okText: "静默",
+                        cancelText: "取消",
+                        onOk: () => quickSilence2h(r),
+                      });
+                    },
                   },
                   {
                     key: "ticket",
@@ -497,6 +530,8 @@ export function HistoryTab() {
                   <Space size={0} wrap className="yunshu-table-actions" onClick={stop}>
                     <AlertAckActionButton
                       acked={Boolean(r.acked)}
+                      loading={ackActingIds.has(r.id)}
+                      disabled={ackActingIds.size > 0}
                       onAck={(minutes) => void toggleAck(r, minutes)}
                       onClear={() => void toggleAck(r)}
                     />

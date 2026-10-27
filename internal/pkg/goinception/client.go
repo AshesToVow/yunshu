@@ -298,5 +298,7 @@ func isDDLStatement(sql string) bool {
 }
 
 func escapeInceptionValue(s string) string {
+	// 反斜杠必须先转义，否则密码末尾的 \ 会吞掉闭合引号，导致 header 被截断/注入。
+	s = strings.ReplaceAll(s, `\`, `\\`)
 	return strings.ReplaceAll(s, `'`, `\'`)
 }

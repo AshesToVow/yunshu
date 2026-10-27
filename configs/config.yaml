@@ -127,6 +127,8 @@ cicd:
     host_ip: 10.10.10.103
     project_group: registry
     # username/password 也可在数据字典 cicd_harbor_username / cicd_harbor_password 配置
+    # tls_verify: true 时校验 Harbor 服务端证书；默认跳过以兼容内网自签（字典 cicd_harbor_tls_verify 优先）
+    tls_verify: false
   # 与Jenkins中的凭据ID一致
   credentials:
     git: gitee_registry_ssh

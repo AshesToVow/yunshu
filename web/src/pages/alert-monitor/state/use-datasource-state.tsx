@@ -11,7 +11,7 @@
  */
 import { ApiOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { Button, Form, Popconfirm, Space, Tag, message } from "antd";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useDictOptions } from "../../../hooks/use-dict-options";
 import {
@@ -59,13 +59,22 @@ export function useAlertMonitorDatasourceState(params: {
     [dsBasicUserDictOpts],
   );
 
+  const loadDatasourcesSeqRef = useRef(0);
+
   const loadDatasources = useCallback(
     async (projectID?: number) => {
-      const r = await listAlertDatasources({ project_id: projectID, page: 1, page_size: 200 });
-      setDsList(r.list ?? []);
-      // PromQL 控制台首次拿到数据源时预选第一条（不区分启用状态）；
-      // promql Tab 的「当前选中项已失效」兜底另见 state/use-promql-console-state.ts
-      applyDefaultPromDatasource(r.list?.[0]?.id);
+      const seq = ++loadDatasourcesSeqRef.current;
+      try {
+        const r = await listAlertDatasources({ project_id: projectID, page: 1, page_size: 200 });
+        if (seq !== loadDatasourcesSeqRef.current) return;
+        setDsList(r.list ?? []);
+        // PromQL 控制台首次拿到数据源时预选第一条（不区分启用状态）；
+        // promql Tab 的「当前选中项已失效」兜底另见 state/use-promql-console-state.ts
+        applyDefaultPromDatasource(r.list?.[0]?.id);
+      } catch (e: unknown) {
+        if (seq !== loadDatasourcesSeqRef.current) return;
+        message.error(extractApiErrorMessage(e, "加载数据源失败"));
+      }
     },
     [applyDefaultPromDatasource],
   );

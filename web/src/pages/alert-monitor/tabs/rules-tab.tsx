@@ -16,7 +16,7 @@ import {
   message,
 } from "antd";
 import { PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAlertMonitor } from "../context";
 import { useIdempotencyKey } from "../../../hooks/use-idempotency-key";
 import { tablePagination } from "../../../utils/table-pagination";
@@ -50,6 +50,12 @@ export function RulesTab() {
   >([]);
   const [pendingChanges, setPendingChanges] = useState<AlertMonitorRuleChangeItem[]>([]);
   const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingActingId, setPendingActingId] = useState<number | null>(null);
+  const pendingActingRef = useRef<number | null>(null);
+  const [tplSubmitting, setTplSubmitting] = useState(false);
+  const tplSubmittingRef = useRef(false);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const importSubmittingRef = useRef(false);
 
   async function loadPendingChanges() {
     setPendingLoading(true);
@@ -99,27 +105,36 @@ export function RulesTab() {
   }, [selected, datasources, form]);
 
   async function submitFromTemplate() {
-    if (!selected) return;
+    if (!selected || tplSubmittingRef.current) return;
+    let v: Record<string, unknown>;
     try {
-      const v = await form.validateFields();
-      const params: Record<string, string> = {};
-      const keys = Object.keys(selected.default_params || {});
-      for (const k of keys) {
-        if (v[k] != null && String(v[k]).trim() !== "") {
-          params[k] = String(v[k]);
-        }
+      v = (await form.validateFields()) as Record<string, unknown>;
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "表单校验失败"));
+      return;
+    }
+    const params: Record<string, string> = {};
+    const keys = Object.keys(selected.default_params || {});
+    for (const k of keys) {
+      if (v[k] != null && String(v[k]).trim() !== "") {
+        params[k] = String(v[k]);
       }
-      const isLog = selected.group === "log" || selected.labels?.rule_kind === "log";
-      if (isLog && !ctx.projectContextId) {
-        message.warning("请先选择顶栏项目上下文，再创建日志告警规则");
-        return;
-      }
+    }
+    const isLog = selected.group === "log" || selected.labels?.rule_kind === "log";
+    if (isLog && !ctx.projectContextId) {
+      message.warning("请先选择顶栏项目上下文，再创建日志告警规则");
+      return;
+    }
+    tplSubmittingRef.current = true;
+    setTplSubmitting(true);
+    try {
       await createAlertMonitorRuleFromTemplate({
         template_id: selected.id,
         datasource_id: isLog ? undefined : Number(v.datasource_id),
         project_id: ctx.projectContextId || undefined,
-        name: v.name,
-        severity: v.severity,
+        name: String(v.name ?? ""),
+        severity: String(v.severity ?? ""),
         params,
       });
       message.success(
@@ -131,16 +146,85 @@ export function RulesTab() {
       );
       setTplOpen(false);
       setSelected(null);
-      await ctx.loadRules(ctx.projectContextId);
+      await ctx.loadRules(ctx.projectContextId).catch(() => undefined);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "从模板创建失败"));
+    } finally {
+      tplSubmittingRef.current = false;
+      setTplSubmitting(false);
+    }
+  }
+
+  async function handlePendingApprove(id: number) {
+    if (pendingActingRef.current !== null) return;
+    pendingActingRef.current = id;
+    setPendingActingId(id);
+    try {
+      await approveMonitorRuleChange(id, approveIdemKey);
+      rotateApproveIdemKey();
+      message.success("已批准并应用");
+      await loadPendingChanges();
+      await ctx.loadRules(ctx.projectContextId).catch(() => undefined);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "批准规则变更失败"));
+    } finally {
+      pendingActingRef.current = null;
+      setPendingActingId(null);
+    }
+  }
+
+  async function handlePendingReject(id: number) {
+    if (pendingActingRef.current !== null) return;
+    pendingActingRef.current = id;
+    setPendingActingId(id);
+    try {
+      await rejectMonitorRuleChange(id);
+      message.success("已驳回");
+      await loadPendingChanges();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "驳回规则变更失败"));
+    } finally {
+      pendingActingRef.current = null;
+      setPendingActingId(null);
+    }
+  }
+
+  async function confirmImport() {
+    if (importSubmittingRef.current) return;
+    let v: Record<string, unknown>;
+    try {
+      v = (await importForm.validateFields()) as Record<string, unknown>;
     } catch (e) {
       if (e && typeof e === "object" && "errorFields" in e) return;
-      message.error(extractApiErrorMessage(e, "从模板创建失败"));
+      message.error(extractApiErrorMessage(e, "表单校验失败"));
+      return;
+    }
+    importSubmittingRef.current = true;
+    setImportSubmitting(true);
+    try {
+      const res = await importPrometheusYAML({
+        datasource_id: Number(v.datasource_id),
+        yaml: String(v.yaml ?? ""),
+        enabled: !!v.enabled,
+        dry_run: false,
+      });
+      setImportPreview(res.preview || []);
+      message.success(`已创建 ${res.created} 条，跳过 ${res.skipped}`);
+      if (res.errors?.length) message.warning(res.errors.slice(0, 3).join("; "));
+      setImportOpen(false);
+      await ctx.loadRules(ctx.projectContextId).catch(() => undefined);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "导入失败"));
+    } finally {
+      importSubmittingRef.current = false;
+      setImportSubmitting(false);
     }
   }
 
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
-      <Space wrap align="center">
+      <div className="toolbar">
+        <Space wrap align="center">
         <Button type="primary" icon={<PlusOutlined />} onClick={ctx.openRuleCreate}>
           新建规则
         </Button>
@@ -184,7 +268,8 @@ export function RulesTab() {
             : `（共 ${ctx.ruleTotal} 条）`}
           · 告警由本平台规则中心评测数据源产生（Telegraf / blackbox / Pushgateway → Prom/VM）；在此新建、调整、启停规则
         </Typography.Text>
-      </Space>
+        </Space>
+      </div>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
         规则中心是平台主告警入口：PromQL / SLO 燃尽 / 日志告警（ERROR 计数与突增）统一评估后，经屏蔽 / 抑制 /
         订阅树投递。Alertmanager Webhook 仍可接入，但带
@@ -254,20 +339,16 @@ export function RulesTab() {
               {
                 title: "操作",
                 width: 180,
+                fixed: "right",
                 className: "yunshu-table-actions-cell",
                 render: (_: unknown, r: AlertMonitorRuleChangeItem) => (
                   <Space size={0} wrap className="yunshu-table-actions">
                     <Button
                       size="small"
                       type="link"
-                      onClick={() =>
-                        void approveMonitorRuleChange(r.id, approveIdemKey).then(async () => {
-                          rotateApproveIdemKey();
-                          message.success("已批准并应用");
-                          await loadPendingChanges();
-                          await ctx.loadRules(ctx.projectContextId);
-                        })
-                      }
+                      loading={pendingActingId === r.id}
+                      disabled={pendingActingId !== null && pendingActingId !== r.id}
+                      onClick={() => void handlePendingApprove(r.id)}
                     >
                       批准
                     </Button>
@@ -275,12 +356,9 @@ export function RulesTab() {
                       size="small"
                       type="link"
                       danger
-                      onClick={() =>
-                        void rejectMonitorRuleChange(r.id).then(() => {
-                          message.success("已驳回");
-                          void loadPendingChanges();
-                        })
-                      }
+                      loading={pendingActingId === r.id}
+                      disabled={pendingActingId !== null && pendingActingId !== r.id}
+                      onClick={() => void handlePendingReject(r.id)}
                     >
                       驳回
                     </Button>
@@ -309,11 +387,13 @@ export function RulesTab() {
         title="从规则模板创建"
         open={tplOpen}
         onCancel={() => {
+          if (tplSubmitting) return;
           setTplOpen(false);
           setSelected(null);
         }}
         onOk={() => void submitFromTemplate()}
-        okButtonProps={{ disabled: !selected }}
+        okButtonProps={{ disabled: !selected || tplSubmitting }}
+        confirmLoading={tplSubmitting}
         width={820}
         destroyOnClose
       >
@@ -395,15 +475,20 @@ export function RulesTab() {
       <Modal
         title="导入 Prometheus 规则 YAML"
         open={importOpen}
-        onCancel={() => setImportOpen(false)}
+        onCancel={() => {
+          if (importSubmitting) return;
+          setImportOpen(false);
+        }}
+        confirmLoading={importSubmitting}
         width={860}
         destroyOnClose
         footer={[
-          <Button key="cancel" onClick={() => setImportOpen(false)}>
+          <Button key="cancel" disabled={importSubmitting} onClick={() => setImportOpen(false)}>
             取消
           </Button>,
           <Button
             key="dry"
+            disabled={importSubmitting}
             onClick={async () => {
               try {
                 const v = await importForm.validateFields();
@@ -427,25 +512,9 @@ export function RulesTab() {
           <Button
             key="ok"
             type="primary"
-            onClick={async () => {
-              try {
-                const v = await importForm.validateFields();
-                const res = await importPrometheusYAML({
-                  datasource_id: Number(v.datasource_id),
-                  yaml: v.yaml,
-                  enabled: !!v.enabled,
-                  dry_run: false,
-                });
-                setImportPreview(res.preview || []);
-                message.success(`已创建 ${res.created} 条，跳过 ${res.skipped}`);
-                if (res.errors?.length) message.warning(res.errors.slice(0, 3).join("; "));
-                setImportOpen(false);
-                await ctx.loadRules(ctx.projectContextId);
-              } catch (e) {
-                if (e && typeof e === "object" && "errorFields" in e) return;
-                message.error(extractApiErrorMessage(e, "导入失败"));
-              }
-            }}
+            loading={importSubmitting}
+            disabled={importSubmitting}
+            onClick={() => void confirmImport()}
           >
             确认导入
           </Button>,

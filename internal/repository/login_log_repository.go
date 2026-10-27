@@ -9,11 +9,12 @@ import (
 )
 
 type LoginLogListParams struct {
-	Username string
-	Status   *int
-	Source   string
-	Page     int
-	PageSize int
+	Username      string
+	UsernameExact string // 精确匹配（普通管理员仅能查看自己的日志）
+	Status        *int
+	Source        string
+	Page          int
+	PageSize      int
 }
 
 type LoginLogRepository struct {
@@ -30,7 +31,9 @@ func (r *LoginLogRepository) Create(ctx context.Context, log *model.LoginLog) er
 
 func (r *LoginLogRepository) List(ctx context.Context, p LoginLogListParams) ([]model.LoginLog, int64, error) {
 	q := r.db.WithContext(ctx).Model(&model.LoginLog{})
-	if p.Username != "" {
+	if p.UsernameExact != "" {
+		q = q.Where("username = ?", p.UsernameExact)
+	} else if p.Username != "" {
 		q = q.Where("username LIKE ?", "%"+p.Username+"%")
 	}
 	if p.Status != nil {

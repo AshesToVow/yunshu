@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"yunshu/internal/model"
@@ -28,8 +29,71 @@ func (r *DbmgmtRepository) UpdateInstance(ctx context.Context, inst *model.DbIns
 	return r.db.WithContext(ctx).Save(inst).Error
 }
 
+// DeleteInstance 删除实例并清理其全部业务数据，避免 grants/账号/工单成为孤儿。
+// 审计日志（db_audit_logs）保留，instance_id 可空且属于历史留痕。
 func (r *DbmgmtRepository) DeleteInstance(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&model.DbInstance{}, id).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var ticketIDs []uint
+		if err := tx.Model(&model.DbSqlTicket{}).Where("instance_id = ?", id).Pluck("id", &ticketIDs).Error; err != nil {
+			return err
+		}
+		if len(ticketIDs) > 0 {
+			if err := tx.Where("ticket_id IN ?", ticketIDs).Delete(&model.DbSqlTicketStep{}).Error; err != nil {
+				return err
+			}
+		}
+		var accessIDs []uint
+		if err := tx.Model(&model.DbAccessRequest{}).Where("instance_id = ?", id).Pluck("id", &accessIDs).Error; err != nil {
+			return err
+		}
+		if len(accessIDs) > 0 {
+			if err := tx.Where("access_request_id IN ?", accessIDs).Delete(&model.DbAccessRequestStep{}).Error; err != nil {
+				return err
+			}
+		}
+		var appUserIDs []uint
+		if err := tx.Model(&model.DbAppUserRequest{}).Where("instance_id = ?", id).Pluck("id", &appUserIDs).Error; err != nil {
+			return err
+		}
+		if len(appUserIDs) > 0 {
+			if err := tx.Where("app_user_request_id IN ?", appUserIDs).Delete(&model.DbAppUserRequestStep{}).Error; err != nil {
+				return err
+			}
+		}
+		for _, m := range []any{
+			&model.DbSqlExecution{},
+			&model.DbSqlTicket{},
+			&model.DbAccessRequest{},
+			&model.DbAppUserRequest{},
+			&model.DbAccessGrant{},
+			&model.DbInstanceAccount{},
+			&model.DbColumnMaskRule{},
+		} {
+			if err := tx.Where("instance_id = ?", id).Delete(m).Error; err != nil {
+				return err
+			}
+		}
+		// 解除从库绑定，避免残留指向已删除主库的引用。
+		if err := tx.Model(&model.DbInstance{}).Where("primary_instance_id = ?", id).Update("primary_instance_id", nil).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.DbInstance{}, id).Error
+	})
+}
+
+// ListInstanceLinkedRefIDs 列出实例下所有工单/申请 ID，供删除前关闭统一工单。
+func (r *DbmgmtRepository) ListInstanceLinkedRefIDs(ctx context.Context, instanceID uint) (sqlTicketIDs, accessRequestIDs, appUserRequestIDs []uint, err error) {
+	db := r.db.WithContext(ctx)
+	if err = db.Model(&model.DbSqlTicket{}).Where("instance_id = ?", instanceID).Pluck("id", &sqlTicketIDs).Error; err != nil {
+		return nil, nil, nil, err
+	}
+	if err = db.Model(&model.DbAccessRequest{}).Where("instance_id = ?", instanceID).Pluck("id", &accessRequestIDs).Error; err != nil {
+		return nil, nil, nil, err
+	}
+	if err = db.Model(&model.DbAppUserRequest{}).Where("instance_id = ?", instanceID).Pluck("id", &appUserRequestIDs).Error; err != nil {
+		return nil, nil, nil, err
+	}
+	return sqlTicketIDs, accessRequestIDs, appUserRequestIDs, nil
 }
 
 func (r *DbmgmtRepository) GetInstance(ctx context.Context, id uint) (*model.DbInstance, error) {
@@ -71,6 +135,22 @@ func (r *DbmgmtRepository) ListInstances(ctx context.Context, p DbInstanceListPa
 	return list, total, err
 }
 
+// ListInstancesForVisibility 返回全部匹配项（不分页），供服务层先按可见性过滤再分页，
+// 避免「先分页后过滤」导致页面条数与 total 失真。
+func (r *DbmgmtRepository) ListInstancesForVisibility(ctx context.Context, p DbInstanceListParams) ([]model.DbInstance, error) {
+	q := r.db.WithContext(ctx).Model(&model.DbInstance{}).Where("project_id = ?", p.ProjectID)
+	if p.Env != "" {
+		q = q.Where("env = ?", p.Env)
+	}
+	if p.Keyword != "" {
+		like := "%" + p.Keyword + "%"
+		q = q.Where("name LIKE ? OR host LIKE ? OR tags LIKE ?", like, like, like)
+	}
+	var list []model.DbInstance
+	err := q.Order("id DESC").Find(&list).Error
+	return list, err
+}
+
 func (r *DbmgmtRepository) ListAllInstances(ctx context.Context) ([]model.DbInstance, error) {
 	var list []model.DbInstance
 	err := r.db.WithContext(ctx).Find(&list).Error
@@ -102,6 +182,15 @@ func (r *DbmgmtRepository) DeleteGrant(ctx context.Context, id uint) error {
 func (r *DbmgmtRepository) GetGrantInProject(ctx context.Context, projectID, id uint) (*model.DbAccessGrant, error) {
 	var g model.DbAccessGrant
 	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).First(&g, id).Error
+	return &g, err
+}
+
+// GetGrantBySourceRequest 按“来源权限申请”查授权，用于终审幂等。
+func (r *DbmgmtRepository) GetGrantBySourceRequest(ctx context.Context, projectID, requestID uint) (*model.DbAccessGrant, error) {
+	var g model.DbAccessGrant
+	err := r.db.WithContext(ctx).
+		Where("project_id = ? AND source_request_id = ?", projectID, requestID).
+		First(&g).Error
 	return &g, err
 }
 
@@ -179,6 +268,29 @@ func (r *DbmgmtRepository) UpdateAccessRequestStep(ctx context.Context, step *mo
 	return r.db.WithContext(ctx).Save(step).Error
 }
 
+// ClaimAccessRequestStep 原子认领待审批步骤：仅 pending 可更新，并发下只允许一个审批人成功。
+func (r *DbmgmtRepository) ClaimAccessRequestStep(ctx context.Context, stepID, requestID uint, fields map[string]any) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbAccessRequestStep{}).
+		Where("id = ? AND access_request_id = ? AND status = ?", stepID, requestID, model.DbApprovalStepPending).
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
+// UpdateAccessRequestFieldsIfStatus 条件更新申请主表，避免并发审批互相覆盖终态。
+func (r *DbmgmtRepository) UpdateAccessRequestFieldsIfStatus(ctx context.Context, requestID uint, status string, fields map[string]any) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbAccessRequest{}).
+		Where("id = ? AND status = ?", requestID, status).
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
+// UpdateAccessRequestFields 定向更新申请字段（如建库失败回写），不整行 Save。
+func (r *DbmgmtRepository) UpdateAccessRequestFields(ctx context.Context, requestID uint, fields map[string]any) error {
+	return r.db.WithContext(ctx).Model(&model.DbAccessRequest{}).
+		Where("id = ?", requestID).
+		Updates(fields).Error
+}
+
 // --- SQL Ticket ---
 
 func (r *DbmgmtRepository) CreateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error {
@@ -207,6 +319,7 @@ type DbSqlTicketListParams struct {
 	Status          string
 	SubmitterUserID uint
 	TicketType      string
+	Keyword         string
 	Page            int
 	PageSize        int
 }
@@ -222,6 +335,10 @@ func (r *DbmgmtRepository) ListSqlTickets(ctx context.Context, p DbSqlTicketList
 	}
 	if p.TicketType != "" {
 		q = q.Where("ticket_type = ?", p.TicketType)
+	}
+	if kw := strings.TrimSpace(p.Keyword); kw != "" {
+		like := "%" + kw + "%"
+		q = q.Where("(reason LIKE ? OR sql_text LIKE ?)", like, like)
 	}
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -244,6 +361,31 @@ func (r *DbmgmtRepository) ListSqlTicketSteps(ctx context.Context, ticketID uint
 
 func (r *DbmgmtRepository) UpdateSqlTicketStep(ctx context.Context, step *model.DbSqlTicketStep) error {
 	return r.db.WithContext(ctx).Save(step).Error
+}
+
+// ClaimSqlTicketStep 原子认领待审批步骤：仅 pending 可更新。
+func (r *DbmgmtRepository) ClaimSqlTicketStep(ctx context.Context, stepID, ticketID uint, fields map[string]any) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbSqlTicketStep{}).
+		Where("id = ? AND ticket_id = ? AND status = ?", stepID, ticketID, model.DbApprovalStepPending).
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
+// UpdateSqlTicketFieldsIfStatus 条件更新工单主表，避免并发审批/执行互相覆盖终态。
+func (r *DbmgmtRepository) UpdateSqlTicketFieldsIfStatus(ctx context.Context, ticketID uint, status string, fields map[string]any) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
+		Where("id = ? AND status = ?", ticketID, status).
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
+// FailStaleExecutingSqlTickets 把长时间停在 executing 的工单标记为「结果未知」，
+// 覆盖进程崩溃/HTTP 超时导致的状态卡死；不自动重试，避免重复执行。
+func (r *DbmgmtRepository) FailStaleExecutingSqlTickets(ctx context.Context, olderThan time.Time) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbSqlTicket{}).
+		Where("status = ? AND updated_at < ?", model.DbTicketStatusExecuting, olderThan).
+		Updates(map[string]any{"status": model.DbTicketStatusResultUnknown, "updated_at": time.Now()})
+	return res.RowsAffected, res.Error
 }
 
 // --- Execution & Audit ---
@@ -386,6 +528,28 @@ func (r *DbmgmtRepository) ListAppUserRequestSteps(ctx context.Context, requestI
 
 func (r *DbmgmtRepository) UpdateAppUserRequestStep(ctx context.Context, step *model.DbAppUserRequestStep) error {
 	return r.db.WithContext(ctx).Save(step).Error
+}
+
+// ClaimAppUserRequestStep 原子认领待审批步骤：仅 pending 可更新。
+func (r *DbmgmtRepository) ClaimAppUserRequestStep(ctx context.Context, stepID, requestID uint, fields map[string]any) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbAppUserRequestStep{}).
+		Where("id = ? AND app_user_request_id = ? AND status = ?", stepID, requestID, model.DbApprovalStepPending).
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
+// UpdateAppUserRequestFieldsIfStatus 条件更新申请主表，避免并发审批互相覆盖终态。
+func (r *DbmgmtRepository) UpdateAppUserRequestFieldsIfStatus(ctx context.Context, requestID uint, status string, fields map[string]any) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&model.DbAppUserRequest{}).
+		Where("id = ? AND status = ?", requestID, status).
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
+// UpdateAppUserRequestFields 按字段更新申请（map 更新不会自动写 updated_at）。
+func (r *DbmgmtRepository) UpdateAppUserRequestFields(ctx context.Context, requestID uint, fields map[string]any) error {
+	return r.db.WithContext(ctx).Model(&model.DbAppUserRequest{}).
+		Where("id = ?", requestID).Updates(fields).Error
 }
 
 // --- Instance Account ---

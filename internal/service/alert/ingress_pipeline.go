@@ -215,6 +215,9 @@ func RunIngressPipeline(ctx context.Context, host IngressHost, items []Canonical
 
 		if status == "firing" {
 			if !host.TryLockGroupSend(ctx, groupKey) {
+				// 同组正由其它副本投递：本轮不重复推送，但必须留痕，便于排查“告警收到却无外发”。
+				outgoing["suppressed_reason"] = "group_send_busy"
+				host.LogSuppressedFiringTiming(ctx, title, severity, status, groupKey, labelsDigest, "group_send_busy", outgoing)
 				continue
 			}
 		}

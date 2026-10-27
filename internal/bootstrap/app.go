@@ -270,6 +270,10 @@ func (b *Builder) WithGin() *Builder {
 	}
 
 	engine := gin.New()
+	if err := engine.SetTrustedProxies(b.app.Config.HTTP.TrustedProxies); err != nil {
+		b.err = fmt.Errorf("invalid http.trusted_proxies: %w", err)
+		return b
+	}
 	engine.Use(middleware.Recovery(b.app.Logger))
 	cspOn := true
 	if b.app.Config.Auth.CSPEnabled != nil {

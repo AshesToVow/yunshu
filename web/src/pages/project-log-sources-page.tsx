@@ -15,7 +15,7 @@ import {
   Tag,
   message,
 } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getProjects,
@@ -29,7 +29,12 @@ import {
   type ServiceItem,
   type LogSourceItem,
 } from "../services/projects";
+import { extractApiErrorMessage } from "../services/http";
 import { useDictOptions } from "../hooks/use-dict-options";
+
+function isFormValidationError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "errorFields" in error;
+}
 
 export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
@@ -43,8 +48,12 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
   const [loading, setLoading] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number>();
   const [fileOptions, setFileOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [current, setCurrent] = useState<LogSourceItem | null>(null);
+  const loadSeqRef = useRef(0);
+  const serversSeqRef = useRef(0);
+  const servicesSeqRef = useRef(0);
   const [form] = Form.useForm<{
     id?: number;
     service_id: number;
@@ -72,34 +81,65 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
 
   useEffect(() => {
     void (async () => {
-      const p = await getProjects({ page: 1, page_size: 1000 });
-      setProjects(p.list);
-      if (p.list[0]) setProjectId(p.list[0].id);
+      try {
+        const p = await getProjects({ page: 1, page_size: 1000 });
+        setProjects(p.list);
+        if (p.list[0]) setProjectId(p.list[0].id);
+      } catch (e: unknown) {
+        message.error(extractApiErrorMessage(e, "加载项目列表失败"));
+      }
     })();
   }, []);
 
   useEffect(() => {
-    if (!projectId) return;
-    void (async () => {
-      const sv = await getProjectServers(projectId, { page: 1, page_size: 1000 });
-      setServers(sv.list);
+    const seq = ++serversSeqRef.current;
+    if (!projectId) {
+      setServers([]);
       setServerId(undefined);
       setServiceId(undefined);
       setServices([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const sv = await getProjectServers(projectId, { page: 1, page_size: 1000 });
+        if (seq !== serversSeqRef.current) return;
+        setServers(sv.list);
+        setServerId(undefined);
+        setServiceId(undefined);
+        setServices([]);
+      } catch (e: unknown) {
+        if (seq !== serversSeqRef.current) return;
+        message.error(extractApiErrorMessage(e, "加载服务器列表失败"));
+      }
     })();
   }, [projectId]);
 
   useEffect(() => {
-    if (!projectId) return;
-    void (async () => {
-      const list = await getProjectServices(projectId, { page: 1, page_size: 1000, server_id: serverId });
-      setServices(list.list);
+    const seq = ++servicesSeqRef.current;
+    if (!projectId) {
+      setServices([]);
       setServiceId(undefined);
+      return;
+    }
+    void (async () => {
+      try {
+        const list = await getProjectServices(projectId, { page: 1, page_size: 1000, server_id: serverId });
+        if (seq !== servicesSeqRef.current) return;
+        setServices(list.list);
+        setServiceId(undefined);
+      } catch (e: unknown) {
+        if (seq !== servicesSeqRef.current) return;
+        message.error(extractApiErrorMessage(e, "加载服务列表失败"));
+      }
     })();
   }, [projectId, serverId]);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId) {
+      setSources([]);
+      return;
+    }
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, serviceId]);
@@ -117,14 +157,36 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
   }
 
   async function load() {
-    if (!projectId) return;
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setSources([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res = await getProjectLogSources(projectId, { page: 1, page_size: 1000, service_id: serviceId });
+      if (seq !== loadSeqRef.current) return;
       setSources(res.list);
+    } catch (e: unknown) {
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载日志源失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
+  }
+
+  function handleProjectChange(id: number) {
+    loadSeqRef.current += 1;
+    serversSeqRef.current += 1;
+    servicesSeqRef.current += 1;
+    setProjectId(id);
+    setServers([]);
+    setServices([]);
+    setSources([]);
+    setServerId(undefined);
+    setServiceId(undefined);
+    setLoading(false);
   }
 
   function openCreate() {
@@ -158,10 +220,10 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
   }
 
   async function onSubmit() {
-    if (!projectId) return;
-    const v = await form.validateFields();
+    if (!projectId || submitting) return;
     setSubmitting(true);
     try {
+      const v = await form.validateFields();
       let finalPath = String(v.path || "").trim();
       if (v.log_type === "file") {
         const logDir = String(v.log_dir || "").trim();
@@ -185,9 +247,26 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
       });
       message.success(current ? "已更新日志源" : "已创建日志源");
       setEditorOpen(false);
-      void load();
+      await load();
+    } catch (e: unknown) {
+      if (isFormValidationError(e)) return;
+      message.error(extractApiErrorMessage(e, current ? "更新日志源失败" : "创建日志源失败"));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDelete(record: LogSourceItem) {
+    if (!projectId || deletingId != null) return;
+    setDeletingId(record.id);
+    try {
+      await deleteProjectLogSource(projectId, record.id);
+      message.success("已删除");
+      await load();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除日志源失败"));
+    } finally {
+      setDeletingId(undefined);
     }
   }
 
@@ -196,7 +275,7 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
       <Select
         style={{ width: 240 }}
         value={projectId}
-        onChange={setProjectId}
+        onChange={handleProjectChange}
         options={projectOptions}
         placeholder="项目"
       />
@@ -230,12 +309,13 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
 
   const body = (
     <>
-      {embedded ? <div style={{ marginBottom: 12 }}>{toolbar}</div> : null}
+      <div className="toolbar">{toolbar}</div>
       <Table
         rowKey="id"
         dataSource={sources}
         loading={loading}
         pagination={false}
+        scroll={{ x: 1000 }}
         columns={[
           { title: "类型", dataIndex: "log_type", width: 100 },
           { title: "路径/Unit", dataIndex: "path" },
@@ -250,22 +330,19 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
           {
             title: "操作",
             width: 200,
+            fixed: "right",
             render: (_: unknown, record: LogSourceItem) => (
               <Space>
-                <Button icon={<EditOutlined />} onClick={() => openEdit(record)}>
+                <Button icon={<EditOutlined />} disabled={deletingId != null} onClick={() => openEdit(record)}>
                   编辑
                 </Button>
                 <Popconfirm
                   title="确认删除日志源？"
-                  onConfirm={() =>
-                    projectId &&
-                    deleteProjectLogSource(projectId, record.id).then(() => {
-                      message.success("已删除");
-                      void load();
-                    })
-                  }
+                  okText="删除"
+                  cancelText="取消"
+                  onConfirm={() => handleDelete(record)}
                 >
-                  <Button danger icon={<DeleteOutlined />}>
+                  <Button danger icon={<DeleteOutlined />} loading={deletingId === record.id} disabled={deletingId != null}>
                     删除
                   </Button>
                 </Popconfirm>
@@ -378,7 +455,7 @@ export function ProjectLogSourcesPage({ embedded = false }: { embedded?: boolean
     return body;
   }
   return (
-    <Card title="日志源配置" extra={toolbar}>
+    <Card className="table-card" title="日志源配置">
       {body}
     </Card>
   );

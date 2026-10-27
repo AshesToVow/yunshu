@@ -35,6 +35,13 @@ func (r *UserRepository) Save(ctx context.Context, user *model.User) error {
 	return r.db.WithContext(ctx).Save(user).Error
 }
 
+func (r *UserRepository) UpdateFields(ctx context.Context, id uint, fields map[string]any) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Updates(fields).Error
+}
+
 func (r *UserRepository) Delete(ctx context.Context, user *model.User) error {
 	return r.db.WithContext(ctx).Delete(user).Error
 }
@@ -155,6 +162,22 @@ func (r *UserRepository) ListUserIDsByRoleCode(ctx context.Context, roleCode str
 	return ids, nil
 }
 
+// CountEnabledUsersByRoleCode 统计仍处于启用状态、且角色本身启用的用户数（用于最后一名超管保护）。
+func (r *UserRepository) CountEnabledUsersByRoleCode(ctx context.Context, roleCode string) (int64, error) {
+	roleCode = strings.TrimSpace(roleCode)
+	if roleCode == "" {
+		return 0, nil
+	}
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.User{}).
+		Joins("JOIN user_roles ur ON ur.user_id = users.id").
+		Joins("JOIN roles r ON r.id = ur.role_id AND r.code = ? AND r.status = ?", roleCode, model.StatusEnabled).
+		Where("users.status = ?", model.StatusEnabled).
+		Distinct("users.id").
+		Count(&count).Error
+	return count, err
+}
+
 // ListActiveIDsByDepartmentIDs 返回部门 ID 列表下、状态为启用的用户 ID（精确匹配 department_id）。
 func (r *UserRepository) ListActiveIDsByDepartmentIDs(ctx context.Context, deptIDs []uint) ([]uint, error) {
 	if len(deptIDs) == 0 {
@@ -192,6 +215,6 @@ func (r *UserRepository) ListActiveIDsByDepartmentSubtree(ctx context.Context, r
 	q = q.Where("("+strings.Join(orParts, " OR ")+")", args...)
 
 	var ids []uint
-	err := q.Pluck("users.id", &ids).Error
+	err := q.Order("users.id ASC").Pluck("users.id", &ids).Error
 	return ids, err
 }

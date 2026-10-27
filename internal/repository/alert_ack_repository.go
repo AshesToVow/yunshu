@@ -21,6 +21,18 @@ func (r *AlertAckRepository) Create(ctx context.Context, row *model.AlertAck) er
 	return r.db.WithContext(ctx).Create(row).Error
 }
 
+// ReplaceActive 在同一事务内结束旧认领并写入新认领，保证同指纹仅一条有效记录。
+func (r *AlertAckRepository) ReplaceActive(ctx context.Context, row *model.AlertAck, now time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.AlertAck{}).
+			Where("fingerprint = ? AND expires_at > ?", row.Fingerprint, now).
+			Update("expires_at", now).Error; err != nil {
+			return err
+		}
+		return tx.Create(row).Error
+	})
+}
+
 func (r *AlertAckRepository) ExpireActive(ctx context.Context, fingerprint string, now time.Time) error {
 	return r.db.WithContext(ctx).Model(&model.AlertAck{}).
 		Where("fingerprint = ? AND expires_at > ?", fingerprint, now).

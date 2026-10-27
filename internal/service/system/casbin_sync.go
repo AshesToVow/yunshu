@@ -105,6 +105,10 @@ func RemoveRolePolicies(enforcer *casbin.SyncedEnforcer, roleCode string) error 
 	if _, err := enforcer.DeleteRolesForUser(roleCode); err != nil {
 		return err
 	}
+	// g 策略为 (user, role)，删除角色时需按第二列清理用户绑定。
+	if _, err := enforcer.RemoveFilteredGroupingPolicy(1, roleCode); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -1,7 +1,23 @@
 import { DownloadOutlined, PlayCircleOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Form, Input, Radio, Select, Space, Table, Tabs, Tag, Tree, Upload, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Form,
+  Input,
+  Popconfirm,
+  Radio,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Tree,
+  Upload,
+  message,
+} from "antd";
 import type { DataNode } from "antd/es/tree";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CREATE_TABLE_SAMPLE, SQL_AUDIT_RULES, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import { envLabel } from "../utils/dbmgmt-labels";
@@ -22,6 +38,7 @@ import {
   type DbSqlCheckRow,
   type DbSqlExecution,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import {
   downloadQueryResultCsv,
@@ -29,8 +46,6 @@ import {
   formatSqlCheckSummary,
   guessSqlRiskLevel,
   quoteSqlIdent,
-  riskLevelColor,
-  riskLevelLabel,
   sanitizeQuerySql,
 } from "../utils/dbmgmt-console";
 import { formatDateTime } from "../utils/format";
@@ -91,6 +106,25 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyKeyword, setHistoryKeyword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const loadInstancesSeqRef = useRef(0);
+  const treeSeqRef = useRef(0);
+  const metaSeqRef = useRef(0);
+  const historySeqRef = useRef(0);
+  const querySeqRef = useRef(0);
+  const checkSeqRef = useRef(0);
+
+  const resetQueryResult = useCallback(() => {
+    querySeqRef.current += 1;
+    setLoading(false);
+    setColumns([]);
+    setColumnDefs([]);
+    setRawRows([]);
+    setRows([]);
+    setTableColumns([]);
+    setRiskMsg(undefined);
+  }, []);
 
   const currentInstance = useMemo(() => instances.find((i) => i.id === instanceId), [instances, instanceId]);
   const writeRisk = useMemo(() => guessSqlRiskLevel(sql), [sql]);
@@ -106,17 +140,29 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const projectName = projects.find((p) => p.id === projectId)?.name ?? "数据库";
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch(() => undefined);
   }, []);
 
   const loadInstances = useCallback(async () => {
-    if (!projectId) return;
-    const res = await listDbInstances(projectId, { page: 1, page_size: 200 });
-    const list = res.list ?? [];
-    setInstances(list);
+    const seq = ++loadInstancesSeqRef.current;
+    if (!projectId) {
+      setInstances([]);
+      return;
+    }
+    try {
+      const res = await listDbInstances(projectId, { page: 1, page_size: 200 });
+      if (seq !== loadInstancesSeqRef.current) return;
+      setInstances(res.list ?? []);
+    } catch (e) {
+      if (seq !== loadInstancesSeqRef.current) return;
+      setInstances([]);
+      message.error(extractApiErrorMessage(e, "加载实例列表失败"));
+    }
   }, [projectId]);
 
   useEffect(() => {
@@ -124,7 +170,11 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   }, [loadInstances]);
 
   const buildInstanceTree = useCallback(async () => {
-    if (!projectId) return;
+    const seq = ++treeSeqRef.current;
+    if (!projectId) {
+      setTreeData([]);
+      return;
+    }
     const byDriver = new Map<string, DbInstance[]>();
     for (const inst of instances) {
       const d = (inst.driver || "mysql").toLowerCase();
@@ -138,10 +188,20 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
         const instKey = `inst:${inst.id}`;
         let dbChildren: DataNode[] = [];
         if (instanceId === inst.id) {
-          const dbs = await listDbDatabases(projectId, inst.id).catch(() => []);
+          const dbs = await listDbDatabases(projectId, inst.id).catch((e) => {
+            if (seq === treeSeqRef.current) message.error(extractApiErrorMessage(e, "加载数据库列表失败"));
+            return [];
+          });
+          if (seq !== treeSeqRef.current) return;
           dbChildren = await Promise.all(
             (dbs ?? []).map(async (d) => {
-              const tables = database === d.name ? await listDbTables(projectId, inst.id, d.name).catch(() => []) : [];
+              const tables =
+                database === d.name
+                  ? await listDbTables(projectId, inst.id, d.name).catch((e) => {
+                      if (seq === treeSeqRef.current) message.error(extractApiErrorMessage(e, "加载表列表失败"));
+                      return [];
+                    })
+                  : [];
               return {
                 title: d.name,
                 key: `db:${inst.id}:${d.name}`,
@@ -158,6 +218,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       }
       driverNodes.push({ title: driver, key: `driver:${driver}`, children });
     }
+    if (seq !== treeSeqRef.current) return;
     setTreeData([{ title: projectName, key: "root", children: driverNodes }]);
   }, [projectId, instances, instanceId, database, projectName]);
 
@@ -166,6 +227,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   }, [buildInstanceTree]);
 
   const refreshMeta = useCallback(async () => {
+    const seq = ++metaSeqRef.current;
     if (!projectId || !instanceId) {
       setPerm(null);
       setPermLoaded(false);
@@ -174,15 +236,22 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     setPermLoaded(false);
     try {
       const p = await getEffectiveDbPermission(projectId, instanceId);
+      if (seq !== metaSeqRef.current) return;
       setPerm(p);
       if (database && selectedTable) {
-        const cols = await listDbColumns(projectId, instanceId, database, selectedTable).catch(() => []);
+        const cols = await listDbColumns(projectId, instanceId, database, selectedTable).catch((e) => {
+          if (seq === metaSeqRef.current) message.error(extractApiErrorMessage(e, "加载表结构失败"));
+          return [];
+        });
+        if (seq !== metaSeqRef.current) return;
         setTableColumns(cols ?? []);
       }
-    } catch {
+    } catch (e) {
+      if (seq !== metaSeqRef.current) return;
       setPerm(null);
+      message.error(extractApiErrorMessage(e, "加载数据库权限失败"));
     } finally {
-      setPermLoaded(true);
+      if (seq === metaSeqRef.current) setPermLoaded(true);
     }
   }, [projectId, instanceId, database, selectedTable]);
 
@@ -191,7 +260,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   }, [refreshMeta]);
 
   const loadHistory = useCallback(async () => {
-    if (!projectId) return;
+    const seq = ++historySeqRef.current;
+    if (!projectId) {
+      setHistoryRows([]);
+      setHistoryTotal(0);
+      return;
+    }
     setHistoryLoading(true);
     try {
       const res = await listDbExecutions(projectId, {
@@ -200,10 +274,14 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
         page: historyPage,
         page_size: 10,
       });
+      if (seq !== historySeqRef.current) return;
       setHistoryRows(res.list ?? []);
       setHistoryTotal(res.total ?? 0);
+    } catch (e) {
+      if (seq !== historySeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载查询历史失败"));
     } finally {
-      setHistoryLoading(false);
+      if (seq === historySeqRef.current) setHistoryLoading(false);
     }
   }, [projectId, instanceId, historyPage]);
 
@@ -215,18 +293,22 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     const k = String(keys[0] ?? "");
     if (k.startsWith("inst:")) {
       const id = Number(k.slice(5));
+      if (id !== instanceId) resetQueryResult();
       setInstanceId(id);
       setDatabase(undefined);
       setSelectedTable(undefined);
+      setTableColumns([]);
       return;
     }
     if (k.startsWith("db:")) {
       const parts = k.split(":");
       const id = Number(parts[1]);
       const dbName = parts.slice(2).join(":");
+      if (id !== instanceId) resetQueryResult();
       setInstanceId(id);
       setDatabase(dbName);
       setSelectedTable(undefined);
+      setTableColumns([]);
       return;
     }
     if (k.startsWith("table:")) {
@@ -237,18 +319,27 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       const tbl = m[3];
       const inst = instances.find((i) => i.id === iid);
       const drv = (inst?.driver || "mysql").toLowerCase();
+      if (iid !== instanceId) resetQueryResult();
       setInstanceId(iid);
       setDatabase(dbn);
       setSelectedTable(tbl);
       setSql(`SELECT * FROM ${quoteSqlIdent(tbl, drv)} LIMIT 100`);
       if (projectId) {
-        const cols = await listDbColumns(projectId, iid, dbn, tbl).catch(() => []);
+        const seq = ++metaSeqRef.current;
+        setTableColumns([]);
+        const cols = await listDbColumns(projectId, iid, dbn, tbl).catch((e) => {
+          if (seq === metaSeqRef.current) message.error(extractApiErrorMessage(e, "加载表结构失败"));
+          return [];
+        });
+        if (seq !== metaSeqRef.current) return;
         setTableColumns(cols ?? []);
       }
     }
   };
 
   useEffect(() => {
+    checkSeqRef.current += 1;
+    setChecking(false);
     setCheckPassed(false);
     setCheckOpen(false);
     setCheckSummary(undefined);
@@ -268,6 +359,8 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       message.warning("请先选择要查询的数据库");
       return;
     }
+    if (loading) return;
+    const seq = ++querySeqRef.current;
     setLoading(true);
     setRiskMsg(undefined);
     try {
@@ -277,6 +370,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
         return;
       }
       const res = await queryDb(projectId, instanceId, { database, sql: querySql });
+      if (seq !== querySeqRef.current) return;
       const cols = res.columns ?? [];
       const dataRows = (res.rows ?? []).map((r) => (Array.isArray(r) ? r : []));
       setColumns(cols);
@@ -286,21 +380,25 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       if (res.truncated) message.warning("结果已截断");
       setQueryTab("result");
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "查询失败");
+      if (seq !== querySeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "查询失败"));
     } finally {
-      setLoading(false);
+      if (seq === querySeqRef.current) setLoading(false);
     }
   };
 
   const runCheck = async () => {
-    if (!projectId || !instanceId) return;
+    if (!projectId || !instanceId || checking) return;
     const instanceDDL = /^\s*CREATE\s+DATABASE\b/i.test(sql.trim()) || /^\s*DROP\s+DATABASE\b/i.test(sql.trim());
     if (!database && !instanceDDL) {
       message.warning("请先选择数据库");
       return;
     }
+    const seq = ++checkSeqRef.current;
+    setChecking(true);
     try {
       const res = await checkDbSql(projectId, instanceId, { database, sql, audit_mode: auditType });
+      if (seq !== checkSeqRef.current) return;
       setCheckRows(res.rows ?? []);
       setCheckSummary(formatSqlCheckSummary(res));
       setCheckOpen(true);
@@ -310,8 +408,11 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       else if ((res.warning_count ?? 0) > 0) message.warning("预检有警告，请确认后执行");
       else message.success("预检通过");
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "预检失败");
+      if (seq !== checkSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "预检失败"));
       setCheckPassed(false);
+    } finally {
+      if (seq === checkSeqRef.current) setChecking(false);
     }
   };
 
@@ -320,12 +421,16 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       message.warning("请先选择数据库");
       return;
     }
+    if (checking) return;
     if (!importSql.trim()) {
       message.warning("请上传 SQL 文件");
       return;
     }
+    const seq = ++checkSeqRef.current;
+    setChecking(true);
     try {
       const res = await checkDbSql(projectId, instanceId, { database, sql: importSql, audit_mode: auditType });
+      if (seq !== checkSeqRef.current) return;
       setCheckRows(res.rows ?? []);
       setCheckSummary(formatSqlCheckSummary(res));
       setCheckOpen(true);
@@ -334,12 +439,16 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       if (!passed) message.error(formatSqlCheckFailure(res));
       else message.success("文件 SQL 预检通过");
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "预检失败");
+      if (seq !== checkSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "预检失败"));
       setImportCheckPassed(false);
+    } finally {
+      if (seq === checkSeqRef.current) setChecking(false);
     }
   };
 
   const runExecute = async () => {
+    if (submitting) return;
     if (!projectId || !instanceId) {
       message.warning("请先选择实例");
       return;
@@ -369,6 +478,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       message.error("当前 SQL 命中阻断规则，无法执行");
       return;
     }
+    setSubmitting(true);
     try {
       const res = await executeDb(projectId, instanceId, {
         database,
@@ -383,11 +493,14 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
         message.success(`执行成功，影响行数 ${res.rows_affected ?? 0}`);
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "执行失败");
+      message.error(extractApiErrorMessage(e, "执行失败"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const submitImport = async () => {
+    if (submitting) return;
     if (!projectId || !instanceId || !database) {
       message.warning("请先选择数据库");
       return;
@@ -408,18 +521,25 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
       message.warning("请填写变更概述");
       return;
     }
-    const res = await importDbSql(projectId, instanceId, {
-      database,
-      sql: importSql,
-      reason: changeDesc,
-      audit_mode: auditType,
-      is_backup: backupChoice === "yes",
-      sql_file_ref: importFileName || undefined,
-    });
-    if (res.status === "pending_approval") {
-      message.info(res.message ?? `已创建审批工单 #${res.ticket_id}`);
-    } else {
-      message.success(res.message ?? "导入执行成功");
+    setSubmitting(true);
+    try {
+      const res = await importDbSql(projectId, instanceId, {
+        database,
+        sql: importSql,
+        reason: changeDesc,
+        audit_mode: auditType,
+        is_backup: backupChoice === "yes",
+        sql_file_ref: importFileName || undefined,
+      });
+      if (res.status === "pending_approval") {
+        message.info(res.message ?? `已创建审批工单 #${res.ticket_id}`);
+      } else {
+        message.success(res.message ?? "导入执行成功");
+      }
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "导入失败"));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -451,7 +571,7 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     : "/";
 
   return (
-    <Card title={pageTitle}>
+    <Card className="table-card" title={pageTitle}>
       <div className="dbmgmt-console-layout">
         <div className="dbmgmt-console-tree">
           <div style={{ marginBottom: 8, fontWeight: 600 }}>
@@ -465,6 +585,10 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               setProjectId(v);
               setInstanceId(undefined);
               setDatabase(undefined);
+              setSelectedTable(undefined);
+              setInstances([]);
+              setTreeData([]);
+              resetQueryResult();
             }}
           />
           <Tree showLine defaultExpandAll treeData={treeData} onSelect={(keys) => void onTreeSelect(keys)} />
@@ -481,25 +605,32 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               {!instanceId ? (
                 <Alert type="info" showIcon message="当前未选择实例信息!" style={{ marginBottom: 12 }} />
               ) : null}
-              <Space style={{ marginBottom: 12 }} wrap>
-                <Button
-                  type="primary"
-                  icon={<PlayCircleOutlined />}
-                  loading={loading}
-                  disabled={!canQuerySql}
-                  onClick={() => void runQuery()}
-                >
-                  查询
-                </Button>
-                <Button onClick={() => setSql(formatSqlBasic(sql))}>格式化</Button>
-                <Link to="/dbmgmt/apply/query">
-                  <Button>查询权限申请</Button>
-                </Link>
-                <Button icon={<ReloadOutlined />} onClick={() => void loadHistory()} />
-                <Button icon={<DownloadOutlined />} disabled={!rawRows.length} onClick={exportCsv}>
-                  导出 CSV
-                </Button>
-              </Space>
+              <div className="toolbar">
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    loading={loading}
+                    disabled={!canQuerySql || loading}
+                    onClick={() => void runQuery()}
+                  >
+                    查询
+                  </Button>
+                  <Button onClick={() => setSql(formatSqlBasic(sql))}>格式化</Button>
+                  <Link to="/dbmgmt/apply/query">
+                    <Button>查询权限申请</Button>
+                  </Link>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    loading={historyLoading}
+                    disabled={historyLoading}
+                    onClick={() => void loadHistory()}
+                  />
+                  <Button icon={<DownloadOutlined />} disabled={!rawRows.length} onClick={exportCsv}>
+                    导出 CSV
+                  </Button>
+                </Space>
+              </div>
               <MonacoSqlEditor value={sql} onChange={setSql} height={240} />
             </>
           ) : null}
@@ -531,6 +662,8 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                     accept=".sql,.txt"
                     maxCount={1}
                     beforeUpload={(file) => {
+                      checkSeqRef.current += 1;
+                      setChecking(false);
                       setImportFileName(file.name);
                       void file.text().then((t) => {
                         setImportSql(t);
@@ -539,6 +672,8 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                       return false;
                     }}
                     onRemove={() => {
+                      checkSeqRef.current += 1;
+                      setChecking(false);
                       setImportFileName("");
                       setImportSql("");
                       setImportCheckPassed(false);
@@ -599,45 +734,68 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   message="当前为只读查询语句，请切换到「SQL 查询」页面执行；SQL 审核用于 INSERT/UPDATE/DELETE/DDL 等变更。"
                 />
               ) : null}
-              <Space style={{ marginTop: 8 }} wrap>
-                {auditTab === "sql" ? (
-                  <>
-                    <Button
-                      type="primary"
-                      style={{ background: "#fa8c16", borderColor: "#fa8c16" }}
-                      onClick={() => void runCheck()}
-                    >
-                      sql检测
-                    </Button>
-                    <Button
-                      type="primary"
-                      disabled={!checkPassed || isReadOnlySql || !canWriteSql}
-                      onClick={() => void runExecute()}
-                    >
-                      提交sql
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      type="primary"
-                      style={{ background: "#fa8c16", borderColor: "#fa8c16" }}
-                      onClick={() => void runImportCheck()}
-                    >
-                      sql检测
-                    </Button>
-                    <Button
-                      type="primary"
-                      disabled={
-                        !importCheckPassed || !database || !importSql.trim() || !changeDesc.trim() || !canWriteSql
-                      }
-                      onClick={() => void submitImport()}
-                    >
-                      提交
-                    </Button>
-                  </>
-                )}
-              </Space>
+              <div className="toolbar">
+                <Space wrap>
+                  {auditTab === "sql" ? (
+                    <>
+                      <Button
+                        type="primary"
+                        style={{ background: "#fa8c16", borderColor: "#fa8c16" }}
+                        loading={checking}
+                        disabled={checking}
+                        onClick={() => void runCheck()}
+                      >
+                        sql检测
+                      </Button>
+                      <Popconfirm
+                        title="确认提交该 SQL？变更执行后不可撤销"
+                        onConfirm={() => void runExecute()}
+                        disabled={submitting}
+                      >
+                        <Button
+                          type="primary"
+                          loading={submitting}
+                          disabled={!checkPassed || isReadOnlySql || !canWriteSql || submitting}
+                        >
+                          提交sql
+                        </Button>
+                      </Popconfirm>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="primary"
+                        style={{ background: "#fa8c16", borderColor: "#fa8c16" }}
+                        loading={checking}
+                        disabled={checking}
+                        onClick={() => void runImportCheck()}
+                      >
+                        sql检测
+                      </Button>
+                      <Popconfirm
+                        title="确认提交导入？执行后不可撤销"
+                        onConfirm={() => void submitImport()}
+                        disabled={submitting}
+                      >
+                        <Button
+                          type="primary"
+                          loading={submitting}
+                          disabled={
+                            !importCheckPassed ||
+                            !database ||
+                            !importSql.trim() ||
+                            !changeDesc.trim() ||
+                            !canWriteSql ||
+                            submitting
+                          }
+                        >
+                          提交
+                        </Button>
+                      </Popconfirm>
+                    </>
+                  )}
+                </Space>
+              </div>
               <div style={{ marginTop: 24 }}>
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>
                   正确建表样例:（标记红词句必须有, 否则通不过审核!）
@@ -658,29 +816,42 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
           {mode === "all" ? (
             <>
               <MonacoSqlEditor value={sql} onChange={setSql} height={280} />
-              <Space style={{ marginTop: 12 }} wrap>
-                {isQueryMode ? (
-                  <Button
-                    type="primary"
-                    icon={<PlayCircleOutlined />}
-                    loading={loading}
-                    disabled={!canQuerySql}
-                    onClick={() => void runQuery()}
-                  >
-                    查询
-                  </Button>
-                ) : null}
-                {isAuditMode && !isReadOnlySql ? (
-                  <>
-                    <Button onClick={() => void runCheck()} disabled={!canWriteSql}>
-                      SQL 检查
+              <div className="toolbar" style={{ marginTop: 12 }}>
+                <Space wrap>
+                  {isQueryMode ? (
+                    <Button
+                      type="primary"
+                      icon={<PlayCircleOutlined />}
+                      loading={loading}
+                      disabled={!canQuerySql || loading}
+                      onClick={() => void runQuery()}
+                    >
+                      查询
                     </Button>
-                    <Button type="primary" danger disabled={!canWriteSql} onClick={() => void runExecute()}>
-                      提交 SQL
-                    </Button>
-                  </>
-                ) : null}
-              </Space>
+                  ) : null}
+                  {isAuditMode && !isReadOnlySql ? (
+                    <>
+                      <Button onClick={() => void runCheck()} disabled={!canWriteSql} loading={checking}>
+                        SQL 检查
+                      </Button>
+                      <Popconfirm
+                        title="确认提交该 SQL？变更执行后不可撤销"
+                        onConfirm={() => void runExecute()}
+                        disabled={submitting}
+                      >
+                        <Button
+                          type="primary"
+                          danger
+                          loading={submitting}
+                          disabled={!canWriteSql || submitting}
+                        >
+                          提交 SQL
+                        </Button>
+                      </Popconfirm>
+                    </>
+                  ) : null}
+                </Space>
+              </div>
             </>
           ) : null}
 
@@ -695,26 +866,35 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                   label: "查询历史",
                   children: (
                     <>
-                      <Space style={{ marginBottom: 12 }}>
-                        <Input
-                          placeholder="请输入实例名称、SQL、数据库"
-                          value={historyKeyword}
-                          onChange={(e) => setHistoryKeyword(e.target.value)}
-                          style={{ width: 280 }}
-                        />
-                        <Button type="primary" onClick={() => void loadHistory()}>
-                          搜索
-                        </Button>
-                        <Button
-                          icon={<ReloadOutlined />}
-                          onClick={() => {
-                            setHistoryKeyword("");
-                            void loadHistory();
-                          }}
-                        >
-                          刷新重置
-                        </Button>
-                      </Space>
+                      <div className="toolbar">
+                        <Space wrap>
+                          <Input
+                            placeholder="请输入实例名称、SQL、数据库"
+                            value={historyKeyword}
+                            onChange={(e) => setHistoryKeyword(e.target.value)}
+                            style={{ width: 280 }}
+                          />
+                          <Button
+                            type="primary"
+                            loading={historyLoading}
+                            disabled={historyLoading}
+                            onClick={() => void loadHistory()}
+                          >
+                            搜索
+                          </Button>
+                          <Button
+                            icon={<ReloadOutlined />}
+                            loading={historyLoading}
+                            disabled={historyLoading}
+                            onClick={() => {
+                              setHistoryKeyword("");
+                              void loadHistory();
+                            }}
+                          >
+                            刷新重置
+                          </Button>
+                        </Space>
+                      </div>
                       <Table
                         size="small"
                         loading={historyLoading}
@@ -722,6 +902,13 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
                         dataSource={filteredHistory}
                         onRow={(r) => ({
                           onDoubleClick: () => {
+                            if (r.instance_id && r.instance_id !== instanceId) {
+                              resetQueryResult();
+                              setSelectedTable(undefined);
+                            } else if (r.database_name && r.database_name !== database) {
+                              setSelectedTable(undefined);
+                              setTableColumns([]);
+                            }
                             if (r.instance_id) setInstanceId(r.instance_id);
                             if (r.database_name) setDatabase(r.database_name);
                             if (r.sql_excerpt) setSql(r.sql_excerpt);

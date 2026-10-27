@@ -155,7 +155,7 @@ func (s *K8sWorkloadService) topologyService(ctx context.Context, q TopologyQuer
 	b := newGraphBuilder()
 	sid := nodeID("service", q.Namespace, svc.Name)
 	b.addNode(sid, svc.Name, "Service", string(svc.Spec.Type))
-	appendIngressPointingToService(b, ctx, k, q.Namespace, svc.Name, sid)
+	appendIngressForServices(b, ctx, k, q.Namespace, b.nodes)
 	appendWorkloadsBehindService(ctx, k, b, q.Namespace, svc, sid)
 	return b.build(), nil
 }
@@ -305,6 +305,7 @@ func appendDeploymentReplicaSetChain(b *graphBuilder, ctx context.Context, k *ko
 }
 
 func appendIngressForServices(b *graphBuilder, ctx context.Context, k *kom.Kubectl, ns string, nodes []TopologyNode) {
+	svcNodeIDs := make(map[string]string, len(nodes))
 	for _, n := range nodes {
 		if n.Kind != "Service" {
 			continue
@@ -313,41 +314,60 @@ func appendIngressForServices(b *graphBuilder, ctx context.Context, k *kom.Kubec
 		if len(parts) < 3 {
 			continue
 		}
-		appendIngressPointingToService(b, ctx, k, ns, parts[2], n.ID)
+		svcNodeIDs[parts[2]] = n.ID
 	}
-}
-
-func appendIngressPointingToService(b *graphBuilder, ctx context.Context, k *kom.Kubectl, ns, svcName, sid string) {
+	if len(svcNodeIDs) == 0 {
+		return
+	}
+	// 一次列全量 Ingress 再按服务聚合，避免每个 Service 各列一次（N+1）。
 	var ings []networkingv1.Ingress
 	if err := k.WithContext(ctx).Resource(&networkingv1.Ingress{}).Namespace(ns).List(&ings).Error; err != nil {
 		return
 	}
 	for _, ing := range ings {
-		if !ingressReferencesService(ing, svcName) {
+		var targets []string
+		for _, svcName := range ingressReferencedServices(ing) {
+			if sid, ok := svcNodeIDs[svcName]; ok {
+				targets = append(targets, sid)
+			}
+		}
+		if len(targets) == 0 {
 			continue
 		}
 		iid := nodeID("ingress", ns, ing.Name)
-		state := "rules:" + fmt.Sprintf("%d", len(ing.Spec.Rules))
-		b.addNode(iid, ing.Name, "Ingress", state)
-		b.addEdge(iid, sid, "routes")
+		b.addNode(iid, ing.Name, "Ingress", "rules:"+fmt.Sprintf("%d", len(ing.Spec.Rules)))
+		for _, sid := range targets {
+			b.addEdge(iid, sid, "routes")
+		}
 	}
 }
 
-func ingressReferencesService(ing networkingv1.Ingress, svcName string) bool {
-	if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil && ing.Spec.DefaultBackend.Service.Name == svcName {
-		return true
+// ingressReferencedServices 返回 Ingress 引用的全部后端 Service 名称（去重）。
+func ingressReferencedServices(ing networkingv1.Ingress) []string {
+	seen := make(map[string]struct{}, 4)
+	add := func(name string) {
+		if strings.TrimSpace(name) != "" {
+			seen[name] = struct{}{}
+		}
+	}
+	if ing.Spec.DefaultBackend != nil && ing.Spec.DefaultBackend.Service != nil {
+		add(ing.Spec.DefaultBackend.Service.Name)
 	}
 	for _, rule := range ing.Spec.Rules {
 		if rule.HTTP == nil {
 			continue
 		}
 		for _, p := range rule.HTTP.Paths {
-			if p.Backend.Service != nil && p.Backend.Service.Name == svcName {
-				return true
+			if p.Backend.Service != nil {
+				add(p.Backend.Service.Name)
 			}
 		}
 	}
-	return false
+	out := make([]string, 0, len(seen))
+	for name := range seen {
+		out = append(out, name)
+	}
+	return out
 }
 
 func labelsToSelector(labels map[string]string) string {

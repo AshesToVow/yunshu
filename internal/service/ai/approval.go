@@ -114,23 +114,44 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 			return row, nil
 		}
 		uid := actor.ID
-		row.ReviewerID = &uid
-		row.ReviewNote = truncateStr(req.Note, 500)
+		reviewNote := truncateStr(req.Note, 500)
 		if !req.Approve || (detail != nil && detail.Status == model.WorkflowTicketStatusRejected) {
-			row.Status = "rejected"
-			if err := s.repo.SaveApproval(ctx, row); err != nil {
+			affected, err := s.repo.ClaimApprovalReview(ctx, id, map[string]any{
+				"reviewer_id": uid,
+				"review_note": reviewNote,
+				"status":      "rejected",
+				"updated_at":  time.Now(),
+			})
+			if err != nil {
 				return nil, err
 			}
+			if affected == 0 {
+				return nil, constants.ErrBadRequestWithMsg("审批单状态已变更，请刷新后重试")
+			}
+			row.ReviewerID = &uid
+			row.ReviewNote = reviewNote
+			row.Status = "rejected"
 			s.syncInvestigationAfterApproval(ctx, row)
 			return row, nil
 		}
 		if detail == nil || detail.Status != model.WorkflowTicketStatusApproved {
 			return row, nil
 		}
-		row.Status = "approved"
-		if err := s.repo.SaveApproval(ctx, row); err != nil {
+		affected, err := s.repo.ClaimApprovalReview(ctx, id, map[string]any{
+			"reviewer_id": uid,
+			"review_note": reviewNote,
+			"status":      "approved",
+			"updated_at":  time.Now(),
+		})
+		if err != nil {
 			return nil, err
 		}
+		if affected == 0 {
+			return nil, constants.ErrBadRequestWithMsg("审批单状态已变更，请刷新后重试")
+		}
+		row.ReviewerID = &uid
+		row.ReviewNote = reviewNote
+		row.Status = "approved"
 		if req.Execute {
 			return s.ExecuteApproval(ctx, actor, id)
 		}
@@ -139,21 +160,26 @@ func (s *Service) ReviewApproval(ctx context.Context, actor *auth.CurrentUser, i
 	}
 
 	uid := actor.ID
-	row.ReviewerID = &uid
-	row.ReviewNote = truncateStr(req.Note, 500)
+	targetStatus := "approved"
 	if !req.Approve {
-		row.Status = "rejected"
-		if err := s.repo.SaveApproval(ctx, row); err != nil {
-			return nil, err
-		}
-		s.syncInvestigationAfterApproval(ctx, row)
-		return row, nil
+		targetStatus = "rejected"
 	}
-	row.Status = "approved"
-	if err := s.repo.SaveApproval(ctx, row); err != nil {
+	affected, err := s.repo.ClaimApprovalReview(ctx, id, map[string]any{
+		"reviewer_id": uid,
+		"review_note": truncateStr(req.Note, 500),
+		"status":      targetStatus,
+		"updated_at":  time.Now(),
+	})
+	if err != nil {
 		return nil, err
 	}
-	if req.Execute {
+	if affected == 0 {
+		return nil, constants.ErrBadRequestWithMsg("审批单状态已变更，请刷新后重试")
+	}
+	row.ReviewerID = &uid
+	row.ReviewNote = truncateStr(req.Note, 500)
+	row.Status = targetStatus
+	if req.Approve && req.Execute {
 		return s.ExecuteApproval(ctx, actor, id)
 	}
 	s.syncInvestigationAfterApproval(ctx, row)
@@ -173,7 +199,7 @@ func (s *Service) ExecuteApproval(ctx context.Context, actor *auth.CurrentUser, 
 			return nil, constants.ErrForbiddenWithMsg("无权执行该审批单")
 		}
 	}
-	affected, err := s.repo.ClaimApprovalExecution(ctx, id, []string{"approved", "failed", "executing"})
+	affected, err := s.repo.ClaimApprovalExecution(ctx, id, []string{"approved", "failed"})
 	if err != nil {
 		return nil, err
 	}

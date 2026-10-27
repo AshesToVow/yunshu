@@ -76,8 +76,8 @@ func allowReadByK8sClusterGrant(c *gin.Context, accessRepo interfaces.K8sCluster
 	if normalizedPath == "/api/v1/clusters" {
 		return accessRepo.HasAnyK8sGrant(ctx, pack)
 	}
-	clusterID, _ := extractClusterNamespaceFromRequest(c)
-	if clusterID == 0 {
+	clusterID, _, err := extractClusterNamespaceFromRequest(c, normalizedPath)
+	if err != nil || clusterID == 0 {
 		return false
 	}
 	rank := accessRepo.EffectiveTier(ctx, pack, clusterID)

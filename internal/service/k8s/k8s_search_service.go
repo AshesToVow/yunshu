@@ -75,18 +75,27 @@ func (s *K8sSearchService) Search(ctx context.Context, q K8sSearchQuery) ([]K8sS
 		return nil, err
 	}
 	var (
-		mu  sync.Mutex
-		wg  sync.WaitGroup
-		out []K8sSearchItem
-		sem = make(chan struct{}, 5)
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+		out     []K8sSearchItem
+		scanErr error
+		sem     = make(chan struct{}, 5)
 	)
 	for _, cl := range clusters {
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			cctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 			defer cancel()
-			items := s.searchCluster(cctx, cl, q.Q, types, limit)
+			items, err := s.searchCluster(cctx, cl, q.Q, types, limit)
+			if err != nil {
+				mu.Lock()
+				if scanErr == nil {
+					scanErr = err
+				}
+				mu.Unlock()
+				return
+			}
 			if len(items) == 0 {
 				return
 			}
@@ -96,6 +105,10 @@ func (s *K8sSearchService) Search(ctx context.Context, q K8sSearchQuery) ([]K8sS
 		})
 	}
 	wg.Wait()
+	// 全部集群都失败时返回错误，避免前端把“搜不到”误判为无结果。
+	if len(out) == 0 && scanErr != nil {
+		return nil, bizerrors.Pass(ctx, "k8s.search", "Search", scanErr)
+	}
 	if len(out) > limit*4 {
 		out = out[:limit*4]
 	}
@@ -152,10 +165,16 @@ func (s *K8sSearchService) accessibleClusters(ctx context.Context) ([]model.K8sC
 	return out, nil
 }
 
-func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluster, q string, types map[string]bool, limit int) []K8sSearchItem {
+func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluster, q string, types map[string]bool, limit int) ([]K8sSearchItem, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, cl.ID)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	var firstErr error
+	recordErr := func(e error) {
+		if e != nil && firstErr == nil {
+			firstErr = e
+		}
 	}
 	kw := strings.ToLower(q)
 	var items []K8sSearchItem
@@ -181,6 +200,8 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("pod", p.Namespace, p.Name, string(p.Status.Phase), string(p.Status.Phase),
 					"/pods?cluster_id="+itoa(cl.ID)+"&namespace="+p.Namespace+"&keyword="+p.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
 	if types["service"] {
@@ -190,6 +211,8 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("service", svc.Namespace, svc.Name, svc.Spec.ClusterIP, string(svc.Spec.Type),
 					"/k8s-services?cluster_id="+itoa(cl.ID)+"&namespace="+svc.Namespace+"&keyword="+svc.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
 	if types["ingress"] {
@@ -200,6 +223,8 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("ingress", ing.Namespace, ing.Name, hosts, "",
 					"/ingresses?cluster_id="+itoa(cl.ID)+"&namespace="+ing.Namespace+"&keyword="+ing.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
 	if types["event"] {
@@ -213,6 +238,8 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("event", e.Namespace, e.InvolvedObject.Name, e.Reason+" | "+e.Message, e.Type,
 					"/events?cluster_id="+itoa(cl.ID)+"&namespace="+e.Namespace+"&keyword="+e.InvolvedObject.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
 	if types["deployment"] {
@@ -222,6 +249,8 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("deployment", d.Namespace, d.Name, fmt.Sprintf("%d/%d", d.Status.ReadyReplicas, d.Status.Replicas), "",
 					"/deployments?cluster_id="+itoa(cl.ID)+"&namespace="+d.Namespace+"&keyword="+d.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
 	if types["configmap"] {
@@ -231,6 +260,8 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("configmap", cm.Namespace, cm.Name, "", "",
 					"/configmaps?cluster_id="+itoa(cl.ID)+"&namespace="+cm.Namespace+"&keyword="+cm.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
 	if types["namespace"] {
@@ -240,9 +271,14 @@ func (s *K8sSearchService) searchCluster(ctx context.Context, cl model.K8sCluste
 				add("namespace", ns.Name, ns.Name, string(ns.Status.Phase), string(ns.Status.Phase),
 					"/namespaces?cluster_id="+itoa(cl.ID)+"&keyword="+ns.Name)
 			}
+		} else {
+			recordErr(err)
 		}
 	}
-	return items
+	if len(items) == 0 {
+		return nil, firstErr
+	}
+	return items, nil
 }
 
 func (s *K8sSearchService) namespaceAllowed(ctx context.Context, clusterID uint, namespace string) bool {

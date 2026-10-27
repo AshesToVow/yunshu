@@ -14,7 +14,7 @@ import {
   Tag,
   message,
 } from "antd";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import {
   createClusterLogRule,
@@ -51,6 +51,10 @@ function splitCSV(v?: string): string[] {
     .filter(Boolean);
 }
 
+function isFormValidationError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "errorFields" in error;
+}
+
 /** 集群采集：规则 + DaemonSet 下发（与主机 Loggie 并列）。 */
 export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -67,7 +71,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   const [pipelineGenerated, setPipelineGenerated] = useState("");
   const [pipelineCustom, setPipelineCustom] = useState(false);
   const [pipelineSaving, setPipelineSaving] = useState(false);
+  const [ruleSubmitting, setRuleSubmitting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [actingRuleId, setActingRuleId] = useState<number | null>(null);
+  const [refreshingAgentId, setRefreshingAgentId] = useState<number | null>(null);
   const [rateLimitQps, setRateLimitQps] = useState<number>(2000);
+  const loadSeqRef = useRef(0);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -77,39 +87,69 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         setProjects(list);
         if (list[0]) setProjectId(list[0].id);
       })
-      .catch(() => undefined);
+      .catch((e: unknown) => message.error(extractApiErrorMessage(e, "加载项目列表失败")));
     void getClusters({ page: 1, page_size: 1000 })
       .then((res) => {
         const list = res?.list || [];
         setClusters(list);
         if (list[0]) setClusterId(list[0].id);
       })
-      .catch(() => undefined);
+      .catch((e: unknown) => message.error(extractApiErrorMessage(e, "加载集群列表失败")));
   }, []);
 
-  async function load() {
-    if (!projectId) return;
+  const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setRules([]);
+      setAgents([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [r, a] = await Promise.all([listClusterLogRules(projectId, clusterId), listClusterLogAgents(projectId)]);
+      if (seq !== loadSeqRef.current) return;
       setRules(r?.list || []);
       setAgents(a?.list || []);
       const cur = (a?.list || []).find((x) => x.cluster_id === clusterId);
-      if (cur?.rate_limit_qps && cur.rate_limit_qps > 0) {
-        setRateLimitQps(cur.rate_limit_qps);
-      }
-    } catch (e) {
+      setRateLimitQps(cur?.rate_limit_qps && cur.rate_limit_qps > 0 ? cur.rate_limit_qps : 2000);
+    } catch (e: unknown) {
+      if (seq !== loadSeqRef.current) return;
       message.error(extractApiErrorMessage(e, "加载集群采集失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }
+  }, [projectId, clusterId]);
 
   useEffect(() => {
     void load();
-  }, [projectId, clusterId]);
+  }, [load]);
+
+  function resetClusterState() {
+    loadSeqRef.current += 1;
+    setRules([]);
+    setAgents([]);
+    setRateLimitQps(2000);
+    setPipelineText("");
+    setPipelineGenerated("");
+    setPipelineCustom(false);
+    setPipelineOpen(false);
+    setEditing(null);
+    setOpen(false);
+  }
+
+  function handleProjectChange(id: number) {
+    resetClusterState();
+    setProjectId(id);
+  }
+
+  function handleClusterChange(id: number) {
+    resetClusterState();
+    setClusterId(id);
+  }
 
   function openCreate() {
+    if (ruleSubmitting) return;
     setEditing(null);
     form.resetFields();
     form.setFieldsValue({ parse_profile: "cri", enabled: true, rate_limit_qps: 0 });
@@ -117,6 +157,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   }
 
   function openEdit(row: ClusterLogRule) {
+    if (ruleSubmitting) return;
     setEditing(row);
     form.setFieldsValue({
       name: row.name,
@@ -132,19 +173,20 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   }
 
   async function onSubmitRule() {
-    if (!projectId || !clusterId) return;
-    const values = await form.validateFields();
-    const payload = {
-      name: values.name as string,
-      match_namespaces: splitCSV(values.match_namespaces),
-      match_workloads: splitCSV(values.match_workloads),
-      exclude_namespaces: splitCSV(values.exclude_namespaces),
-      parse_profile: (values.parse_profile as string) || "cri",
-      rate_limit_qps: Number(values.rate_limit_qps) || 0,
-      enabled: Boolean(values.enabled ?? true),
-      remark: (values.remark as string) || "",
-    };
+    if (!projectId || !clusterId || ruleSubmitting) return;
+    setRuleSubmitting(true);
     try {
+      const values = await form.validateFields();
+      const payload = {
+        name: values.name as string,
+        match_namespaces: splitCSV(values.match_namespaces),
+        match_workloads: splitCSV(values.match_workloads),
+        exclude_namespaces: splitCSV(values.exclude_namespaces),
+        parse_profile: (values.parse_profile as string) || "cri",
+        rate_limit_qps: Number(values.rate_limit_qps) || 0,
+        enabled: Boolean(values.enabled ?? true),
+        remark: (values.remark as string) || "",
+      };
       if (editing) {
         await updateClusterLogRule(projectId, editing.id, payload);
         message.success("规则已更新");
@@ -159,12 +201,16 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
       setEditing(null);
       void load();
     } catch (e) {
+      if (isFormValidationError(e)) return;
       message.error(extractApiErrorMessage(e, editing ? "更新失败" : "创建失败"));
+    } finally {
+      setRuleSubmitting(false);
     }
   }
 
   async function onPreview() {
-    if (!projectId || !clusterId) return;
+    if (!projectId || !clusterId || previewing) return;
+    setPreviewing(true);
     try {
       const res = await previewClusterLogPipelines(projectId, clusterId);
       setPipelineText(res?.pipelines_yml || "");
@@ -173,11 +219,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
       setPipelineOpen(true);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "预览失败"));
+    } finally {
+      setPreviewing(false);
     }
   }
 
   async function onSavePipelines(apply: boolean, reset = false) {
-    if (!projectId || !clusterId) return;
+    if (!projectId || !clusterId || pipelineSaving) return;
     setPipelineSaving(true);
     try {
       const res = await saveClusterLogPipelines(projectId, {
@@ -205,7 +253,8 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
   }
 
   async function onDeploy() {
-    if (!projectId || !clusterId) return;
+    if (!projectId || !clusterId || deploying) return;
+    setDeploying(true);
     try {
       const agent = await deployClusterLog(projectId, {
         cluster_id: clusterId,
@@ -218,55 +267,106 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
       void load();
     } catch (e) {
       message.error(extractApiErrorMessage(e, "部署失败"));
+    } finally {
+      setDeploying(false);
+    }
+  }
+
+  async function onToggleRule(row: ClusterLogRule, checked: boolean) {
+    if (!projectId || actingRuleId != null) return;
+    setActingRuleId(row.id);
+    try {
+      await updateClusterLogRule(projectId, row.id, { enabled: checked });
+      message.success(checked ? "规则已启用" : "规则已停用");
+      await load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "切换规则状态失败"));
+    } finally {
+      setActingRuleId(null);
+    }
+  }
+
+  async function onDeleteRule(row: ClusterLogRule) {
+    if (!projectId || actingRuleId != null) return;
+    setActingRuleId(row.id);
+    try {
+      await deleteClusterLogRule(projectId, row.id);
+      message.success("规则已删除");
+      await load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除规则失败"));
+    } finally {
+      setActingRuleId(null);
+    }
+  }
+
+  async function onRefreshAgent(row: ClusterLogAgent) {
+    if (!projectId || refreshingAgentId != null) return;
+    setRefreshingAgentId(row.cluster_id);
+    try {
+      await refreshClusterLogStatus(projectId, row.cluster_id);
+      message.success("状态已刷新");
+      await load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "刷新失败"));
+    } finally {
+      setRefreshingAgentId(null);
     }
   }
 
   const body = (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
-      <Space wrap>
-        <Select
-          style={{ minWidth: 200 }}
-          placeholder="项目"
-          value={projectId}
-          options={projects.map((p) => ({ value: p.id, label: p.name }))}
-          onChange={setProjectId}
-        />
-        <Select
-          style={{ minWidth: 220 }}
-          placeholder="集群"
-          value={clusterId}
-          options={clusters.map((c) => ({ value: c.id, label: c.name }))}
-          onChange={setClusterId}
-        />
-        <span>
-          项目限流 QPS{" "}
-          <InputNumber
-            min={100}
-            max={100000}
-            step={100}
-            value={rateLimitQps}
-            onChange={(v) => setRateLimitQps(Number(v) || 2000)}
+      <div className="toolbar">
+        <Space wrap>
+          <Select
+            style={{ minWidth: 200 }}
+            placeholder="项目"
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={handleProjectChange}
           />
-        </span>
-        <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
-          刷新
-        </Button>
-        <Button disabled={!clusterId || !projectId} onClick={() => void onPreview()}>
-          编辑 Pipeline
-        </Button>
-        <Button
-          type="primary"
-          icon={<CloudUploadOutlined />}
-          disabled={!clusterId || !projectId}
-          onClick={() => void onDeploy()}
-        >
-          部署/同步 DaemonSet
-        </Button>
-        <Button icon={<PlusOutlined />} disabled={!clusterId || !projectId} onClick={openCreate}>
-          新建规则
-        </Button>
-      </Space>
-      <Card size="small" title="采集规则（按 Namespace / Workload；宽采排除系统 ns；未填 QPS 的规则均分项目配额）">
+          <Select
+            style={{ minWidth: 220 }}
+            placeholder="集群"
+            value={clusterId}
+            options={clusters.map((c) => ({ value: c.id, label: c.name }))}
+            onChange={handleClusterChange}
+          />
+          <span>
+            项目限流 QPS{" "}
+            <InputNumber
+              min={100}
+              max={100000}
+              step={100}
+              value={rateLimitQps}
+              onChange={(v) => setRateLimitQps(Number(v) || 2000)}
+            />
+          </span>
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>
+            刷新
+          </Button>
+          <Button disabled={!clusterId || !projectId} loading={previewing} onClick={() => void onPreview()}>
+            编辑 Pipeline
+          </Button>
+          <Button
+            type="primary"
+            icon={<CloudUploadOutlined />}
+            disabled={!clusterId || !projectId}
+            loading={deploying}
+            onClick={() => void onDeploy()}
+          >
+            部署/同步 DaemonSet
+          </Button>
+          <Button icon={<PlusOutlined />} disabled={!clusterId || !projectId} onClick={openCreate}>
+            新建规则
+          </Button>
+        </Space>
+      </div>
+      <Card
+        className="table-card"
+        size="small"
+        title="采集规则（按 Namespace / Workload；宽采排除系统 ns；未填 QPS 的规则均分项目配额）"
+      >
         <Table
           size="small"
           rowKey="id"
@@ -300,31 +400,36 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
                 <Switch
                   size="small"
                   checked={v}
-                  disabled={!row}
-                  onChange={(checked) =>
-                    projectId && row
-                      ? void updateClusterLogRule(projectId, row.id, { enabled: checked }).then(load)
-                      : undefined
-                  }
+                  loading={!!row && actingRuleId === row.id}
+                  disabled={!row || actingRuleId != null}
+                  onChange={(checked) => (row ? void onToggleRule(row, checked) : undefined)}
                 />
               ),
             },
             {
               title: "操作",
               width: 120,
+              fixed: "right",
               render: (_: unknown, row?: ClusterLogRule) =>
                 row ? (
                   <Space size={0}>
-                    <Button type="link" size="small" onClick={() => openEdit(row)}>
+                    <Button type="link" size="small" disabled={ruleSubmitting} onClick={() => openEdit(row)}>
                       编辑
                     </Button>
                     <Popconfirm
                       title="删除规则？"
-                      onConfirm={() =>
-                        projectId ? void deleteClusterLogRule(projectId, row.id).then(load) : undefined
-                      }
+                      okText="删除"
+                      cancelText="取消"
+                      disabled={actingRuleId != null}
+                      onConfirm={() => onDeleteRule(row)}
                     >
-                      <Button type="link" size="small" danger>
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        loading={actingRuleId === row.id}
+                        disabled={actingRuleId != null}
+                      >
                         删除
                       </Button>
                     </Popconfirm>
@@ -334,7 +439,7 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
           ]}
         />
       </Card>
-      <Card size="small" title="DaemonSet 状态">
+      <Card className="table-card" size="small" title="DaemonSet 状态">
         <Table
           size="small"
           rowKey="id"
@@ -354,20 +459,15 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
             {
               title: "操作",
               width: 90,
+              fixed: "right",
               render: (_: unknown, r?: ClusterLogAgent) =>
                 r ? (
                   <Button
                     type="link"
                     size="small"
-                    onClick={() =>
-                      projectId
-                        ? void refreshClusterLogStatus(projectId, r.cluster_id)
-                            .then(load)
-                            .catch((e) => {
-                              message.error(extractApiErrorMessage(e, "刷新失败"));
-                            })
-                        : undefined
-                    }
+                    loading={refreshingAgentId === r.cluster_id}
+                    disabled={refreshingAgentId != null}
+                    onClick={() => void onRefreshAgent(r)}
                   >
                     刷新
                   </Button>
@@ -380,10 +480,13 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         title={editing ? "编辑集群采集规则" : "新建集群采集规则"}
         open={open}
         onCancel={() => {
+          if (ruleSubmitting) return;
           setOpen(false);
           setEditing(null);
         }}
         onOk={() => void onSubmitRule()}
+        confirmLoading={ruleSubmitting}
+        okButtonProps={{ disabled: ruleSubmitting }}
         destroyOnClose
       >
         <Form form={form} layout="vertical">
@@ -430,12 +533,16 @@ export function ProjectClusterLogPage({ embedded }: { embedded?: boolean }) {
         }
         open={pipelineOpen}
         width={900}
-        onCancel={() => setPipelineOpen(false)}
+        onCancel={() => {
+          if (!pipelineSaving) setPipelineOpen(false);
+        }}
         footer={
           <Space wrap>
-            <Button onClick={() => setPipelineOpen(false)}>关闭</Button>
+            <Button disabled={pipelineSaving} onClick={() => setPipelineOpen(false)}>
+              关闭
+            </Button>
             <Button
-              disabled={!pipelineGenerated}
+              disabled={!pipelineGenerated || pipelineSaving}
               onClick={() => {
                 setPipelineText(pipelineGenerated);
                 message.info("已填入当前规则生成的内容，保存后才会覆盖自定义");

@@ -170,5 +170,8 @@ func (h *DbmgmtHandler) GetInstanceAccountPassword(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	// 密码不得被浏览器/代理缓存。
+	c.Header("Cache-Control", "no-store")
+	c.Header("Pragma", "no-cache")
 	response.Success(c, res)
 }

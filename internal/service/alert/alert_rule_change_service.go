@@ -61,13 +61,24 @@ func (s *AlertRuleChangeService) Approve(ctx context.Context, id, reviewerID uin
 	if err := json.Unmarshal([]byte(row.PayloadJSON), &payload); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.rule_change", "Approve", err)
 	}
+	// 先原子抢占（pending→applying），避免并发重复应用；失败可回退 pending 重试。
+	claimed, err := s.repo.UpdatePending(ctx, row.ID, map[string]any{
+		"status": model.AlertRuleChangeApplying, "reviewer_id": reviewerID,
+	})
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.rule_change", "Approve", err)
+	}
+	if claimed == 0 {
+		return nil, constants.ErrBadRequestWithMsg("变更单已被处理，请刷新")
+	}
 	updated, err := s.rules.Update(ctx, row.RuleID, payload)
 	if err != nil {
+		_, _ = s.repo.UpdatePending(ctx, row.ID, map[string]any{"status": model.AlertRuleChangePending})
 		return nil, err
 	}
-	_ = s.repo.UpdateFields(ctx, row.ID, map[string]any{
-		"status": model.AlertRuleChangeApproved, "reviewer_id": reviewerID,
-	})
+	if err := s.repo.UpdateFields(ctx, row.ID, map[string]any{"status": model.AlertRuleChangeApproved}); err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.rule_change", "Approve", err)
+	}
 	return updated, nil
 }
 

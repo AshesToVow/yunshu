@@ -34,11 +34,11 @@ type HarborChartVersion struct {
 }
 
 type HarborConfigInfo struct {
-	URL          string `json:"url"`
-	Project      string `json:"project"`
-	OCIPrefix    string `json:"oci_prefix"`
-	ChartRepoURL string `json:"chart_repo_url"`
-	AuthConfigured bool `json:"auth_configured"`
+	URL            string `json:"url"`
+	Project        string `json:"project"`
+	OCIPrefix      string `json:"oci_prefix"`
+	ChartRepoURL   string `json:"chart_repo_url"`
+	AuthConfigured bool   `json:"auth_configured"`
 }
 
 type harborChartSummaryItem struct {
@@ -146,8 +146,16 @@ func harborBaseURL(raw string) string {
 	return strings.TrimRight(u, "/")
 }
 
-func (s *K8sHelmService) harborHTTPClient(serverName string) *http.Client {
-	return platformhttp.NewInsecureTLSClient(30*time.Second, serverName)
+// harborScheme 依据配置的 URL 前缀选择协议，未显式指定时默认 https。
+func harborScheme(raw string) string {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(raw)), "http://") {
+		return "http"
+	}
+	return "https"
+}
+
+func (s *K8sHelmService) harborHTTPClient(cfg config.HarborConfig) *http.Client {
+	return platformhttp.NewTLSClient(30*time.Second, harborBaseURL(cfg.URL), cfg.TLSVerify)
 }
 
 func (s *K8sHelmService) harborAuthHeader(cfg config.HarborConfig) string {
@@ -169,7 +177,7 @@ func harborConnectHost(cfg config.HarborConfig) string {
 
 func (s *K8sHelmService) harborRequest(ctx context.Context, cfg config.HarborConfig, method, path string) ([]byte, int, error) {
 	host := harborBaseURL(cfg.URL)
-	url := fmt.Sprintf("https://%s%s", harborConnectHost(cfg), path)
+	url := fmt.Sprintf("%s://%s%s", harborScheme(cfg.URL), harborConnectHost(cfg), path)
 	req, err := http.NewRequestWithContext(ctx, method, url, nil)
 	if err != nil {
 		return nil, 0, err
@@ -179,7 +187,7 @@ func (s *K8sHelmService) harborRequest(ctx context.Context, cfg config.HarborCon
 		req.Header.Set("Authorization", auth)
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := s.harborHTTPClient(host).Do(req)
+	resp, err := s.harborHTTPClient(cfg).Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -198,12 +206,13 @@ func (s *K8sHelmService) GetHarborInfo(ctx context.Context) (*HarborConfigInfo, 
 		return nil, err
 	}
 	host := harborBaseURL(cfg.URL)
+	scheme := harborScheme(cfg.URL)
 	project := strings.TrimSpace(cfg.ProjectGroup)
 	return &HarborConfigInfo{
 		URL:            host,
 		Project:        project,
 		OCIPrefix:      fmt.Sprintf("oci://%s/%s", host, project),
-		ChartRepoURL:   fmt.Sprintf("https://%s/chartrepo/%s", host, project),
+		ChartRepoURL:   fmt.Sprintf("%s://%s/chartrepo/%s", scheme, host, project),
 		AuthConfigured: strings.TrimSpace(cfg.Username) != "" && strings.TrimSpace(cfg.Password) != "",
 	}, nil
 }
@@ -368,6 +377,7 @@ func harborOCIChartRef(cfg config.HarborConfig, chartName string) string {
 }
 
 // ensureHarborRegistryLogin 为 OCI pull 配置 registry 凭据（Helm registry client）。
+// insecure 默认开启以兼容内网自签；配置 cicd_harbor_tls_verify=true 时启用证书校验。
 func (s *K8sHelmService) harborRegistryLogin(cfg config.HarborConfig) (username, password string, insecure bool) {
-	return strings.TrimSpace(cfg.Username), strings.TrimSpace(cfg.Password), true
+	return strings.TrimSpace(cfg.Username), strings.TrimSpace(cfg.Password), !cfg.TLSVerify
 }

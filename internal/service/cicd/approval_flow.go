@@ -98,7 +98,7 @@ func normalizeStageKey(raw string) (string, error) {
 }
 
 func (s *Service) workflowEngine() *workflowsvc.Service {
-	return workflowsvc.NewService(s.workflowRepo, s.userGroupRepo, s.dutyRepo, s.userRepo)
+	return workflowsvc.NewService(s.workflowRepo, s.userGroupRepo, s.dutyRepo, s.userRepo, s.memberRepo)
 }
 
 func (s *Service) GetApprovalFlow(ctx context.Context, projectID uint) (*ApprovalFlowResponse, error) {

@@ -70,6 +70,31 @@ func TestActionFromHTTP(t *testing.T) {
 	if ActionFromHTTP("DELETE", "/api/v1/deployments") != "delete" {
 		t.Fatal("delete")
 	}
+	if ActionFromHTTP("GET", "/api/v1/secrets/reveal") != "secret_reveal" {
+		t.Fatal("secret reveal must not be a plain read")
+	}
+}
+
+func TestCheck_SecretRevealRequiresAdmin(t *testing.T) {
+	t.Parallel()
+	ro := []model.K8sClusterAccessGrant{{Preset: ClusterReadonly, ClusterID: 1}}
+	if err := Check(ro, "1", "dev", "secret_reveal", nil); err == nil {
+		t.Fatal("readonly must not reveal secrets")
+	}
+	exec := []model.K8sClusterAccessGrant{
+		{Preset: ClusterReadonly, ClusterID: 1},
+		{Preset: ClusterPodExec, ClusterID: 1},
+	}
+	if err := Check(exec, "1", "dev", "secret_reveal", nil); err == nil {
+		t.Fatal("readonly+exec must not reveal secrets")
+	}
+	admin := []model.K8sClusterAccessGrant{{Preset: ClusterAdmin, ClusterID: 1, Namespaces: "app-dev"}}
+	if err := Check(admin, "1", "dev", "secret_reveal", []string{"app-dev"}); err != nil {
+		t.Fatalf("admin reveal: %v", err)
+	}
+	if err := Check(admin, "1", "dev", "secret_reveal", []string{"kube-system"}); err == nil {
+		t.Fatal("admin outside whitelist must be denied")
+	}
 }
 
 func TestExpandToStoredRoles(t *testing.T) {

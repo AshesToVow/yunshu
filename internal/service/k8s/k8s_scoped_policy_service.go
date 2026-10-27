@@ -27,10 +27,10 @@ type K8sActionItem struct {
 
 // K8sClusterAccessItem 集群档位（DB），不经 Casbin。
 type K8sClusterAccessItem struct {
-	ID            uint     `json:"id"`
-	PrincipalKind string   `json:"principal_kind"`
-	PrincipalRef  string   `json:"principal_ref"`
-	RoleCode      string   `json:"role_code"` // 兼容：principal_kind=role 时与 principal_ref 相同
+	ID                  uint     `json:"id"`
+	PrincipalKind       string   `json:"principal_kind"`
+	PrincipalRef        string   `json:"principal_ref"`
+	RoleCode            string   `json:"role_code"` // 兼容：principal_kind=role 时与 principal_ref 相同
 	ClusterID           uint     `json:"cluster_id"`
 	Preset              string   `json:"preset"`
 	Namespaces          string   `json:"namespaces"`
@@ -250,6 +250,9 @@ func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedP
 	if len(roles) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("请选择档位：只读 / 只读+Exec / 集群管理员")
 	}
+	if err := s.ensureGrantActorAllowed(ctx, kind, principalRef, clusterIDs, k8scaps.Rank(caps)); err != nil {
+		return nil, err
+	}
 	nsCSV := k8srole.JoinNamespaces(req.AllowNamespaces)
 	blCSV := k8srole.JoinNamespaces(req.DenyNamespaces)
 	added, skipped := 0, 0
@@ -300,6 +303,59 @@ func (s *K8sScopedPolicyService) GrantPreset(ctx context.Context, req K8sScopedP
 		AllowRulesAdded:   allowAdded,
 		AllowRulesSkipped: allowSkipped,
 	}, nil
+}
+
+// ensureGrantActorAllowed 非超管下发档位时的越权防护：
+// 禁止给自己/自己的角色/自己的用户组授权，禁止跨集群越档授权，禁止下发「全部集群」档。
+func (s *K8sScopedPolicyService) ensureGrantActorAllowed(
+	ctx context.Context,
+	kind, principalRef string,
+	clusterIDs []uint,
+	requestedRank int,
+) error {
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return nil
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		return nil
+	}
+	ref := strings.TrimSpace(principalRef)
+	switch kind {
+	case model.K8sPrincipalUser:
+		if parseUserRefUint(ref) == u.ID {
+			return constants.ErrForbiddenWithMsg("不能给自己下发集群档位")
+		}
+	case model.K8sPrincipalRole:
+		for _, rc := range u.RoleCodes {
+			if strings.EqualFold(strings.TrimSpace(rc), ref) {
+				return constants.ErrForbiddenWithMsg("不能给自己所属角色下发集群档位")
+			}
+		}
+	case model.K8sPrincipalGroup:
+		for _, gc := range u.GroupCodes {
+			if strings.EqualFold(strings.TrimSpace(gc), ref) {
+				return constants.ErrForbiddenWithMsg("不能给自己所在用户组下发集群档位")
+			}
+		}
+	}
+	if s.accessRepo == nil {
+		return constants.ErrInternal
+	}
+	pack := k8sauth.PackFromCurrentUser(u)
+	for _, cid := range clusterIDs {
+		if cid == 0 {
+			return constants.ErrForbiddenWithMsg("非超级管理员不能下发「全部集群」档位")
+		}
+		grants, err := s.accessRepo.ListForPack(ctx, pack, cid)
+		if err != nil {
+			return bizerrors.Pass(ctx, "k8s.policy", "ensureGrantActorAllowed", err)
+		}
+		if k8srole.RankFromGrants(grants) < requestedRank {
+			return constants.ErrForbiddenWithMsg("不能授予超过自身权限档位的集群权限")
+		}
+	}
+	return nil
 }
 
 // resolveGrantCapabilities 解析下发：能力勾选映射为 k8m 三角色，或直接使用 preset。

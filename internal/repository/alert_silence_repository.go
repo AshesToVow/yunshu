@@ -46,6 +46,16 @@ func (r *AlertSilenceRepository) Create(ctx context.Context, row *model.AlertSil
 	return r.db.WithContext(ctx).Create(row).Error
 }
 
+// CreateBatch 批量创建：同一事务内原子写入，避免部分成功导致调度状态只落一半。
+func (r *AlertSilenceRepository) CreateBatch(ctx context.Context, rows []*model.AlertSilence) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return tx.Create(rows).Error
+	})
+}
+
 func (r *AlertSilenceRepository) GetByID(ctx context.Context, id uint) (*model.AlertSilence, error) {
 	var row model.AlertSilence
 	if err := r.db.WithContext(ctx).First(&row, id).Error; err != nil {
@@ -62,14 +72,16 @@ func (r *AlertSilenceRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&model.AlertSilence{}, id).Error
 }
 
-func (r *AlertSilenceRepository) ListPaged(ctx context.Context, projectID uint, keyword string, offset, limit int) ([]model.AlertSilence, int64, error) {
+func (r *AlertSilenceRepository) ListPaged(ctx context.Context, projectID uint, projectIDs []uint, keyword string, offset, limit int) ([]model.AlertSilence, int64, error) {
 	tx := r.db.WithContext(ctx).Model(&model.AlertSilence{})
 	if projectID > 0 {
 		tx = tx.Where("project_id = ?", projectID)
+	} else if len(projectIDs) > 0 {
+		tx = tx.Where("project_id IN ?", projectIDs)
 	}
 	if kw := strings.TrimSpace(keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("name LIKE ? OR comment LIKE ?", like, like)
+		like := likeContains(kw)
+		tx = tx.Where(`(name LIKE ? ESCAPE '!' OR comment LIKE ? ESCAPE '!')`, like, like)
 	}
 	var total int64
 	if err := tx.Count(&total).Error; err != nil {

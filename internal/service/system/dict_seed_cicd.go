@@ -27,6 +27,7 @@ func cicdDictSeeds() []DictEntryCreateRequest {
 		{DictType: "cicd_harbor_project_group", Label: "Harbor 项目", Value: "registry", Sort: intRef(1), Status: 1, Remark: "Jenkins PROJECT_GROUP（镜像仓库项目名）"},
 		{DictType: "cicd_harbor_username", Label: "Harbor 用户名", Value: "admin", Sort: intRef(1), Status: 1, Remark: "Helm 拉取 Harbor OCI Chart 与 Chart API 鉴权"},
 		{DictType: "cicd_harbor_password", Label: "Harbor 密码", Value: "", Sort: intRef(1), Status: 0, Remark: "Helm/Harbor API 密码（敏感，启用后填写）"},
+		{DictType: "cicd_harbor_tls_verify", Label: "Harbor 校验 TLS 证书", Value: "false", Sort: intRef(1), Status: 1, Remark: "true/false：内网自签证书设为 false；设为 true 时校验 Harbor 服务端证书"},
 		{DictType: "cicd_default_wait_mins", Label: "手动发布超时(分钟)", Value: "60", Sort: intRef(1), Status: 1, Remark: "waitMins 默认值"},
 		{DictType: "cicd_default_artifact_retain_count", Label: "制品保留数", Value: "10", Sort: intRef(1), Status: 1, Remark: "artifactRetainCount 默认"},
 		{DictType: "cicd_run_sync_interval_seconds", Label: "Run 同步间隔(秒)", Value: "15", Sort: intRef(1), Status: 1, Remark: "后台轮询 Jenkins 状态"},

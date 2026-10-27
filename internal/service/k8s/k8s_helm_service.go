@@ -15,10 +15,13 @@ import (
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/platformhttp"
 
+	"github.com/weibaohui/kom/kom"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/engine"
 	"helm.sh/helm/v3/pkg/registry"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
@@ -29,6 +32,7 @@ type CicdConfigResolver func(ctx context.Context) config.CicdConfig
 
 type K8sHelmService struct {
 	runtime     *K8sRuntimeService
+	dyn         *DynamicResourceService
 	harborMerge interfaces.HarborMergeRepository
 	resolveCicd CicdConfigResolver
 	cicdBase    config.CicdConfig
@@ -42,6 +46,7 @@ func NewK8sHelmService(
 ) *K8sHelmService {
 	return &K8sHelmService{
 		runtime:     runtime,
+		dyn:         NewDynamicResourceService(runtime),
 		harborMerge: harborMerge,
 		resolveCicd: resolveCicd,
 		cicdBase:    cicdBase,
@@ -380,11 +385,21 @@ func (s *K8sHelmService) GetReleaseValues(ctx context.Context, q HelmReleaseName
 
 // Install 从 Harbor OCI 安装 Chart。
 func (s *K8sHelmService) Install(ctx context.Context, req HelmInstallRequest) (*HelmReleaseItem, error) {
+	ns := strings.TrimSpace(req.Namespace)
+	cluster, kube, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+	if err := assertK8sWritable(ctx, cluster, "helm_install", ns); err != nil {
+		return nil, err
+	}
+	if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
+		return nil, err
+	}
 	harborCfg, err := s.resolveHarbor(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ns := strings.TrimSpace(req.Namespace)
 	actionConfig, settings, err := s.newActionConfig(ctx, req.ClusterID, ns)
 	if err != nil {
 		return nil, err
@@ -399,6 +414,8 @@ func (s *K8sHelmService) Install(ctx context.Context, req HelmInstallRequest) (*
 	install.CreateNamespace = req.CreateNamespace
 	install.Wait = true
 	install.Timeout = 5 * time.Minute
+	// 失败时自动卸载已创建资源，避免半成品 Release 占用名称。
+	install.Atomic = true
 	install.SetRegistryClient(regClient)
 	chartRequested, err := loader.Load(chartPath)
 	if err != nil {
@@ -408,10 +425,16 @@ func (s *K8sHelmService) Install(ctx context.Context, req HelmInstallRequest) (*
 	if vals == nil {
 		vals = map[string]any{}
 	}
+	if err := s.ensureRenderedChartAllowed(ctx, kube, chartRequested, vals, install.ReleaseName, ns, true, 1); err != nil {
+		return nil, err
+	}
 	rel, err := install.Run(chartRequested, vals)
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "helm", "install", err, "Helm 安装失败")
 	}
+	recordK8sChange(ctx, cluster, "helm_install", "HelmRelease", ns, install.ReleaseName, map[string]any{
+		"chart": req.ChartName, "version": req.ChartVersion,
+	})
 	item := releaseToItem(rel)
 	return &item, nil
 }
@@ -419,6 +442,16 @@ func (s *K8sHelmService) Install(ctx context.Context, req HelmInstallRequest) (*
 // Upgrade 升级 Release（可指定新 Chart 版本或仅更新 values）。
 func (s *K8sHelmService) Upgrade(ctx context.Context, req HelmUpgradeRequest) (*HelmReleaseItem, error) {
 	ns := strings.TrimSpace(req.Namespace)
+	cluster, kube, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+	if err := assertK8sWritable(ctx, cluster, "helm_upgrade", ns); err != nil {
+		return nil, err
+	}
+	if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
+		return nil, err
+	}
 	actionConfig, settings, err := s.newActionConfig(ctx, req.ClusterID, ns)
 	if err != nil {
 		return nil, err
@@ -429,6 +462,8 @@ func (s *K8sHelmService) Upgrade(ctx context.Context, req HelmUpgradeRequest) (*
 	upgrade.Timeout = 5 * time.Minute
 	// 未传 values 时保留 Release 现有配置，避免升级 Chart 版本时清空业务 values。
 	upgrade.ReuseValues = true
+	// 失败时回滚到上一版本，避免业务停留在半升级状态。
+	upgrade.Atomic = true
 
 	var chartRequested *chart.Chart
 	vals := req.Values
@@ -437,12 +472,12 @@ func (s *K8sHelmService) Upgrade(ctx context.Context, req HelmUpgradeRequest) (*
 	}
 	chartName := strings.TrimSpace(req.ChartName)
 	releaseName := strings.TrimSpace(req.ReleaseName)
+	get := action.NewGet(actionConfig)
+	current, gerr := get.Run(releaseName)
+	if gerr != nil {
+		return nil, bizerrors.Internalf(ctx, "helm", "get_current", gerr, "获取当前 Release 失败")
+	}
 	if chartName == "" {
-		get := action.NewGet(actionConfig)
-		current, gerr := get.Run(releaseName)
-		if gerr != nil {
-			return nil, bizerrors.Internalf(ctx, "helm", "get_current", gerr, "获取当前 Release 失败")
-		}
 		if current.Chart != nil && current.Chart.Metadata != nil {
 			chartName = current.Chart.Metadata.Name
 			if strings.TrimSpace(req.ChartVersion) == "" {
@@ -465,10 +500,23 @@ func (s *K8sHelmService) Upgrade(ctx context.Context, req HelmUpgradeRequest) (*
 			return nil, bizerrors.Internalf(ctx, "helm", "load_chart", err, "加载 Chart 失败")
 		}
 	}
+	if chartRequested == nil {
+		chartRequested = current.Chart
+	}
+	scopeVals := vals
+	if scopeVals == nil && current != nil {
+		scopeVals = current.Config
+	}
+	if err := s.ensureRenderedChartAllowed(ctx, kube, chartRequested, scopeVals, releaseName, ns, false, current.Version+1); err != nil {
+		return nil, err
+	}
 	rel, err := upgrade.Run(releaseName, chartRequested, vals)
 	if err != nil {
 		return nil, bizerrors.Internalf(ctx, "helm", "upgrade", err, "Helm 升级失败")
 	}
+	recordK8sChange(ctx, cluster, "helm_upgrade", "HelmRelease", ns, releaseName, map[string]any{
+		"chart": chartName, "version": req.ChartVersion,
+	})
 	item := releaseToItem(rel)
 	return &item, nil
 }
@@ -476,19 +524,101 @@ func (s *K8sHelmService) Upgrade(ctx context.Context, req HelmUpgradeRequest) (*
 // Rollback 回滚到指定 revision。
 func (s *K8sHelmService) Rollback(ctx context.Context, req HelmRollbackRequest) (*HelmReleaseItem, error) {
 	ns := strings.TrimSpace(req.Namespace)
+	releaseName := strings.TrimSpace(req.ReleaseName)
+	cluster, kube, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	if err != nil {
+		return nil, err
+	}
+	if err := assertK8sWritable(ctx, cluster, "helm_rollback", ns); err != nil {
+		return nil, err
+	}
+	if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
+		return nil, err
+	}
 	actionConfig, _, err := s.newActionConfig(ctx, req.ClusterID, ns)
 	if err != nil {
 		return nil, err
+	}
+	hist := action.NewHistory(actionConfig)
+	hist.Max = 256
+	releases, err := hist.Run(releaseName)
+	if err != nil {
+		return nil, bizerrors.Internalf(ctx, "helm", "history", err, "获取 Release 历史失败")
+	}
+	var target *release.Release
+	for _, rel := range releases {
+		if rel != nil && rel.Version == req.Revision {
+			target = rel
+			break
+		}
+	}
+	if target == nil {
+		return nil, constants.ErrBadRequestWithMsg("目标 revision 不存在")
+	}
+	if target.Chart != nil {
+		if err := s.ensureRenderedChartAllowed(ctx, kube, target.Chart, target.Config, releaseName, ns, false, req.Revision); err != nil {
+			return nil, err
+		}
 	}
 	rollback := action.NewRollback(actionConfig)
 	rollback.Version = req.Revision
 	rollback.Wait = true
 	rollback.Timeout = 5 * time.Minute
-	if err := rollback.Run(strings.TrimSpace(req.ReleaseName)); err != nil {
+	// 回滚失败时尽量清理新建资源，避免残留中间态。
+	rollback.CleanupOnFail = true
+	if err := rollback.Run(releaseName); err != nil {
 		return nil, bizerrors.Internalf(ctx, "helm", "rollback", err, "Helm 回滚失败")
 	}
+	recordK8sChange(ctx, cluster, "helm_rollback", "HelmRelease", ns, releaseName, map[string]any{
+		"revision": req.Revision,
+	})
 	q := HelmReleaseNameQuery{ClusterID: req.ClusterID, Namespace: ns, ReleaseName: req.ReleaseName}
 	return s.GetRelease(ctx, q)
+}
+
+// ensureRenderedChartAllowed 渲染 Chart（含 CRD）后复用清单范围校验：
+// 命名空间目标须在授权范围内，集群级资源须无命名空间限制的集群管理员。
+func (s *K8sHelmService) ensureRenderedChartAllowed(
+	ctx context.Context,
+	kube *kom.Kubectl,
+	ch *chart.Chart,
+	vals map[string]any,
+	releaseName, namespace string,
+	isInstall bool,
+	revision int,
+) error {
+	if ch == nil {
+		return constants.ErrBadRequestWithMsg("Chart 为空，无法校验资源范围")
+	}
+	if vals == nil {
+		vals = map[string]any{}
+	}
+	renderVals, err := chartutil.ToRenderValues(ch, vals, chartutil.ReleaseOptions{
+		Name:      releaseName,
+		Namespace: namespace,
+		Revision:  revision,
+		IsInstall: isInstall,
+	}, chartutil.DefaultCapabilities)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("渲染 Chart 失败：" + err.Error())
+	}
+	rendered, err := engine.Render(ch, renderVals)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("渲染 Chart 失败：" + err.Error())
+	}
+	var b strings.Builder
+	for name, content := range rendered {
+		if strings.HasSuffix(name, "NOTES.txt") {
+			continue
+		}
+		b.WriteString(content)
+		b.WriteString("\n---\n")
+	}
+	for _, crd := range ch.CRDObjects() {
+		b.Write(crd.File.Data)
+		b.WriteString("\n---\n")
+	}
+	return s.dyn.ensureManifestScopesAllowed(ctx, kube, b.String())
 }
 
 // Uninstall 卸载 Release。

@@ -7,7 +7,7 @@ import {
   ScissorOutlined,
   TagsOutlined,
 } from "@ant-design/icons";
-import { Button, Form, Input, InputNumber, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
+import { Button, Form, Input, InputNumber, Modal, Popconfirm, Progress, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
@@ -152,6 +152,7 @@ export function StatefulsetsPage() {
   const [revisionTarget, setRevisionTarget] = useState<{ clusterId: number; namespace: string; name: string } | null>(
     null,
   );
+  const revisionSeqRef = useRef(0);
   const { openPods, viewer: podsViewer } = useRelatedPodsDrawer(
     async ({ clusterId, namespace, name }) => await listStatefulSetPods(clusterId, namespace, name),
   );
@@ -388,19 +389,33 @@ spec:
                     label: "重启",
                     icon: <ReloadOutlined />,
                     onClick: () => {
-                      void (async () => {
-                        const ns = ctx.namespace ?? "default";
-                        await restartStatefulSet(ctx.clusterId, ns, record.name);
-                        message.success("已触发滚动重启");
-                        progress?.track({
-                          kind: "StatefulSet",
-                          clusterId: ctx.clusterId,
-                          namespace: ns,
-                          name: record.name,
-                          title: `重启 ${record.name}`,
-                        });
-                        ctx.reload();
-                      })();
+                      if (!ctx.clusterId) {
+                        message.error("请先选择集群");
+                        return;
+                      }
+                      const ns = ctx.namespace ?? "default";
+                      Modal.confirm({
+                        title: `确认重启 ${record.name}？`,
+                        content: "将触发 StatefulSet 滚动重启（更新 Pod 模板注解），Pod 将按序重建。",
+                        okText: "重启",
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          try {
+                            await restartStatefulSet(ctx.clusterId, ns, record.name);
+                            message.success("已触发滚动重启");
+                            progress?.track({
+                              kind: "StatefulSet",
+                              clusterId: ctx.clusterId,
+                              namespace: ns,
+                              name: record.name,
+                              title: `重启 ${record.name}`,
+                            });
+                            ctx.reload();
+                          } catch {
+                            /* interceptor */
+                          }
+                        },
+                      });
                     },
                   },
                   {
@@ -409,14 +424,24 @@ spec:
                     icon: <FileTextOutlined />,
                     onClick: () => {
                       const ns = ctx.namespace ?? "default";
+                      const seq = ++revisionSeqRef.current;
                       setRevisionTarget({ clusterId: ctx.clusterId, namespace: ns, name: record.name });
                       setRevisionOpen(true);
                       setRevisionLoading(true);
                       setRevisionRows([]);
                       void listStatefulSetRevisions(ctx.clusterId, ns, record.name)
-                        .then((rows) => setRevisionRows(rows || []))
-                        .catch(() => message.error("加载历史版本失败"))
-                        .finally(() => setRevisionLoading(false));
+                        .then((rows) => {
+                          if (seq !== revisionSeqRef.current) return;
+                          setRevisionRows(rows || []);
+                        })
+                        .catch(() => {
+                          if (seq !== revisionSeqRef.current) return;
+                          message.error("加载历史版本失败");
+                          setRevisionOpen(false);
+                        })
+                        .finally(() => {
+                          if (seq === revisionSeqRef.current) setRevisionLoading(false);
+                        });
                     },
                   },
                 ],
@@ -464,10 +489,11 @@ spec:
               width: 120,
               render: (_, row) =>
                 row.current ? null : (
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
+                  <Popconfirm
+                    title={`确认回滚到 revision ${row.revision}？`}
+                    okText="回滚"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => {
                       if (!revisionTarget) return;
                       void (async () => {
                         try {
@@ -493,15 +519,20 @@ spec:
                       })();
                     }}
                   >
-                    回滚到此版
-                  </Button>
+                    <Button type="link" size="small">
+                      回滚到此版
+                    </Button>
+                  </Popconfirm>
                 ),
             },
           ]}
         />
         <Space style={{ marginTop: 12 }}>
-          <Button
-            onClick={() => {
+          <Popconfirm
+            title="确认回滚到上一版本？"
+            okText="回滚"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => {
               if (!revisionTarget) return;
               void (async () => {
                 try {
@@ -522,8 +553,8 @@ spec:
               })();
             }}
           >
-            回滚到上一版
-          </Button>
+            <Button>回滚到上一版</Button>
+          </Popconfirm>
         </Space>
       </Modal>
 

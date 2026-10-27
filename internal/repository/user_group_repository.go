@@ -14,10 +14,13 @@ type UserGroupRepository struct {
 }
 
 type UserGroupListParams struct {
-	Keyword         string
-	Page            int
-	PageSize        int
-	ScopeProjectID  *uint // 非空时仅返回全局组或该项目的组
+	Keyword        string
+	Page           int
+	PageSize       int
+	ScopeProjectID *uint // 非空时仅返回全局组或该项目的组
+	// RestrictToProjects 为 true 时仅返回全局组或 ProjectIDs 内的项目专属组（空切片表示仅全局组）。
+	RestrictToProjects bool
+	ProjectIDs         []uint
 }
 
 func NewUserGroupRepository(db *gorm.DB) UserGroupRepo {
@@ -83,6 +86,13 @@ func (r *UserGroupRepository) List(ctx context.Context, params UserGroupListPara
 	if params.ScopeProjectID != nil && *params.ScopeProjectID > 0 {
 		sp := *params.ScopeProjectID
 		q = q.Where("(scope_project_id IS NULL OR scope_project_id = ?)", sp)
+	}
+	if params.RestrictToProjects {
+		if len(params.ProjectIDs) == 0 {
+			q = q.Where("scope_project_id IS NULL")
+		} else {
+			q = q.Where("(scope_project_id IS NULL OR scope_project_id IN ?)", params.ProjectIDs)
+		}
 	}
 	var list []model.UserGroup
 	total, err := listWithPagination(q, params.Page, params.PageSize, "id DESC", &list)

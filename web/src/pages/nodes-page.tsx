@@ -26,7 +26,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useKeyValueViewer } from "../components/k8s/key-value-viewer";
 import { YamlCrudPage } from "../components/k8s/yaml-crud-page";
 import { useWorkloadProgressOptional } from "../contexts/workload-progress-context";
@@ -119,6 +119,7 @@ export function NodesPage() {
   const [drainForce, setDrainForce] = useState(false);
   const [drainPreview, setDrainPreview] = useState<NodeDrainResult | null>(null);
   const [drainReload, setDrainReload] = useState<(() => void) | null>(null);
+  const drainSeqRef = useRef(0);
 
   function openTaintEditor(clusterId: number, record: Item, reload: () => void) {
     setTaintClusterId(clusterId);
@@ -162,6 +163,7 @@ export function NodesPage() {
   }
 
   function openDrain(clusterId: number, record: Item, reload: () => void) {
+    const seq = ++drainSeqRef.current;
     setDrainClusterId(clusterId);
     setDrainNodeName(record.name);
     setDrainForce(false);
@@ -171,6 +173,7 @@ export function NodesPage() {
     void (async () => {
       try {
         const preview = await drainNode(clusterId, record.name, { dry_run: true, force: false });
+        if (seq !== drainSeqRef.current) return;
         setDrainPreview(preview);
       } catch {
         /* toasted */
@@ -186,8 +189,21 @@ export function NodesPage() {
         force: drainForce,
         confirm: true,
       });
-      message.success(result.message || "Drain 已执行");
       setDrainOpen(false);
+      Modal.success({
+        title: `Drain ${drainNodeName} 完成`,
+        content: (
+          <Space direction="vertical" size={4}>
+            <Typography.Text>
+              驱逐 {result.evicted} 个 · 跳过 {result.skipped} 个 · 失败 {result.failed} 个
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              剩余待驱逐 {result.remaining} 个（已完成 {result.completed_pods} 个）
+            </Typography.Text>
+            <Typography.Text type={result.failed > 0 ? "warning" : "secondary"}>{result.message}</Typography.Text>
+          </Space>
+        ),
+      });
       progress?.track({
         kind: "NodeDrain",
         clusterId: drainClusterId,
@@ -195,6 +211,8 @@ export function NodesPage() {
         title: `Drain ${drainNodeName}`,
       });
       drainReload?.();
+    } catch {
+      /* toasted by http */
     } finally {
       setDrainSaving(false);
     }
@@ -319,16 +337,18 @@ export function NodesPage() {
           list: async ({ clusterId, keyword }) => await listNodes(clusterId, keyword),
           detail: async ({ clusterId, name }) => await getNodeDetail(clusterId, name),
         }}
-        extraRowActions={(record, { clusterId, reload }) => (
-          <Space size={0} wrap>
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openTaintEditor(clusterId, record, reload)}
-            >
-              污点
-            </Button>
+        extraRowActions={(record, { clusterId, reload, canMutate, tierLoading }) => {
+          if (!tierLoading && !canMutate) return null;
+          return (
+            <Space size={0} wrap>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openTaintEditor(clusterId, record, reload)}
+              >
+                污点
+              </Button>
             {!record.unschedulable ? (
               <Popconfirm
                 title="禁止调度？"
@@ -375,8 +395,9 @@ export function NodesPage() {
             >
               Drain
             </Button>
-          </Space>
-        )}
+            </Space>
+          );
+        }}
         detailExtra={(d) => (
           <div>
             <Form layout="vertical" style={{ marginBottom: 10 }}>

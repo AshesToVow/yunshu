@@ -100,22 +100,46 @@ func (h *ProjectHandler) Delete(c *gin.Context) {
 
 // ListServices 查询列表对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) ListServices(c *gin.Context) {
-	ServeQuery(c, h.svc.ListServices)
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeQuery(c, func(ctx context.Context, q service.ServiceListQuery) (any, error) {
+		q.ProjectID = projectID
+		return h.svc.ListServices(ctx, q)
+	})
 }
 
 // UpsertService 处理对应的 HTTP 请求并返回统一响应。
 func (h *ProjectHandler) UpsertService(c *gin.Context) {
-	ServeJSON(c, h.svc.UpsertService)
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.ServiceUpsertRequest) (service.ServiceItem, error) {
+		it, err := h.svc.UpsertService(ctx, projectID, req)
+		if err != nil {
+			return service.ServiceItem{}, err
+		}
+		return *it, nil
+	})
 }
 
 // DeleteService 删除对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) DeleteService(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	id, err := parseUintParam(c, "serviceId")
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteService(c.Request.Context(), id); err != nil {
+	if err := h.svc.DeleteService(c.Request.Context(), projectID, id); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -124,7 +148,13 @@ func (h *ProjectHandler) DeleteService(c *gin.Context) {
 
 // ListLogSources 查询列表对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) ListLogSources(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	ServeQuery(c, func(ctx context.Context, q service.LogSourceListQuery) (gin.H, error) {
+		q.ProjectID = projectID
 		res, err := h.svc.ListLogSources(ctx, q)
 		if err != nil {
 			return nil, err
@@ -140,8 +170,13 @@ func (h *ProjectHandler) ListLogSources(c *gin.Context) {
 
 // UpsertLogSource 处理对应的 HTTP 请求并返回统一响应。
 func (h *ProjectHandler) UpsertLogSource(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	ServeJSON(c, func(ctx context.Context, req service.LogSourceUpsertRequest) (service.LogSourceItem, error) {
-		it, err := h.svc.UpsertLogSource(ctx, req)
+		it, err := h.svc.UpsertLogSource(ctx, projectID, req)
 		if err != nil {
 			return service.LogSourceItem{}, err
 		}
@@ -151,12 +186,17 @@ func (h *ProjectHandler) UpsertLogSource(c *gin.Context) {
 
 // DeleteLogSource 删除对应的 HTTP 接口处理逻辑。
 func (h *ProjectHandler) DeleteLogSource(c *gin.Context) {
+	projectID, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	id, err := parseUintParam(c, "logSourceId")
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.DeleteLogSource(c.Request.Context(), id); err != nil {
+	if err := h.svc.DeleteLogSource(c.Request.Context(), projectID, id); err != nil {
 		response.Error(c, err)
 		return
 	}

@@ -16,7 +16,7 @@ import {
   Typography,
   message,
 } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getClusters, listNamespaces } from "../services/clusters";
 import {
@@ -87,6 +87,13 @@ export function K8sScopedPoliciesPage() {
 
   const watchedPresetClusterIds = Form.useWatch("cluster_ids", presetForm) ?? [];
   const watchedDenyClusterId = Form.useWatch("cluster_id", denyForm);
+  const accessSeqRef = useRef(0);
+  const denySeqRef = useRef(0);
+
+  function resetGrantForms() {
+    presetForm.setFieldsValue({ preset: "readonly", cluster_ids: [], deny_namespaces: [], allow_namespaces: [] });
+    splitForm.resetFields();
+  }
 
   const capNameByCode = useMemo(() => {
     const m = new Map<string, string>();
@@ -246,22 +253,23 @@ export function K8sScopedPoliciesPage() {
   }
 
   async function refreshAccessGrants(kind: SubjectKind, roleId?: number, groupId?: number, userId?: number) {
+    const seq = ++accessSeqRef.current;
     if (kind === "role" && roleId) {
       const result = await listK8sPoliciesByRole(roleId);
-      setAccessGrants(result.list);
+      if (seq === accessSeqRef.current) setAccessGrants(result.list);
       return;
     }
     if (kind === "group" && groupId) {
       const result = await listK8sClusterGrants({ group_id: groupId });
-      setAccessGrants(result.list);
+      if (seq === accessSeqRef.current) setAccessGrants(result.list);
       return;
     }
     if (kind === "user" && userId) {
       const result = await listK8sClusterGrants({ user_id: userId });
-      setAccessGrants(result.list);
+      if (seq === accessSeqRef.current) setAccessGrants(result.list);
       return;
     }
-    setAccessGrants([]);
+    if (seq === accessSeqRef.current) setAccessGrants([]);
   }
 
   async function refreshDenyRules(principalKind: SubjectKind, principalRef: string) {
@@ -270,14 +278,15 @@ export function K8sScopedPoliciesPage() {
       setDenyRules([]);
       return;
     }
+    const seq = ++denySeqRef.current;
     setDenyLoading(true);
     try {
       const data = await listK8sNamespaceDenyRules({ principal_kind: principalKind, principal_ref: ref });
-      setDenyRules(data.list ?? []);
+      if (seq === denySeqRef.current) setDenyRules(data.list ?? []);
     } catch {
-      setDenyRules([]);
+      if (seq === denySeqRef.current) setDenyRules([]);
     } finally {
-      setDenyLoading(false);
+      if (seq === denySeqRef.current) setDenyLoading(false);
     }
   }
 
@@ -436,6 +445,7 @@ export function K8sScopedPoliciesPage() {
                 onChange={(v) => {
                   const k = v as SubjectKind;
                   setSubjectKind(k);
+                  resetGrantForms();
                   void (async () => {
                     if (k === "role") {
                       const rid = selectedRoleId ?? roles[0]?.id;
@@ -478,6 +488,7 @@ export function K8sScopedPoliciesPage() {
                   value={selectedRoleId}
                   onChange={(v) => {
                     setSelectedRoleId(v);
+                    resetGrantForms();
                     void refreshAccessGrants("role", v, undefined, undefined);
                     const rc = roles.find((r) => r.id === v)?.code ?? "";
                     void refreshDenyRules("role", rc);
@@ -493,6 +504,7 @@ export function K8sScopedPoliciesPage() {
                   value={selectedUserId}
                   onChange={(v) => {
                     setSelectedUserId(v);
+                    resetGrantForms();
                     void refreshAccessGrants("user", undefined, undefined, v);
                     void refreshDenyRules("user", String(v));
                   }}
@@ -508,6 +520,7 @@ export function K8sScopedPoliciesPage() {
                   value={selectedGroupId}
                   onChange={(v) => {
                     setSelectedGroupId(v);
+                    resetGrantForms();
                     void refreshAccessGrants("group", undefined, v, undefined);
                     const gc = groups.find((g) => g.id === v)?.code ?? "";
                     void refreshDenyRules("group", gc);

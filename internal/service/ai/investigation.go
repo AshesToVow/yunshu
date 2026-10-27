@@ -162,6 +162,8 @@ func (s *Service) StartInvestigation(
 	row.UpdatedAt = time.Now()
 	if err := s.repo.SaveInvestigation(ctx, &row); err != nil {
 		for _, aid := range createdApprovals {
+			// 补偿：先关闭关联统一工单，避免待办残留指向已删除的审批单
+			_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefAiToolApproval, aid)
 			_ = s.repo.DeleteApproval(ctx, aid)
 		}
 		return fail("保存报告失败: " + err.Error())

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -305,8 +306,8 @@ func (s *Service) ExecuteQuery(ctx context.Context, projectID, instanceID uint, 
 	start := time.Now()
 	var cols []string
 	var data [][]any
-	err = withDatabase(qctx, sess, inst, req.Database, func(ctx context.Context, db *sql.DB) error {
-		rows, qerr := db.QueryContext(ctx, sqlText)
+	err = withDatabase(qctx, sess, inst, req.Database, func(ctx context.Context, conn *sql.Conn) error {
+		rows, qerr := conn.QueryContext(ctx, sqlText)
 		if qerr != nil {
 			return qerr
 		}
@@ -331,7 +332,9 @@ func (s *Service) ExecuteQuery(ctx context.Context, projectID, instanceID uint, 
 		RowsAffected: int64(len(data)), DurationMs: dur,
 		ResultPreviewJSON: string(preview), RiskLevel: model.DbRiskLow,
 	}
-	_ = s.repo.CreateSqlExecution(ctx, ex)
+	if err := s.repo.CreateSqlExecution(ctx, ex); err != nil {
+		slog.Default().With("component", "dbmgmt").Warn("record console query execution failed", "instance_id", instanceID, "error", err)
+	}
 	_ = s.writeAudit(ctx, projectID, &instanceID, actor, "console_query", map[string]any{
 		"database": req.Database,
 		"sql":      truncateSQL(sqlText, 500),
@@ -353,7 +356,7 @@ func (s *Service) ListExecutions(ctx context.Context, projectID uint, instanceID
 		selfID := actorUserID(actor)
 		if executorUserID == 0 {
 			executorUserID = selfID
-		} else if executorUserID != selfID && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		} else if executorUserID != selfID && !isSuperAdmin(actor) {
 			if ok, _ := s.isProjectAdminOrOwner(ctx, projectID, actor); !ok {
 				executorUserID = selfID
 			}

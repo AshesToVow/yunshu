@@ -33,10 +33,13 @@ type CurrentUser struct {
 	MustChangePassword bool     `json:"must_change_password,omitempty"`
 }
 
+// SuperAdminRoleCode 内置超级管理员角色编码，角色管理中禁止创建/改名为该编码。
+const SuperAdminRoleCode = "super-admin"
+
 // IsSuperAdminRole reports whether the subject has the built-in super-admin role.
 func IsSuperAdminRole(roleCodes []string) bool {
 	for _, code := range roleCodes {
-		if strings.TrimSpace(code) == "super-admin" {
+		if strings.TrimSpace(code) == SuperAdminRoleCode {
 			return true
 		}
 	}

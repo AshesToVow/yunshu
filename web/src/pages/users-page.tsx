@@ -42,7 +42,8 @@ import {
   exportUsers,
   importUsers,
 } from "../services/users";
-import type { DepartmentItem, RoleItem, UserCreatePayload, UserItem, UserUpdatePayload } from "../types/api";
+import type { DepartmentItem, PasswordPolicy, RoleItem, UserCreatePayload, UserItem, UserUpdatePayload } from "../types/api";
+import { getPasswordPolicy } from "../services/auth";
 import { listUserClusterAuth, type K8sUserClusterAuthRow } from "../services/k8s-policies";
 import { formatDateTime } from "../utils/format";
 import { buildRoleTreeData, normalizeCheckedKeys } from "../utils/tree";
@@ -58,6 +59,7 @@ export function UsersPage() {
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState(defaultQuery);
   const [loading, setLoading] = useState(false);
+  const listSeqRef = useRef(0);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [departments, setDepartments] = useState<DepartmentItem[]>([]);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -82,8 +84,10 @@ export function UsersPage() {
   const [k8sAuthLoading, setK8sAuthLoading] = useState(false);
   const [permOpen, setPermOpen] = useState(false);
   const [permTarget, setPermTarget] = useState<UserItem | null>(null);
+  const [passwordPolicy, setPasswordPolicy] = useState<PasswordPolicy | null>(null);
 
   const roleTreeData = useMemo(() => buildRoleTreeData(roles), [roles]);
+  const passwordMinLen = passwordPolicy?.min_length ?? 8;
   const roleIdSet = useMemo(() => new Set(roles.map((role) => role.id)), [roles]);
   const isSuperAdmin = useMemo(
     () => currentUser?.roles?.some((r) => r.code === "super-admin") ?? false,
@@ -97,16 +101,23 @@ export function UsersPage() {
   useEffect(() => {
     void loadRoles();
     void loadDepartments();
+    void getPasswordPolicy()
+      .then(setPasswordPolicy)
+      .catch(() => {
+        /* 读取失败时退回默认最小长度提示，后端仍会强制校验 */
+      });
   }, []);
 
   async function loadUsers(nextQuery = query) {
+    const seq = ++listSeqRef.current;
     setLoading(true);
     try {
       const result = await getUsers(nextQuery);
+      if (seq !== listSeqRef.current) return;
       setList(result.list);
       setTotal(result.total);
     } finally {
-      setLoading(false);
+      if (seq === listSeqRef.current) setLoading(false);
     }
   }
 
@@ -587,7 +598,15 @@ export function UsersPage() {
           <Form.Item label="所属部门" name="department_id">
             <Select allowClear placeholder="可选，选择用户所属部门" options={departmentOptions} />
           </Form.Item>
-          <Form.Item label="密码" name="password" rules={[{ required: true, message: "请输入密码" }]}>
+          <Form.Item
+            label="密码"
+            name="password"
+            rules={[
+              { required: true, message: "请输入密码" },
+              { min: passwordMinLen, message: `密码至少 ${passwordMinLen} 位` },
+            ]}
+            extra={passwordPolicy?.hint}
+          >
             <Input.Password placeholder="请输入密码" autoComplete="new-password" />
           </Form.Item>
           <Form.Item label="状态" name="status" rules={[{ required: true, message: "请选择状态" }]}>
@@ -827,8 +846,9 @@ export function UsersPage() {
             name="password"
             rules={[
               { required: true, message: "请输入新密码" },
-              { min: 6, message: "至少 6 位" },
+              { min: passwordMinLen, message: `至少 ${passwordMinLen} 位` },
             ]}
+            extra={passwordPolicy?.hint}
           >
             <Input.Password placeholder="新密码" autoComplete="new-password" />
           </Form.Item>
@@ -837,7 +857,7 @@ export function UsersPage() {
             name="confirm"
             rules={[
               { required: true, message: "请再次输入新密码" },
-              { min: 6, message: "至少 6 位" },
+              { min: passwordMinLen, message: `至少 ${passwordMinLen} 位` },
             ]}
           >
             <Input.Password placeholder="再次输入" autoComplete="new-password" />

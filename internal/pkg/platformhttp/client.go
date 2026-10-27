@@ -18,10 +18,15 @@ type Client struct {
 
 // NewInsecureTLSClient 内网自签场景的 HTTP 客户端（统一 SkipVerify，避免各处重复造 Dialer）。
 func NewInsecureTLSClient(timeout time.Duration, serverName string) *http.Client {
+	return NewTLSClient(timeout, serverName, false)
+}
+
+// NewTLSClient 按 verify 决定是否校验服务端证书；serverName 用于证书 SAN 与目标地址不一致（如 HostIP 直连）时指定。
+func NewTLSClient(timeout time.Duration, serverName string, verify bool) *http.Client {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	tlsCfg := &tls.Config{InsecureSkipVerify: true} // #nosec G402 — 内网自签由调用方显式选择
+	tlsCfg := &tls.Config{InsecureSkipVerify: !verify} // #nosec G402 — 默认内网自签跳过校验，verify=true 时开启
 	if sn := strings.TrimSpace(serverName); sn != "" {
 		tlsCfg.ServerName = sn
 	}

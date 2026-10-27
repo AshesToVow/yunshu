@@ -9,6 +9,8 @@ import (
 
 	"yunshu/internal/config"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/validateutil"
 )
 
 type LoggieBootstrapSourcePreview struct {
@@ -61,7 +63,8 @@ func bootstrapSourcesToEntries(projectID, serverID uint, sources []loggieBootstr
 		if len(paths) == 0 && strings.TrimSpace(src.Path) != "" {
 			paths = []string{strings.TrimSpace(src.Path)}
 		}
-		paths = defaultLogPaths(paths)
+		// 白名单外的路径直接跳过，避免历史脏数据把敏感文件带入采集配置
+		paths = sanitizeLogPaths(paths)
 		if len(paths) == 0 {
 			continue
 		}
@@ -134,6 +137,21 @@ func (s *LoggieAgentService) loadBootstrapSourcesFromDB(ctx context.Context, pro
 	return logSourcesToBootstrapSources(list), nil
 }
 
+func validateBootstrapLogPaths(paths []string) ([]string, error) {
+	out := make([]string, 0, len(paths))
+	for _, raw := range paths {
+		p := strings.TrimSpace(raw)
+		if p == "" {
+			continue
+		}
+		if err := validateutil.ValidateLogCollectPath(p); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("日志路径不合法: %s（%s）", p, err.Error()))
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 func (s *LoggieAgentService) resolveBootstrapSources(
 	ctx context.Context,
 	projectID, serverID uint,
@@ -149,8 +167,11 @@ func (s *LoggieAgentService) resolveBootstrapSources(
 			return sources, nil
 		}
 	}
-	paths := defaultLogPaths(req.LogPaths)
-	if len(paths) == 0 && len(req.LogPaths) == 0 {
+	paths, err := validateBootstrapLogPaths(req.LogPaths)
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
 		return nil, nil
 	}
 	return []loggieBootstrapSource{{

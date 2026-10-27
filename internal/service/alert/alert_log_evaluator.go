@@ -14,15 +14,15 @@ import (
 
 // LogAlertConfig 日志告警规则配置（存于 AlertMonitorRule.Expr JSON）。
 type LogAlertConfig struct {
-	Mode           string `json:"mode"` // error_count | error_spike | pattern_rate
-	Level          string `json:"level"`
-	Keyword        string `json:"keyword"`
-	ServiceName    string `json:"service_name"`
-	Namespace      string `json:"namespace"`
-	WindowMinutes  int    `json:"window_minutes"`
-	Threshold      int64  `json:"threshold"`
-	BaselineMinutes int   `json:"baseline_minutes"` // error_spike: 基线窗口
-	SpikeRatio     float64 `json:"spike_ratio"`     // error_spike: 当前/基线倍率，默认 3
+	Mode            string  `json:"mode"` // error_count | error_spike | pattern_rate
+	Level           string  `json:"level"`
+	Keyword         string  `json:"keyword"`
+	ServiceName     string  `json:"service_name"`
+	Namespace       string  `json:"namespace"`
+	WindowMinutes   int     `json:"window_minutes"`
+	Threshold       int64   `json:"threshold"`
+	BaselineMinutes int     `json:"baseline_minutes"` // error_spike: 基线窗口
+	SpikeRatio      float64 `json:"spike_ratio"`      // error_spike: 当前/基线倍率，默认 3
 }
 
 func normalizeRuleKind(kind string) string {

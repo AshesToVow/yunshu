@@ -13,6 +13,7 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Segmented,
   Select,
   Space,
@@ -26,7 +27,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   GrantValidityCalendarPicker,
@@ -51,6 +52,7 @@ import {
   type DbAppUserRequest,
   type DbTicket,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 import { accessRequestStatusLabel, ticketStatusLabel } from "../utils/dbmgmt-labels";
@@ -106,6 +108,7 @@ const TICKET_STATUS_OPTIONS = [
   { label: "待执行", value: "pending_execution" },
   { label: "执行成功", value: "success" },
   { label: "执行失败", value: "failed" },
+  { label: "结果未知", value: "result_unknown" },
   { label: "已驳回", value: "rejected" },
 ];
 
@@ -144,13 +147,20 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
   const [sqlLoading, setSqlLoading] = useState(false);
   const [sqlTicket, setSqlTicket] = useState<DbTicket | null>(null);
   const [reviewAccess, setReviewAccess] = useState<DbAccessRequest | null>(null);
+  const [actingId, setActingId] = useState<number | null>(null);
+  const [executingId, setExecutingId] = useState<number | null>(null);
+  const loadSeqRef = useRef(0);
+  const reviewTicketIdRef = useRef<number | null>(null);
+  const sqlTicketIdRef = useRef<number | null>(null);
   const [form] = Form.useForm<{ comment: string; grant_period?: GrantValidityPeriod | null }>();
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载项目列表失败")));
   }, []);
 
   const scopeOptions = useMemo(
@@ -167,6 +177,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
 
   const load = useCallback(async () => {
     if (!projectId) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const params: Record<string, string | number> = {
@@ -181,6 +192,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
         listDbAppUserRequests(projectId, params),
         listDbTickets(projectId, params),
       ]);
+      if (seq !== loadSeqRef.current) return; // 已有更新的请求，丢弃过期响应
       setAccessRows(access.list ?? []);
       setAccessTotal(access.total ?? 0);
       setAppUserRows(appUsers.list ?? []);
@@ -188,9 +200,10 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       setTicketRows(tickets.list ?? []);
       setTicketTotal(tickets.total ?? 0);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载待办失败");
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载待办失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [projectId, mineScope, status, page, pageSize]);
 
@@ -220,25 +233,42 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     }
     setReviewOpen(true);
     if (type === "ticket" && projectId) {
+      reviewTicketIdRef.current = id;
       void getDbTicket(projectId, id)
-        .then((t) => setReviewTicket(t))
-        .catch(() => setReviewTicket(null))
-        .finally(() => setReviewTicketLoading(false));
+        .then((t) => {
+          if (reviewTicketIdRef.current === id) setReviewTicket(t);
+        })
+        .catch((e) => {
+          if (reviewTicketIdRef.current !== id) return;
+          setReviewTicket(null);
+          message.error(extractApiErrorMessage(e, "加载工单详情失败"));
+        })
+        .finally(() => {
+          if (reviewTicketIdRef.current === id) setReviewTicketLoading(false);
+        });
+    } else {
+      reviewTicketIdRef.current = null;
     }
   };
 
   const openSqlView = (ticketId: number) => {
     if (!projectId) return;
+    sqlTicketIdRef.current = ticketId;
     setSqlOpen(true);
     setSqlLoading(true);
     setSqlTicket(null);
     void getDbTicket(projectId, ticketId)
-      .then((t) => setSqlTicket(t))
+      .then((t) => {
+        if (sqlTicketIdRef.current === ticketId) setSqlTicket(t);
+      })
       .catch((e) => {
-        message.error(e instanceof Error ? e.message : "加载 SQL 失败");
+        if (sqlTicketIdRef.current !== ticketId) return;
+        message.error(extractApiErrorMessage(e, "加载 SQL 失败"));
         setSqlOpen(false);
       })
-      .finally(() => setSqlLoading(false));
+      .finally(() => {
+        if (sqlTicketIdRef.current === ticketId) setSqlLoading(false);
+      });
   };
 
   const copySql = async (text?: string) => {
@@ -294,29 +324,53 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
   ];
 
   const submitReview = async () => {
-    if (!projectId || !reviewId) return;
-    const values = await form.validateFields();
-    const comment = values.comment;
-    if (reviewType === "access") {
-      if (approve) {
-        const period =
-          reviewAccess?.is_final_approval !== false
-            ? (values.grant_period as GrantValidityPeriod | null | undefined)
-            : undefined;
-        const payload: { comment?: string; expires_at?: string } = { comment };
-        if (period !== undefined) {
-          payload.expires_at = period === null ? "" : (grantPeriodToExpiresAt(period ?? null) ?? "");
-        }
-        await approveDbAccessRequest(projectId, reviewId, payload);
-      } else await rejectDbAccessRequest(projectId, reviewId, comment);
-    } else if (reviewType === "app_user") {
-      if (approve) await approveDbAppUserRequest(projectId, reviewId, comment);
-      else await rejectDbAppUserRequest(projectId, reviewId, comment);
-    } else if (approve) await approveDbTicket(projectId, reviewId, comment);
-    else await rejectDbTicket(projectId, reviewId, comment);
-    message.success("已处理");
-    setReviewOpen(false);
-    void load();
+    if (!projectId || !reviewId || actingId !== null) return;
+    setActingId(reviewId);
+    try {
+      const values = await form.validateFields();
+      const comment = values.comment;
+      if (reviewType === "access") {
+        if (approve) {
+          const period =
+            reviewAccess?.is_final_approval !== false
+              ? (values.grant_period as GrantValidityPeriod | null | undefined)
+              : undefined;
+          const payload: { comment?: string; expires_at?: string } = { comment };
+          if (period !== undefined) {
+            payload.expires_at = period === null ? "" : (grantPeriodToExpiresAt(period ?? null) ?? "");
+          }
+          await approveDbAccessRequest(projectId, reviewId, payload);
+        } else await rejectDbAccessRequest(projectId, reviewId, comment);
+      } else if (reviewType === "app_user") {
+        if (approve) await approveDbAppUserRequest(projectId, reviewId, comment);
+        else await rejectDbAppUserRequest(projectId, reviewId, comment);
+      } else if (approve) await approveDbTicket(projectId, reviewId, comment);
+      else await rejectDbTicket(projectId, reviewId, comment);
+      message.success("已处理");
+      setReviewOpen(false);
+      void load();
+    } catch (e) {
+      // validateFields 失败时表单已提示，不再弹接口错误
+      if (!(e && typeof e === "object" && "errorFields" in e)) {
+        message.error(extractApiErrorMessage(e, approve ? "审批失败" : "驳回失败"));
+      }
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleExecute = async (targetId: number) => {
+    if (!projectId || executingId !== null) return;
+    setExecutingId(targetId);
+    try {
+      await executeDbTicket(projectId, targetId);
+      message.success("执行成功");
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "执行失败"));
+    } finally {
+      setExecutingId(null);
+    }
   };
 
   const accessCols: ColumnsType<DbAccessRequest> = [
@@ -357,6 +411,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     { title: "时间", dataIndex: "created_at", render: (v) => formatDateTime(v) },
     {
       title: "操作",
+      fixed: "right",
+      width: 110,
       render: (_, r) =>
         isAccessPending(r) ? (
           <Space>
@@ -408,6 +464,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     { title: "时间", dataIndex: "created_at", render: (v) => formatDateTime(v) },
     {
       title: "操作",
+      fixed: "right",
+      width: 110,
       render: (_, r) =>
         isAppUserPending(r) ? (
           <Space>
@@ -467,9 +525,11 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
             ? "green"
             : v === "rejected" || v === "failed"
               ? "red"
-              : v === "pending_execution"
-                ? "blue"
-                : "orange";
+              : v === "result_unknown"
+                ? "volcano"
+                : v === "pending_execution"
+                  ? "blue"
+                  : "orange";
         let label = ticketStatusLabel(v);
         if (v === "pending_approval" && row.mine_status === "mine_done") label = "待下一环节";
         return <Tag color={color}>{label}</Tag>;
@@ -477,6 +537,8 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
     },
     {
       title: "操作",
+      fixed: "right",
+      width: 280,
       render: (_, r) => (
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => openSqlView(r.id)}>
@@ -494,20 +556,23 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
             </>
           ) : null}
           {isTicketExecutionPending(r) ? (
-            <Button
-              size="small"
-              icon={<PlayCircleOutlined />}
-              onClick={() =>
-                void executeDbTicket(projectId!, r.id)
-                  .then(() => {
-                    message.success("执行成功");
-                    void load();
-                  })
-                  .catch((e) => message.error(e instanceof Error ? e.message : "执行失败"))
-              }
+            <Popconfirm
+              title="确认执行该工单？"
+              description="执行会立即作用于目标数据库，请确认 SQL 与实例无误。"
+              okText="确认执行"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => void handleExecute(r.id)}
+              disabled={executingId !== null}
             >
-              执行
-            </Button>
+              <Button
+                size="small"
+                icon={<PlayCircleOutlined />}
+                disabled={executingId !== null}
+                loading={executingId === r.id}
+              >
+                执行
+              </Button>
+            </Popconfirm>
           ) : null}
           {!isTicketApprovalPending(r) && !isTicketExecutionPending(r) ? (
             <span style={{ color: "#999" }}>—</span>
@@ -523,6 +588,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
 
   return (
     <Card
+      className="table-card"
       title={mode === "pending" ? "待审核" : "审批待办"}
       extra={
         <Space>
@@ -530,28 +596,49 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
             style={{ width: 200 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
-            onChange={setProjectId}
+            onChange={(v) => {
+              setProjectId(v);
+              setPage(1);
+            }}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+          <Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={loading}>
             刷新
           </Button>
         </Space>
       }
     >
-      <Space wrap style={{ marginBottom: 16 }}>
-        <Segmented options={scopeOptions} value={mineScope} onChange={(v) => setMineScope(v as MineScope)} />
-        <Select
-          allowClear
-          style={{ width: 160 }}
-          placeholder="状态"
-          value={status || undefined}
-          options={statusOptions}
-          onChange={(v) => setStatus(v ?? "")}
-        />
-      </Space>
+      <div className="toolbar">
+        <Space wrap>
+          <Segmented
+            options={scopeOptions}
+            value={mineScope}
+            onChange={(v) => {
+              setMineScope(v as MineScope);
+              setPage(1);
+            }}
+          />
+          <Select
+            allowClear
+            style={{ width: 160 }}
+            placeholder="状态"
+            value={status || undefined}
+            options={statusOptions}
+            onChange={(v) => {
+              setStatus(v ?? "");
+              setPage(1);
+            }}
+          />
+        </Space>
+      </div>
       <Tabs
         activeKey={tab}
-        onChange={(k) => setTab(k as TabKey)}
+        onChange={(k) => {
+          const next = k as TabKey;
+          if (next === tab) return;
+          setTab(next);
+          setStatus(""); // 各 tab 的状态枚举不同，切换时必须清空
+          setPage(1);
+        }}
         items={[
           {
             key: "access",
@@ -562,6 +649,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
                 loading={loading}
                 columns={accessCols}
                 dataSource={accessRows}
+                scroll={{ x: 1100 }}
                 pagination={{
                   current: page,
                   pageSize,
@@ -585,6 +673,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
                 loading={loading}
                 columns={appUserCols}
                 dataSource={appUserRows}
+                scroll={{ x: 1100 }}
                 pagination={{
                   current: page,
                   pageSize,
@@ -608,6 +697,7 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
                 loading={loading}
                 columns={ticketCols}
                 dataSource={ticketRows}
+                scroll={{ x: 1200 }}
                 pagination={{
                   current: page,
                   pageSize,
@@ -627,8 +717,16 @@ export function DbmgmtTodoPage({ mode = "all" }: { mode?: "all" | "pending" }) {
       <Modal
         title={approve ? "审批通过" : "审批拒绝"}
         open={reviewOpen}
-        onCancel={() => setReviewOpen(false)}
+        onCancel={() => {
+          if (actingId !== null) return;
+          setReviewOpen(false);
+        }}
         onOk={() => void submitReview()}
+        confirmLoading={actingId !== null}
+        closable={actingId === null}
+        keyboard={actingId === null}
+        maskClosable={actingId === null}
+        cancelButtonProps={{ disabled: actingId !== null }}
         width={reviewType === "ticket" ? 720 : reviewType === "access" && approve ? 760 : 520}
       >
         {reviewType === "ticket" ? (

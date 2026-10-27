@@ -8,19 +8,19 @@ import (
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
-
 )
 
 // PendingListQuery 跨域待办查询。
 type PendingListQuery struct {
-	Domains    string `form:"domains"`
-	ProjectID  *uint  `form:"project_id"`
-	MineScope  string `form:"mine_scope"`
-	Page       int    `form:"page"`
-	PageSize   int    `form:"page_size"`
+	Domains   string `form:"domains"`
+	ProjectID *uint  `form:"project_id"`
+	MineScope string `form:"mine_scope"`
+	Page      int    `form:"page"`
+	PageSize  int    `form:"page_size"`
 }
 
 // PendingTicketItem 统一待办条目。
@@ -57,6 +57,11 @@ func (s *Service) ListPendingForUser(ctx context.Context, q PendingListQuery, ac
 	mineScope := strings.ToLower(strings.TrimSpace(q.MineScope))
 	if mineScope == "" {
 		mineScope = MineScopePending
+	}
+	switch mineScope {
+	case MineScopePending, MineScopeDone, MineScopeAll:
+	default:
+		return nil, constants.ErrBadRequestWithMsg("非法的 mine_scope: " + mineScope)
 	}
 	domains := parseDomains(q.Domains)
 	userID := actorUserID(actor)

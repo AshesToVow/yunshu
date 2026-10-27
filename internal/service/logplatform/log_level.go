@@ -92,9 +92,16 @@ func levelMessageClauses(level string) []map[string]any {
 	}
 }
 
+var wildcardEscaper = strings.NewReplacer(`\`, `\\`, `*`, `\*`, `?`, `\?`)
+
+// escapeWildcardPattern 转义用户输入中的通配符，避免 * / ? 扩大匹配范围。
+func escapeWildcardPattern(s string) string {
+	return wildcardEscaper.Replace(s)
+}
+
 func filePathFilter(path string) map[string]any {
 	path = strings.TrimSpace(path)
-	pattern := "*" + path + "*"
+	pattern := "*" + escapeWildcardPattern(path) + "*"
 	should := []map[string]any{
 		{"wildcard": map[string]any{"file_path.keyword": pattern}},
 		{"wildcard": map[string]any{"file_path": pattern}},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -88,7 +89,7 @@ func normalizeInstanceRole(role string) string {
 	}
 }
 
-func (s *Service) toInstanceItem(ctx context.Context, inst model.DbInstance) InstanceItem {
+func baseInstanceItem(inst model.DbInstance) InstanceItem {
 	item := InstanceItem{
 		ID: inst.ID, ProjectID: inst.ProjectID, Name: inst.Name, Env: inst.Env,
 		Driver: inst.Driver, ConnectMode: inst.ConnectMode, Host: inst.Host, Port: inst.Port,
@@ -101,25 +102,78 @@ func (s *Service) toInstanceItem(ctx context.Context, inst model.DbInstance) Ins
 	if item.Role == "" {
 		item.Role = model.DbInstanceRolePrimary
 	}
-	if inst.PrimaryInstanceID != nil && *inst.PrimaryInstanceID > 0 {
-		if primary, err := s.repo.GetInstanceInProject(ctx, inst.ProjectID, *inst.PrimaryInstanceID); err == nil && primary != nil {
-			item.PrimaryInstanceName = primary.Name
-		}
-	}
 	if inst.LastPingAt != nil {
 		ts := inst.LastPingAt.Format(time.RFC3339)
 		item.LastPingAt = &ts
 	}
 	item.CreatedAt = inst.CreatedAt.Format(time.RFC3339)
+	if strings.EqualFold(inst.Driver, model.DbDriverMySQL) {
+		item.BackupLink = fmt.Sprintf("/mysql-backup?project_id=%d", inst.ProjectID)
+	}
+	return item
+}
+
+func (s *Service) toInstanceItem(ctx context.Context, inst model.DbInstance) InstanceItem {
+	item := baseInstanceItem(inst)
+	if inst.PrimaryInstanceID != nil && *inst.PrimaryInstanceID > 0 {
+		if primary, err := s.repo.GetInstanceInProject(ctx, inst.ProjectID, *inst.PrimaryInstanceID); err == nil && primary != nil {
+			item.PrimaryInstanceName = primary.Name
+		}
+	}
 	if inst.ServerID != nil && *inst.ServerID > 0 {
 		if sv, err := s.serverRepo.GetByID(ctx, *inst.ServerID); err == nil && sv != nil {
 			item.ServerName = sv.Name
 		}
 	}
-	if strings.EqualFold(inst.Driver, model.DbDriverMySQL) {
-		item.BackupLink = fmt.Sprintf("/mysql-backup?project_id=%d", inst.ProjectID)
-	}
 	return item
+}
+
+// toInstanceItems 批量填充主库名与服务器名，避免列表接口逐条查询（N+1）。
+func (s *Service) toInstanceItems(ctx context.Context, projectID uint, list []model.DbInstance) []InstanceItem {
+	primaryNames := make(map[uint]string, len(list))
+	needAllInstances := false
+	for i := range list {
+		primaryNames[list[i].ID] = list[i].Name
+		if pid := list[i].PrimaryInstanceID; pid != nil && *pid > 0 {
+			if _, ok := primaryNames[*pid]; !ok {
+				needAllInstances = true
+			}
+		}
+	}
+	if needAllInstances {
+		if all, err := s.repo.ListInstancesForVisibility(ctx, repository.DbInstanceListParams{ProjectID: projectID}); err == nil {
+			for i := range all {
+				primaryNames[all[i].ID] = all[i].Name
+			}
+		}
+	}
+	serverNames := make(map[uint]string)
+	needServers := false
+	for i := range list {
+		if sid := list[i].ServerID; sid != nil && *sid > 0 {
+			needServers = true
+			break
+		}
+	}
+	if needServers && s.serverRepo != nil {
+		if servers, err := s.serverRepo.ListByProject(ctx, projectID); err == nil {
+			for i := range servers {
+				serverNames[servers[i].ID] = servers[i].Name
+			}
+		}
+	}
+	items := make([]InstanceItem, 0, len(list))
+	for i := range list {
+		item := baseInstanceItem(list[i])
+		if pid := list[i].PrimaryInstanceID; pid != nil && *pid > 0 {
+			item.PrimaryInstanceName = primaryNames[*pid]
+		}
+		if sid := list[i].ServerID; sid != nil && *sid > 0 {
+			item.ServerName = serverNames[*sid]
+		}
+		items = append(items, item)
+	}
+	return items
 }
 
 func (s *Service) buildOpenParams(inst *model.DbInstance, password string) dbconn.OpenParams {
@@ -145,48 +199,44 @@ func (s *Service) openSession(ctx context.Context, inst *model.DbInstance) (*dbc
 }
 
 func (s *Service) ListInstances(ctx context.Context, q InstanceListQuery) (*pagination.Result[InstanceItem], error) {
-	list, total, err := s.repo.ListInstances(ctx, repository.DbInstanceListParams{
-		ProjectID: q.ProjectID, Env: q.Env, Keyword: q.Keyword, Page: q.Page, PageSize: q.PageSize,
-	})
+	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
+	params := repository.DbInstanceListParams{ProjectID: q.ProjectID, Env: q.Env, Keyword: q.Keyword}
+	// 项目管理员/超管可见全部实例，可直接在数据库分页。
+	if err := s.requireProjectAdminOrOwner(ctx, q.ProjectID, q.Actor); err == nil {
+		params.Page, params.PageSize = page, pageSize
+		list, total, err := s.repo.ListInstances(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		return paginate(s.toInstanceItems(ctx, q.ProjectID, list), total, page, pageSize), nil
+	}
+	// 普通成员：先取全部匹配项，按实例可见性过滤后再分页，避免页内条数与 total 失真。
+	all, err := s.repo.ListInstancesForVisibility(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]InstanceItem, 0, len(list))
-	for _, inst := range list {
-		if !s.canSeeInstance(ctx, q.ProjectID, &inst, q.Actor) {
-			continue
-		}
-		items = append(items, s.toInstanceItem(ctx, inst))
-	}
-	// 授权过滤后 total 以可见条数为准（当前页内过滤；完整分页需全量过滤时再优化）
-	visibleTotal := total
-	if q.Actor != nil && !auth.IsSuperAdminRole(q.Actor.RoleCodes) {
-		if err := s.requireProjectAdminOrOwner(ctx, q.ProjectID, q.Actor); err != nil {
-			visibleTotal = int64(len(items))
-			// 非管理员：为准确 total，在无关键词/环境过滤的小规模场景可接受再扫一遍
-			if q.Keyword == "" && q.Env == "" && total > int64(len(list)) {
-				all, _, e2 := s.repo.ListInstances(ctx, repository.DbInstanceListParams{
-					ProjectID: q.ProjectID, Page: 1, PageSize: 500,
-				})
-				if e2 == nil {
-					n := int64(0)
-					for i := range all {
-						if s.canSeeInstance(ctx, q.ProjectID, &all[i], q.Actor) {
-							n++
-						}
-					}
-					visibleTotal = n
-				}
-			}
+	visible := make([]model.DbInstance, 0, len(all))
+	for i := range all {
+		if s.canSeeInstance(ctx, q.ProjectID, &all[i], q.Actor) {
+			visible = append(visible, all[i])
 		}
 	}
-	return paginate(items, visibleTotal, q.Page, q.PageSize), nil
+	total := int64(len(visible))
+	start := (page - 1) * pageSize
+	if start > len(visible) {
+		start = len(visible)
+	}
+	end := start + pageSize
+	if end > len(visible) {
+		end = len(visible)
+	}
+	return paginate(s.toInstanceItems(ctx, q.ProjectID, visible[start:end]), total, page, pageSize), nil
 }
 
 // canSeeInstance 项目管理员/超管/实例 Owner 可见全部；其余需至少有连接/查询/写/管理任一授权。
 func (s *Service) canSeeInstance(ctx context.Context, projectID uint, inst *model.DbInstance, actor *auth.CurrentUser) bool {
 	if actor == nil {
-		return true
+		return false
 	}
 	if auth.IsSuperAdminRole(actor.RoleCodes) {
 		return true
@@ -338,6 +388,23 @@ func (s *Service) DeleteInstance(ctx context.Context, projectID, id uint, actor 
 			return constants.ErrBadRequestWithMsg("该主库仍有关联从库，请先删除或改绑从库")
 		}
 	}
+	if s.workflow != nil {
+		ticketIDs, accessIDs, appUserIDs, lerr := s.repo.ListInstanceLinkedRefIDs(ctx, id)
+		if lerr != nil {
+			return lerr
+		}
+		closeLinked := func(refType string, ids []uint) {
+			for _, refID := range ids {
+				if cerr := s.workflow.CloseLinkedTicket(ctx, refType, refID); cerr != nil {
+					slog.Default().With("component", "dbmgmt").Warn("close linked workflow ticket failed",
+						"ref_type", refType, "ref_id", refID, "error", cerr)
+				}
+			}
+		}
+		closeLinked(model.WorkflowRefDbSqlTicket, ticketIDs)
+		closeLinked(model.WorkflowRefDbAccessRequest, accessIDs)
+		closeLinked(model.WorkflowRefDbAppUserRequest, appUserIDs)
+	}
 	if err := s.repo.DeleteInstance(ctx, id); err != nil {
 		return err
 	}
@@ -376,7 +443,9 @@ func (s *Service) pingInstance(ctx context.Context, projectID, id uint) (*PingRe
 	} else {
 		inst.Status = "online"
 	}
-	_ = s.repo.UpdateInstance(ctx, inst)
+	if uerr := s.repo.UpdateInstance(ctx, inst); uerr != nil {
+		slog.Default().With("component", "dbmgmt").Warn("persist instance ping status failed", "instance_id", inst.ID, "error", uerr)
+	}
 	if err != nil {
 		return &PingResult{OK: false, Message: err.Error()}, nil
 	}
@@ -384,11 +453,20 @@ func (s *Service) pingInstance(ctx context.Context, projectID, id uint) (*PingRe
 }
 
 func (s *Service) writeAudit(ctx context.Context, projectID uint, instanceID *uint, actor *auth.CurrentUser, action string, detail map[string]any) error {
-	b, _ := json.Marshal(detail)
+	b, err := json.Marshal(detail)
+	if err != nil {
+		// 详情序列化失败不应阻断主流程，但必须留下痕迹，避免审计静默缺失。
+		slog.Default().With("component", "dbmgmt").Warn("marshal audit detail failed", "action", action, "error", err)
+		b = nil
+	}
 	log := &model.DbAuditLog{
 		ProjectID: projectID, InstanceID: instanceID,
 		ActorUserID: actorUserID(actor), ActorName: actorUsername(actor),
 		Action: action, DetailJSON: b,
 	}
-	return s.repo.CreateAuditLog(ctx, log)
+	if err := s.repo.CreateAuditLog(ctx, log); err != nil {
+		slog.Default().With("component", "dbmgmt").Error("write audit log failed", "action", action, "error", err)
+		return err
+	}
+	return nil
 }

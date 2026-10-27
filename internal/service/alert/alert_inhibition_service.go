@@ -11,17 +11,19 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 // AlertInhibitionService 告警抑制服务
 type AlertInhibitionService struct {
-	ruleRepo interfaces.AlertInhibitionRuleRepository
-	redis    *redis.Client
+	ruleRepo   interfaces.AlertInhibitionRuleRepository
+	redis      *redis.Client
+	memberRepo interfaces.ProjectMemberRepository
 
 	cacheMu          sync.RWMutex
 	cachedRules      []model.AlertInhibitionRule
@@ -40,10 +42,11 @@ type inhibitionCompiledMatchers struct {
 }
 
 // NewAlertInhibitionService 创建告警抑制服务
-func NewAlertInhibitionServiceWithRepo(ruleRepo interfaces.AlertInhibitionRuleRepository, redisClient *redis.Client) *AlertInhibitionService {
+func NewAlertInhibitionServiceWithRepo(ruleRepo interfaces.AlertInhibitionRuleRepository, redisClient *redis.Client, memberRepo interfaces.ProjectMemberRepository) *AlertInhibitionService {
 	svc := &AlertInhibitionService{
 		ruleRepo:         ruleRepo,
 		redis:            redisClient,
+		memberRepo:       memberRepo,
 		compiledMatchers: make(map[uint]*inhibitionCompiledMatchers),
 	}
 	// 启动时预热缓存
@@ -80,6 +83,9 @@ type AlertInhibitionRuleListQuery struct {
 // List 查询抑制规则列表
 func (s *AlertInhibitionService) List(ctx context.Context, q AlertInhibitionRuleListQuery) ([]model.AlertInhibitionRule, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, q.ProjectID); err != nil {
+		return nil, 0, page, pageSize, err
+	}
 	list, total, err := s.ruleRepo.ListFiltered(ctx, repository.AlertInhibitionListFilter{
 		ProjectID: q.ProjectID,
 		Keyword:   q.Keyword,
@@ -99,6 +105,9 @@ func (s *AlertInhibitionService) List(ctx context.Context, q AlertInhibitionRule
 
 // Create 创建抑制规则
 func (s *AlertInhibitionService) Create(ctx context.Context, req AlertInhibitionRuleUpsertRequest) (*model.AlertInhibitionRule, error) {
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+		return nil, err
+	}
 	if err := validateInhibitionRule(req); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Create", err)
 	}
@@ -141,7 +150,13 @@ func (s *AlertInhibitionService) Create(ctx context.Context, req AlertInhibition
 func (s *AlertInhibitionService) Update(ctx context.Context, id uint, req AlertInhibitionRuleUpsertRequest) (*model.AlertInhibitionRule, error) {
 	rule, err := s.ruleRepo.GetByID(ctx, id)
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsge4f20d76fd0d)
+		}
 		return nil, bizerrors.Pass(ctx, "alert.inhibition", "Update", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, rule.ProjectID); err != nil {
+		return nil, err
 	}
 
 	if err := validateInhibitionRule(req); err != nil {
@@ -177,6 +192,16 @@ func (s *AlertInhibitionService) Update(ctx context.Context, id uint, req AlertI
 
 // Delete 删除抑制规则
 func (s *AlertInhibitionService) Delete(ctx context.Context, id uint) error {
+	rule, err := s.ruleRepo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg(constants.ErrMsge4f20d76fd0d)
+		}
+		return bizerrors.Pass(ctx, "alert.inhibition", "Delete", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, rule.ProjectID); err != nil {
+		return err
+	}
 	n, err := s.ruleRepo.Delete(ctx, id)
 	if err != nil {
 		return bizerrors.Pass(ctx, "alert.inhibition", "Delete", err)

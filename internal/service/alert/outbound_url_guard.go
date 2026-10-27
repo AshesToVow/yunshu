@@ -45,6 +45,60 @@ func assertSafeOutboundURL(raw string) error {
 	return nil
 }
 
+// validateDatasourceBaseURL 校验监控数据源地址：仅 http/https，禁止本机/链路本地/云元数据，
+// 但允许 RFC1918 私网（自建 Prometheus/VictoriaMetrics 通常位于内网）。
+func validateDatasourceBaseURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fmt.Errorf("base_url 为空")
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("base_url 无效: %w", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("base_url 仅允许 http/https")
+	}
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" {
+		return fmt.Errorf("base_url 缺少主机名")
+	}
+	lower := strings.ToLower(host)
+	if lower == "localhost" || strings.HasSuffix(lower, ".localhost") || lower == "metadata.google.internal" {
+		return fmt.Errorf("禁止访问本机或元数据地址")
+	}
+	if ip := net.ParseIP(lower); ip != nil {
+		if err := checkDatasourceIP(ip); err != nil {
+			return err
+		}
+		return nil
+	}
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("无法解析数据源主机: %w", err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("无法解析数据源主机")
+	}
+	for _, ip := range ips {
+		if err := checkDatasourceIP(ip); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkDatasourceIP(ip net.IP) error {
+	if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+		return fmt.Errorf("禁止访问本机或链路本地地址: %s", ip)
+	}
+	if ip.Equal(net.ParseIP("100.100.100.200")) {
+		return fmt.Errorf("禁止访问云元数据地址: %s", ip)
+	}
+	return nil
+}
+
 func isBlockedOutboundIP(ip net.IP) bool {
 	if ip == nil {
 		return true

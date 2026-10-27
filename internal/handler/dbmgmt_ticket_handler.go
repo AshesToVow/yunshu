@@ -23,8 +23,9 @@ func (h *DbmgmtHandler) ListTickets(c *gin.Context) {
 	}
 	ServeQuery(c, func(ctx context.Context, q service.DbmgmtTicketListQuery) (*pagination.Result[service.TicketItem], error) {
 		q.ProjectID = projectID
-		if q.Mine {
-			if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
+		if u, ok := auth.CurrentUserFromContext(c); ok && u != nil {
+			q.Viewer = u
+			if q.Mine {
 				q.MineViewer = u
 				tabStatus := strings.TrimSpace(q.Status)
 				if tabStatus == model.DbTicketStatusPendingExecution {

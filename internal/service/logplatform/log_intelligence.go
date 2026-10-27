@@ -6,28 +6,37 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/cronutil"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
+)
+
+const (
+	logIntelligenceCycleLockKey = "logs:intelligence:cycle:lock"
+	logIntelligenceCycleLockTTL = 10 * time.Minute
 )
 
 // LogIntelligenceService 日志智能分析：模板聚类、异常检测、多维关联。
 type LogIntelligenceService struct {
-	repo        interfaces.LogIntelligenceRepository
-	logSearch   *LogSearchService
-	projectRepo interfaces.ProjectRepository
+	repo         interfaces.LogIntelligenceRepository
+	logSearch    *LogSearchService
+	projectRepo  interfaces.ProjectRepository
+	redis        *redis.Client
+	cycleRunning atomic.Bool
 }
 
-func NewLogIntelligenceService(repo interfaces.LogIntelligenceRepository, logSearch *LogSearchService, projectRepo interfaces.ProjectRepository) *LogIntelligenceService {
-	return &LogIntelligenceService{repo: repo, logSearch: logSearch, projectRepo: projectRepo}
+func NewLogIntelligenceService(repo interfaces.LogIntelligenceRepository, logSearch *LogSearchService, projectRepo interfaces.ProjectRepository, rdb *redis.Client) *LogIntelligenceService {
+	return &LogIntelligenceService{repo: repo, logSearch: logSearch, projectRepo: projectRepo, redis: rdb}
 }
 
 type LogPatternItem struct {
@@ -191,13 +200,13 @@ type LogContextQuery struct {
 }
 
 type LogContextResult struct {
-	AnchorTime    string               `json:"anchor_time"`
-	WindowFrom    string               `json:"window_from"`
-	WindowTo      string               `json:"window_to"`
-	Overview      *LogOverviewResult   `json:"overview,omitempty"`
-	RecentChanges []model.ChangeEvent  `json:"recent_changes"`
-	RecentAlerts  []model.AlertEvent   `json:"recent_alerts"`
-	LogSummary    *LogSummaryResult    `json:"log_summary,omitempty"`
+	AnchorTime    string              `json:"anchor_time"`
+	WindowFrom    string              `json:"window_from"`
+	WindowTo      string              `json:"window_to"`
+	Overview      *LogOverviewResult  `json:"overview,omitempty"`
+	RecentChanges []model.ChangeEvent `json:"recent_changes"`
+	RecentAlerts  []model.AlertEvent  `json:"recent_alerts"`
+	LogSummary    *LogSummaryResult   `json:"log_summary,omitempty"`
 }
 
 func (s *LogIntelligenceService) GetContext(ctx context.Context, q LogContextQuery) (*LogContextResult, error) {
@@ -305,11 +314,13 @@ func RunIntelligenceWorker(ctx context.Context, svc *LogIntelligenceService) {
 	spec := "*/15 * * * *"
 	log := slog.Default().With("component", "logintel")
 	run := func() {
-		if err := svc.runCycle(ctx); err != nil {
-			log.Warn("Log intelligence cycle failed", "error", err)
-			return
-		}
-		log.Info("Log intelligence cycle completed")
+		runLogCronTask(ctx, svc.redis, &svc.cycleRunning, logIntelligenceCycleLockKey, logIntelligenceCycleLockTTL, func() {
+			if err := svc.runCycle(ctx); err != nil {
+				log.Warn("Log intelligence cycle failed", "error", err)
+				return
+			}
+			log.Info("Log intelligence cycle completed")
+		})
 	}
 	// 启动立即跑一轮，避免只等到下一个 :00/:15/:30/:45
 	run()
@@ -381,6 +392,15 @@ func (s *LogIntelligenceService) processProject(ctx context.Context, projectID u
 				LastSeenAt:  now,
 			}
 			if err := s.repo.CreatePattern(ctx, &row); err != nil {
+				// 并发插入同签名时回退为累加已有模板，避免丢计数或重复建模板。
+				if dup, getErr := s.repo.GetPatternBySignature(ctx, projectID, sig); getErr == nil {
+					dup.HitCount += int64(cnt)
+					dup.LastSeenAt = now
+					if dup.Sample == "" {
+						dup.Sample = truncateRunes(sample.Message, 500)
+					}
+					_ = s.repo.SavePattern(ctx, dup)
+				}
 				continue
 			}
 			s.createAnomalyIfNew(ctx, projectID, row)
@@ -408,7 +428,7 @@ func (s *LogIntelligenceService) processProject(ctx context.Context, projectID u
 		PageSize:  1,
 	})
 	if err != nil {
-		return nil
+		return err
 	}
 	avgHour := dayRes.Total / 23
 	if avgHour <= 0 {

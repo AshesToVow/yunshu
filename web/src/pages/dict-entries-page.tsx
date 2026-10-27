@@ -31,6 +31,7 @@ import {
   createDictEntry,
   deleteDictEntry,
   getDictEntries,
+  revealDictEntryValue,
   updateDictEntry,
   type DictEntryItem,
   type DictPayload,
@@ -59,8 +60,11 @@ export function DictEntriesPage() {
   }));
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [searchText, setSearchText] = useState(initialKeyword);
   const [current, setCurrent] = useState<DictEntryItem | null>(null);
   const [open, setOpen] = useState(false);
+  const [revealedValues, setRevealedValues] = useState<Record<number, string>>({});
+  const [revealingId, setRevealingId] = useState<number | null>(null);
   const [form] = Form.useForm<DictPayload>();
   const formDictType = Form.useWatch("dict_type", form) as string | undefined;
   const autoSortLocked = !current && String(formDictType || "") === "alert_promql_label_key";
@@ -92,6 +96,7 @@ export function DictEntriesPage() {
     const dt = String(searchParams.get("dict_type") || "").trim();
     const kw = String(searchParams.get("keyword") || "").trim();
     const cat = parseCategory(searchParams.get("category"));
+    setSearchText(kw);
     setQuery((prev) => {
       if (prev.dict_type === dt && prev.keyword === kw && prev.category === cat) return prev;
       return { ...prev, dict_type: dt, keyword: kw, category: cat, page: 1 };
@@ -131,6 +136,7 @@ export function DictEntriesPage() {
 
   async function loadData(next = query) {
     setLoading(true);
+    setRevealedValues({});
     try {
       const result = await getDictEntries({
         ...next,
@@ -141,6 +147,24 @@ export function DictEntriesPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function revealValue(record: DictEntryItem) {
+    setRevealingId(record.id);
+    try {
+      const { value } = await revealDictEntryValue(record.id);
+      setRevealedValues((prev) => ({ ...prev, [record.id]: value }));
+    } finally {
+      setRevealingId(null);
+    }
+  }
+
+  function hideRevealed(id: number) {
+    setRevealedValues((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   }
 
   function changeCategory(category: DictCategoryId) {
@@ -213,9 +237,10 @@ export function DictEntriesPage() {
         <Space wrap>
           <Input.Search
             allowClear
-            defaultValue={query.keyword}
+            value={searchText}
             placeholder="搜索标签/值/备注"
             style={{ width: 260 }}
+            onChange={(e) => setSearchText(e.target.value)}
             onSearch={(keyword) => {
               setQuery((prev) => {
                 const next = { ...prev, keyword, page: 1 };
@@ -291,14 +316,42 @@ export function DictEntriesPage() {
           {
             title: "值",
             dataIndex: "value",
-            width: 280,
-            render: (v: string) => (
-              <Tooltip placement="topLeft" title={v}>
-                <Typography.Text ellipsis style={{ maxWidth: 260, display: "block" }}>
-                  {v || "—"}
-                </Typography.Text>
-              </Tooltip>
-            ),
+            width: 320,
+            render: (v: string, record: DictEntryItem) => {
+              const revealedValue = revealedValues[record.id];
+              const isRevealed = record.sensitive && revealedValue !== undefined;
+              const shown = isRevealed ? revealedValue : v;
+              return (
+                <Space size={4} wrap>
+                  {record.sensitive ? <Tag color="orange">敏感</Tag> : null}
+                  <Tooltip
+                    placement="topLeft"
+                    title={record.sensitive && !isRevealed ? "敏感值已脱敏，可点击“查看”获取明文" : shown || "—"}
+                  >
+                    <Typography.Text ellipsis style={{ maxWidth: 180, display: "inline-block", verticalAlign: "middle" }}>
+                      {shown || "—"}
+                    </Typography.Text>
+                  </Tooltip>
+                  {record.sensitive ? (
+                    isRevealed ? (
+                      <Button type="link" size="small" style={{ padding: 0 }} onClick={() => hideRevealed(record.id)}>
+                        隐藏
+                      </Button>
+                    ) : (
+                      <Button
+                        type="link"
+                        size="small"
+                        style={{ padding: 0 }}
+                        loading={revealingId === record.id}
+                        onClick={() => void revealValue(record)}
+                      >
+                        查看
+                      </Button>
+                    )
+                  ) : null}
+                </Space>
+              );
+            },
           },
           { title: "排序", dataIndex: "sort", width: 80 },
           {
@@ -378,7 +431,11 @@ export function DictEntriesPage() {
             label="值"
             name="value"
             rules={[{ required: true, message: "请输入值" }]}
-            extra="支持完整 kubeconfig（含证书）；库字段为 MEDIUMTEXT，服务端上限约 16MB。极长内容建议仍用集群管理直接粘贴。"
+            extra={
+              current?.sensitive
+                ? "敏感字典：此处显示的是脱敏预览。保持不变直接保存会保留原值；如需替换请直接输入新值。"
+                : "支持完整 kubeconfig（含证书）；库字段为 MEDIUMTEXT，服务端上限约 16MB。极长内容建议仍用集群管理直接粘贴。"
+            }
           >
             <Input.TextArea
               rows={4}

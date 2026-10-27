@@ -24,18 +24,21 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	kom "github.com/weibaohui/kom/kom"
 )
 
 // PodDebugImageResolver 由装配层注入，避免 Service 直持 *gorm.DB 读字典。
 type PodDebugImageResolver func(ctx context.Context) string
 
 type K8sPodService struct {
-	runtime       *K8sRuntimeService
-	dyn           *DynamicResourceService
-	resolveDebug  PodDebugImageResolver
-	nsDenyRepo    interfaces.K8sNamespaceDenyRepository
-	nsAllowRepo   interfaces.K8sNamespaceAllowRepository
+	runtime      *K8sRuntimeService
+	dyn          *DynamicResourceService
+	resolveDebug PodDebugImageResolver
+	nsDenyRepo   interfaces.K8sNamespaceDenyRepository
+	nsAllowRepo  interfaces.K8sNamespaceAllowRepository
 }
 
 // NewK8sPodService 创建相关逻辑。
@@ -271,7 +274,7 @@ func (s *K8sPodService) CreateByYAML(ctx context.Context, req PodCreateYAMLReque
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, nil); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.pod", "api", err)
 	}
 	return nil
@@ -365,7 +368,25 @@ func (s *K8sPodService) UpdateSimple(ctx context.Context, req PodCreateSimpleReq
 	}
 
 	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(req.Namespace).Create(desired).Error; err != nil {
-		return k8sFail(ctx, "k8s.pod", "api", err)
+		return s.restoreDeletedPodOnCreateFailure(ctx, k, &existing, err)
 	}
 	return nil
+}
+
+// restoreDeletedPodOnCreateFailure 删除重建失败时尽力恢复原 Pod，避免一次失败的编辑把业务 Pod 清空。
+func (s *K8sPodService) restoreDeletedPodOnCreateFailure(ctx context.Context, k *kom.Kubectl, original *corev1.Pod, createErr error) error {
+	restore := original.DeepCopy()
+	restore.ResourceVersion = ""
+	restore.UID = ""
+	restore.Generation = 0
+	restore.CreationTimestamp = metav1.Time{}
+	restore.DeletionTimestamp = nil
+	restore.DeletionGracePeriodSeconds = nil
+	restore.ManagedFields = nil
+	restore.Status = corev1.PodStatus{}
+	restore.Spec.NodeName = ""
+	if err := k.WithContext(ctx).Resource(&corev1.Pod{}).Namespace(restore.Namespace).Create(restore).Error; err != nil {
+		return constants.ErrInternalWithMsg(fmt.Sprintf("重建 Pod 失败（%v），且原 Pod 恢复失败（%v）", createErr, err))
+	}
+	return constants.ErrInternalWithMsg(fmt.Sprintf("重建 Pod 失败（%v），已恢复原 Pod", createErr))
 }

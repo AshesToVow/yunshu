@@ -33,10 +33,12 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 		if ttlSec <= 0 {
 			ttlSec = 30
 		}
-		ok, err := s.redis.SetNX(ctx, "alert:monitor:eval:leader", "1", time.Duration(ttlSec)*time.Second).Result()
-		if err != nil || !ok {
+		// 整轮扫描期间持续续期，避免耗时超过 TTL 后其它副本并发再跑一轮。
+		_, ok, release := s.acquireAlertLease(ctx, "alert:monitor:eval:leader", time.Duration(ttlSec)*time.Second)
+		if !ok {
 			return nil
 		}
+		defer release()
 	}
 	rules, err := s.monitorRuleRepo.ListEnabledWithProject(ctx)
 	if err != nil {
@@ -53,11 +55,12 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 			if lockSec < 15 {
 				lockSec = 15
 			}
-			if !s.monitorEvalLockAcquire(ctx, rule.ID, lockSec) {
+			_, ok, release := s.acquireAlertLease(ctx, monitorEvalLockKey(rule.ID), time.Duration(lockSec)*time.Second)
+			if !ok {
 				continue
 			}
 			func(r *repository.EvalMonitorRule) {
-				defer s.monitorEvalLockRelease(ctx, r.ID)
+				defer release()
 				s.dispatchMonitorRuleEval(ctx, &r.AlertMonitorRule, r.ProjectID)
 			}(rule)
 			continue
@@ -66,6 +69,9 @@ func (s *AlertService) tickMonitorRules(ctx context.Context) error {
 			continue
 		}
 		s.dispatchMonitorRuleEval(ctx, &rule.AlertMonitorRule, rule.ProjectID)
+	}
+	if s.redis == nil {
+		s.pruneMonitorNoRedisState(now)
 	}
 	return nil
 }

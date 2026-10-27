@@ -142,7 +142,8 @@ func (s *K8sRuntimeService) registerClusterIfNeeded(clusterID string, kubeconfig
 	st.State = "connecting"
 	s.connState[clusterID] = st
 	prev := s.registeredHash[clusterID]
-	if !force && prev != "" && prev == hash {
+	// 必须同时确认 kom 实例仍在：实例可能被其他路径移除而指纹残留，命中缓存会返回 nil。
+	if !force && prev != "" && prev == hash && kom.Cluster(clusterID) != nil {
 		st.State = "ready"
 		st.LastError = ""
 		st.LastSuccessAt = time.Now()

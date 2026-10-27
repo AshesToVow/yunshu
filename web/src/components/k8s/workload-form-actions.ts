@@ -1,5 +1,5 @@
 import type { FormInstance } from "antd";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export type WorkloadFormCtx = { clusterId: number; namespace: string; name?: string };
 export type WorkloadFormMode = "create" | "edit";
@@ -20,11 +20,16 @@ export function useWorkloadFormActions<FV>(opts: UseWorkloadFormActionsOptions<F
   const [loading, setLoading] = useState(false);
   const [ctx, setCtx] = useState<WorkloadFormCtx | null>(null);
   const [mode, setMode] = useState<WorkloadFormMode>(opts.defaultMode ?? "create");
+  const detailSeqRef = useRef(0);
 
-  const close = () => setOpen(false);
+  const close = () => {
+    detailSeqRef.current++;
+    setOpen(false);
+  };
 
   /** 仅填充表单与 ctx，不打开独立 Drawer（用于 YamlCrudPage 内嵌「表单创建」Tab） */
   const prepareCreate = (next: { clusterId: number; namespace: string }, initial?: Partial<FV>) => {
+    detailSeqRef.current++;
     if (opts.mode) setMode("create");
     setCtx({ clusterId: next.clusterId, namespace: next.namespace });
     opts.form.resetFields();
@@ -44,9 +49,11 @@ export function useWorkloadFormActions<FV>(opts: UseWorkloadFormActionsOptions<F
     setCtx({ clusterId: next.clusterId, namespace: next.namespace, name: next.name });
     setOpen(true);
     setLoading(true);
+    const seq = ++detailSeqRef.current;
     void (async () => {
       try {
         const d = await opts.getDetail(next.clusterId, next.namespace, next.name);
+        if (seq !== detailSeqRef.current) return; // stale response, a newer openEdit/close happened
         const fv = opts.toFormValues(d);
         if (fv) {
           // namespace follows toolbar namespace when present
@@ -57,7 +64,7 @@ export function useWorkloadFormActions<FV>(opts: UseWorkloadFormActionsOptions<F
           );
         }
       } finally {
-        setLoading(false);
+        if (seq === detailSeqRef.current) setLoading(false);
       }
     })();
   };

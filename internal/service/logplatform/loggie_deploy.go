@@ -17,6 +17,61 @@ const loggieBinaryName = "loggie"
 const startScriptFilename = "start.sh"
 const heartbeatTimerUnit = "loggie-heartbeat.timer"
 const heartbeatOneshotUnit = "loggie-heartbeat.service"
+const loggieServiceUser = "loggie"
+const loggieDataDir = "/data/loggie"
+
+var allowedLoggieDeployRoots = []string{
+	"/export/",
+	"/opt/",
+	"/data/",
+	"/app/",
+	"/srv/",
+	"/usr/local/",
+	"/var/lib/",
+	"/home/",
+	"/logs/",
+	"/workspace/",
+	"/tmp/",
+}
+
+// validateLoggieDeployDir 限制部署目录必须为绝对路径且落在白名单根目录的子目录下。
+// 该值会进入 systemd 单元并参与远端 sudo rm -rf，必须在 SSH 下发前校验。
+func validateLoggieDeployDir(dir string) error {
+	d := strings.TrimSpace(dir)
+	if d == "" {
+		return nil
+	}
+	if len(d) > 200 {
+		return fmt.Errorf("部署目录过长（最多 200 字符）")
+	}
+	if strings.ContainsAny(d, "\r\n\x00") {
+		return fmt.Errorf("部署目录包含非法控制字符")
+	}
+	if !strings.HasPrefix(d, "/") {
+		return fmt.Errorf("部署目录必须为绝对路径")
+	}
+	if strings.Contains(d, "//") {
+		return fmt.Errorf("部署目录包含重复斜杠")
+	}
+	cleaned := path.Clean(d)
+	if cleaned != strings.TrimRight(d, "/") {
+		return fmt.Errorf("部署目录不允许包含 . 或 .. 段")
+	}
+	for _, r := range cleaned {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '/', r == '-', r == '_', r == '.':
+		default:
+			return fmt.Errorf("部署目录包含非法字符: %q", r)
+		}
+	}
+	for _, root := range allowedLoggieDeployRoots {
+		if cleaned+"/" != root && strings.HasPrefix(cleaned+"/", root) {
+			return nil
+		}
+	}
+	return fmt.Errorf("部署目录必须位于允许的目录（%s）", strings.Join(allowedLoggieDeployRoots, "、"))
+}
 
 func (s *LoggieAgentService) unitName() string {
 	u := strings.TrimSpace(s.loggieCfg.UnitName)
@@ -92,6 +147,9 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 	if deployDir == "" {
 		deployDir = s.defaultDeployDir()
 	}
+	if err := validateLoggieDeployDir(deployDir); err != nil {
+		return "", "", err
+	}
 	if _, err := cli.Exec(ctx, fmt.Sprintf("mkdir -p %q", deployDir), 4096); err != nil {
 		return "", "", fmt.Errorf("mkdir: %w", err)
 	}
@@ -131,6 +189,7 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 			`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT" 2>/dev/null; `+
 			`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null; `+
 			`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer 2>/dev/null; `+
+			shellServiceUserProvision()+
 			`sudo systemctl daemon-reload; `+
 			`sudo systemctl reload-or-restart "$UNIT" 2>&1 || sudo systemctl restart "$UNIT" 2>&1; RC=$?; `+
 			`sudo systemctl enable loggie-heartbeat.timer >/dev/null 2>&1; `+
@@ -224,6 +283,9 @@ func (s *LoggieAgentService) uninstallLoggieOverSSH(ctx context.Context, serverI
 	if dir == "" {
 		dir = s.defaultDeployDir()
 	}
+	if err := validateLoggieDeployDir(dir); err != nil {
+		return "", "", err
+	}
 	res, err := cli.Exec(uninstallCtx, buildUninstallScript(dir, s.unitName(), removeFiles), 65536)
 	if err != nil {
 		return res.Stdout, res.Stderr, err
@@ -250,6 +312,9 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 	deployDir := strings.TrimRight(strings.TrimSpace(bundle.DeployDir), "/")
 	if deployDir == "" {
 		deployDir = s.defaultDeployDir()
+	}
+	if err := validateLoggieDeployDir(deployDir); err != nil {
+		return "", "", err
 	}
 	unit := s.unitName()
 	binRemote := path.Join(deployDir, loggieBinaryName)
@@ -331,16 +396,31 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=%s
+Group=%s
 Environment=DBUS_SESSION_BUS_ADDRESS=disabled:
-WorkingDirectory=%s
-ExecStart=%s -config.system=%s/pipeline.yml -config.pipeline=%s/pipelines.yml
+WorkingDirectory=%q
+ExecStart=%q -config.system=%q -config.pipeline=%q
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
+# 非 root 运行；CAP_DAC_READ_SEARCH 仅用于读取属主为 root 的日志文件
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+UMask=0027
 
 [Install]
 WantedBy=multi-user.target
-`, deployDir, bin, deployDir, deployDir)
+`, loggieServiceUser, loggieServiceUser, deployDir, bin, deployDir, deployDir)
 }
 
 func renderStartScript() string {
@@ -388,11 +468,36 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=%s
-EnvironmentFile=-%s/loggie-heartbeat.env
-ExecStart=/bin/bash %s/heartbeat.sh
+User=%s
+Group=%s
+WorkingDirectory=%q
+EnvironmentFile=-%q
+ExecStart=/bin/bash %q
 Nice=10
-`, deployDir, deployDir, deployDir)
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+`, loggieServiceUser, loggieServiceUser, deployDir, path.Join(deployDir, "loggie-heartbeat.env"), path.Join(deployDir, "heartbeat.sh"))
+}
+
+// shellServiceUserProvision 创建 loggie 系统用户并准备数据目录；
+// 用户创建失败时回退为 root 运行，避免升级后 Agent 直接起不来。
+func shellServiceUserProvision() string {
+	var b strings.Builder
+	b.WriteString(`if ! id -u ` + loggieServiceUser + ` >/dev/null 2>&1; then `)
+	b.WriteString(`sudo useradd --system --no-create-home --shell /usr/sbin/nologin ` + loggieServiceUser + ` >/dev/null 2>&1 || `)
+	b.WriteString(`sudo adduser --system --no-create-home --shell /usr/sbin/nologin ` + loggieServiceUser + ` >/dev/null 2>&1 || true; fi; `)
+	b.WriteString(`if id -u ` + loggieServiceUser + ` >/dev/null 2>&1; then `)
+	b.WriteString(`sudo install -d -o ` + loggieServiceUser + ` -g ` + loggieServiceUser + ` -m 0750 ` + loggieDataDir + ` 2>/dev/null || true; `)
+	b.WriteString(`sudo chown -R ` + loggieServiceUser + `:` + loggieServiceUser + ` ` + loggieDataDir + ` 2>/dev/null || true; `)
+	b.WriteString(`sudo chmod -R a+rX "$DEPLOY" 2>/dev/null || true; `)
+	b.WriteString(`else echo "warn: user ` + loggieServiceUser + ` unavailable; falling back to root"; `)
+	b.WriteString(`sudo sed -i '/^User=` + loggieServiceUser + `$/d;/^Group=` + loggieServiceUser + `$/d;/^AmbientCapabilities=/d;/^CapabilityBoundingSet=/d' "/etc/systemd/system/$UNIT" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null || true; fi; `)
+	return b.String()
 }
 
 func renderHeartbeatTimer() string {
@@ -426,6 +531,7 @@ func buildFinalizeInstallScript(deployDir, unit string) string {
 	b.WriteString(`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT"; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer; `)
+	b.WriteString(shellServiceUserProvision())
 	b.WriteString(`sudo systemctl daemon-reload; `)
 	b.WriteString(`sudo systemctl enable "$UNIT" loggie-heartbeat.timer; `)
 	b.WriteString(`sudo systemctl restart "$UNIT"; `)
@@ -440,7 +546,11 @@ func buildUninstallScript(deployDir, unit string, removeFiles bool) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail; ")
 	b.WriteString(fmt.Sprintf("DEPLOY=%q; UNIT=%q; ", deployDir, unit))
-	b.WriteString(`case "$DEPLOY" in ""|"/"|"/export"|"/opt"|"/usr"|"/var"|"/home"|"/root") echo "refuse unsafe deploy dir: $DEPLOY"; exit 1 ;; esac; `)
+	b.WriteString(`case "$DEPLOY" in /*/*) ;; *) echo "refuse unsafe deploy dir: $DEPLOY"; exit 1 ;; esac; `)
+	b.WriteString(`case "$DEPLOY" in `)
+	b.WriteString(`""|"/"|"/bin"|"/boot"|"/data"|"/dev"|"/etc"|"/home"|"/lib"|"/lib32"|"/lib64"|"/logs"|`)
+	b.WriteString(`"/opt"|"/proc"|"/root"|"/run"|"/sbin"|"/srv"|"/sys"|"/tmp"|"/usr"|"/var"|"/workspace"|"/app"|"/export"|"/usr/local") `)
+	b.WriteString(`echo "refuse unsafe deploy dir: $DEPLOY"; exit 1 ;; esac; `)
 	b.WriteString(`sudo systemctl stop "$UNIT" loggie-heartbeat.timer loggie-heartbeat.service 2>/dev/null || true; `)
 	b.WriteString(`sudo systemctl disable "$UNIT" loggie-heartbeat.timer 2>/dev/null || true; `)
 	b.WriteString(`sudo rm -f "/etc/systemd/system/$UNIT" /etc/systemd/system/loggie-heartbeat.service /etc/systemd/system/loggie-heartbeat.timer; `)

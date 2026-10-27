@@ -202,6 +202,7 @@ export function DeploymentsPage() {
   );
   const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
   const [revisionLoading, setRevisionLoading] = useState(false);
+  const revisionSeqRef = useRef(0);
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -230,18 +231,21 @@ export function DeploymentsPage() {
   }
 
   async function openRevisionRollback(clusterId: number, namespace: string, name: string) {
+    const seq = ++revisionSeqRef.current;
     setRevisionTarget({ clusterId, namespace, name });
     setRevisionOpen(true);
     setRevisionLoading(true);
     setRevisionRows([]);
     try {
       const rows = await listDeploymentRevisions(clusterId, namespace, name);
+      if (seq !== revisionSeqRef.current) return;
       setRevisionRows(rows || []);
     } catch {
+      if (seq !== revisionSeqRef.current) return;
       message.error("加载历史版本失败");
       setRevisionOpen(false);
     } finally {
-      setRevisionLoading(false);
+      if (seq === revisionSeqRef.current) setRevisionLoading(false);
     }
   }
 
@@ -536,27 +540,34 @@ spec:
                     label: "重启工作负载",
                     icon: <ReloadOutlined />,
                     onClick: () => {
-                      void (async () => {
-                        if (!ctx.clusterId) {
-                          message.error("请先选择集群");
-                          return;
-                        }
-                        const ns = ctx.namespace ?? "default";
-                        try {
-                          await restartDeployment(ctx.clusterId, ns, record.name);
-                          message.success("已触发滚动重启");
-                          progress?.track({
-                            kind: "Deployment",
-                            clusterId: ctx.clusterId,
-                            namespace: ns,
-                            name: record.name,
-                            title: `重启 ${record.name}`,
-                          });
-                          ctx.reload();
-                        } catch (e) {
-                          message.error(extractApiErrorMessage(e, "重启失败"));
-                        }
-                      })();
+                      if (!ctx.clusterId) {
+                        message.error("请先选择集群");
+                        return;
+                      }
+                      const ns = ctx.namespace ?? "default";
+                      Modal.confirm({
+                        title: `确认重启 ${record.name}？`,
+                        content: "将触发滚动重启（更新 Pod 模板注解），可能引起 Pod 重建，请确认无发布窗口限制。",
+                        okText: "重启",
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          try {
+                            await restartDeployment(ctx.clusterId, ns, record.name);
+                            message.success("已触发滚动重启");
+                            progress?.track({
+                              kind: "Deployment",
+                              clusterId: ctx.clusterId,
+                              namespace: ns,
+                              name: record.name,
+                              title: `重启 ${record.name}`,
+                            });
+                            ctx.reload();
+                          } catch (e) {
+                            message.error(extractApiErrorMessage(e, "重启失败"));
+                            throw e;
+                          }
+                        },
+                      });
                     },
                   },
                   {
@@ -564,19 +575,30 @@ spec:
                     label: "回滚上一版本",
                     icon: <ReloadOutlined />,
                     onClick: () => {
-                      void (async () => {
-                        const ns = ctx.namespace ?? "default";
-                        await rolloutUndoDeployment(ctx.clusterId, ns, record.name);
-                        message.success("已触发平台回滚");
-                        progress?.track({
-                          kind: "Deployment",
-                          clusterId: ctx.clusterId,
-                          namespace: ns,
-                          name: record.name,
-                          title: `回滚 ${record.name}`,
-                        });
-                        ctx.reload();
-                      })();
+                      const ns = ctx.namespace ?? "default";
+                      Modal.confirm({
+                        title: `确认回滚 ${record.name}？`,
+                        content: "将回滚到上一版本，期间流量可能切换到旧版本。确认继续？",
+                        okText: "回滚",
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          try {
+                            await rolloutUndoDeployment(ctx.clusterId, ns, record.name);
+                            message.success("已触发平台回滚");
+                            progress?.track({
+                              kind: "Deployment",
+                              clusterId: ctx.clusterId,
+                              namespace: ns,
+                              name: record.name,
+                              title: `回滚 ${record.name}`,
+                            });
+                            ctx.reload();
+                          } catch (e) {
+                            message.error(extractApiErrorMessage(e, "回滚失败"));
+                            throw e;
+                          }
+                        },
+                      });
                     },
                   },
                   {
@@ -682,22 +704,26 @@ spec:
                     onConfirm={() => {
                       if (!revisionTarget) return;
                       void (async () => {
-                        await rolloutUndoDeployment(
-                          revisionTarget.clusterId,
-                          revisionTarget.namespace,
-                          revisionTarget.name,
-                          r.revision,
-                        );
-                        message.success(`已回滚到 revision ${r.revision}`);
-                        setRevisionOpen(false);
-                        progress?.track({
-                          kind: "Deployment",
-                          clusterId: revisionTarget.clusterId,
-                          namespace: revisionTarget.namespace,
-                          name: revisionTarget.name,
-                          title: `回滚 ${revisionTarget.name} → rev ${r.revision}`,
-                        });
-                        listReloadRef.current();
+                        try {
+                          await rolloutUndoDeployment(
+                            revisionTarget.clusterId,
+                            revisionTarget.namespace,
+                            revisionTarget.name,
+                            r.revision,
+                          );
+                          message.success(`已回滚到 revision ${r.revision}`);
+                          setRevisionOpen(false);
+                          progress?.track({
+                            kind: "Deployment",
+                            clusterId: revisionTarget.clusterId,
+                            namespace: revisionTarget.namespace,
+                            name: revisionTarget.name,
+                            title: `回滚 ${revisionTarget.name} → rev ${r.revision}`,
+                          });
+                          listReloadRef.current();
+                        } catch {
+                          /* interceptor */
+                        }
                       })();
                     }}
                   >

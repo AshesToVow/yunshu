@@ -31,7 +31,7 @@ func NewOpenAICompatClient(name, baseURL, apiKey, defaultModel string, timeoutSe
 		apiKey:  strings.TrimSpace(apiKey),
 		model:   strings.TrimSpace(defaultModel),
 		timeout: time.Duration(timeoutSec) * time.Second,
-		http:    &http.Client{Timeout: time.Duration(timeoutSec) * time.Second},
+		http:    &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: sharedHTTPTransport},
 	}
 }
 

@@ -22,6 +22,10 @@ export type SubscriptionsTabProps = RoutingTreeEditorProps & {
   subSelectedID: number | null;
   removeSubscription: () => void | Promise<void>;
   saveSubscription: () => void | Promise<void>;
+  /** 路由树写操作进行中（新增/保存/删除） */
+  subCreating?: boolean;
+  subSaving?: boolean;
+  subRemoving?: boolean;
 };
 
 export function SubscriptionsTab(p: SubscriptionsTabProps) {
@@ -40,11 +44,16 @@ export function SubscriptionsTab(p: SubscriptionsTabProps) {
     subSelectedID,
     removeSubscription,
     saveSubscription,
+    subCreating = false,
+    subSaving = false,
+    subRemoving = false,
   } = p;
+  const mutating = subCreating || subSaving || subRemoving;
 
   return (
     <>
-      <Space className="ops-filter-bar" style={{ width: "100%", marginBottom: 12 }} wrap>
+      <div className="toolbar">
+        <Space wrap>
         <Button icon={<ReloadOutlined />} loading={subLoading} onClick={() => void loadSubscriptions()}>
           刷新
         </Button>
@@ -67,7 +76,7 @@ export function SubscriptionsTab(p: SubscriptionsTabProps) {
         </Button>
         <Button
           icon={<CopyOutlined />}
-          disabled={projects.length < 1}
+          disabled={projects.length < 1 || mutating}
           onClick={() => {
             cloneForm.setFieldsValue({
               source_project_id: projects[0]?.id,
@@ -82,25 +91,38 @@ export function SubscriptionsTab(p: SubscriptionsTabProps) {
         >
           {ALERT_ROUTING_TERMS.copyTemplate}
         </Button>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => void createSubscription(null)}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          loading={subCreating}
+          disabled={mutating}
+          onClick={() => void createSubscription(null)}
+        >
           新增根节点
         </Button>
         <Button
-          disabled={!subSelectedID}
+          disabled={!subSelectedID || mutating}
+          loading={subCreating}
           icon={<PlusOutlined />}
           onClick={() => void createSubscription(subSelectedID)}
         >
           新增子节点
         </Button>
-        <Popconfirm title="确认删除节点？（有子节点会失败）" onConfirm={() => void removeSubscription()}>
-          <Button danger disabled={!subSelectedID} icon={<DeleteOutlined />}>
+        <Popconfirm
+          title="确认删除节点？（有子节点会失败）"
+          okButtonProps={{ loading: subRemoving }}
+          disabled={!subSelectedID || mutating}
+          onConfirm={() => void removeSubscription()}
+        >
+          <Button danger disabled={!subSelectedID || mutating} loading={subRemoving} icon={<DeleteOutlined />}>
             删除
           </Button>
         </Popconfirm>
-        <Button type="primary" onClick={() => void saveSubscription()}>
+        <Button type="primary" loading={subSaving} disabled={mutating} onClick={() => void saveSubscription()}>
           保存
         </Button>
-      </Space>
+        </Space>
+      </div>
       <Alert
         type="info"
         showIcon

@@ -26,25 +26,25 @@ const (
 	WorkflowAssigneeDuty         = "duty"
 	WorkflowAssigneePlatformRole = "platform_role"
 
-	WorkflowTicketStatusDraft          = "draft"
-	WorkflowTicketStatusPending        = "pending"
-	WorkflowTicketStatusApproved       = "approved"
-	WorkflowTicketStatusRejected       = "rejected"
-	WorkflowTicketStatusCancelled      = "cancelled"
-	WorkflowTicketStatusClosed         = "closed"
+	WorkflowTicketStatusDraft     = "draft"
+	WorkflowTicketStatusPending   = "pending"
+	WorkflowTicketStatusApproved  = "approved"
+	WorkflowTicketStatusRejected  = "rejected"
+	WorkflowTicketStatusCancelled = "cancelled"
+	WorkflowTicketStatusClosed    = "closed"
 
 	WorkflowStepPending  = "pending"
 	WorkflowStepApproved = "approved"
 	WorkflowStepRejected = "rejected"
 	WorkflowStepSkipped  = "skipped"
 
-	WorkflowRefDbSqlTicket      = "db_sql_ticket"
-	WorkflowRefDbAccessRequest  = "db_access_request"
-	WorkflowRefDbAppUserRequest = "db_app_user_request"
+	WorkflowRefDbSqlTicket       = "db_sql_ticket"
+	WorkflowRefDbAccessRequest   = "db_access_request"
+	WorkflowRefDbAppUserRequest  = "db_app_user_request"
 	WorkflowRefCicdReleaseRun    = "cicd_release_run"
 	WorkflowRefCicdReleaseChange = "cicd_release_change"
-	WorkflowRefAlertEvent       = "alert_event"
-	WorkflowRefAiToolApproval   = "ai_tool_approval"
+	WorkflowRefAlertEvent        = "alert_event"
+	WorkflowRefAiToolApproval    = "ai_tool_approval"
 )
 
 // WorkflowDefinition 跨域工单流程定义（按 domain + project + ticket_type 唯一）。
@@ -83,46 +83,49 @@ func (WorkflowStage) TableName() string { return "workflow_stages" }
 
 // WorkflowTicket 通用工单实例（告警转单、运维变更等）。
 type WorkflowTicket struct {
-	ID              uint           `json:"id" gorm:"primaryKey"`
-	DefinitionID    uint           `json:"definition_id" gorm:"not null;index"`
-	Domain          string         `json:"domain" gorm:"size:32;not null;index"`
-	TicketType      string         `json:"ticket_type" gorm:"size:32;not null;index"`
-	ProjectID       uint           `json:"project_id" gorm:"not null;default:0;index"`
-	Title           string         `json:"title" gorm:"size:256;not null"`
-	Status          string         `json:"status" gorm:"size:32;not null;index"`
-	SubmitterUserID uint           `json:"submitter_user_id" gorm:"not null;default:0;index"`
-	RefType         string         `json:"ref_type" gorm:"size:64;not null;default:'';index:idx_wf_ticket_ref,priority:1"`
-	RefID           uint           `json:"ref_id" gorm:"not null;default:0;index:idx_wf_ticket_ref,priority:2"`
-	PayloadJSON     string         `json:"payload_json" gorm:"type:text"`
-	Remark          string         `json:"remark" gorm:"size:512"`
-	CreatedAt       time.Time      `json:"created_at"`
-	UpdatedAt       time.Time      `json:"updated_at"`
-	ClosedAt        *time.Time     `json:"closed_at,omitempty"`
-	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"`
+	ID              uint   `json:"id" gorm:"primaryKey"`
+	DefinitionID    uint   `json:"definition_id" gorm:"not null;index"`
+	Domain          string `json:"domain" gorm:"size:32;not null;index"`
+	TicketType      string `json:"ticket_type" gorm:"size:32;not null;index;uniqueIndex:idx_wf_ticket_ref_uq,priority:3"`
+	ProjectID       uint   `json:"project_id" gorm:"not null;default:0;index"`
+	Title           string `json:"title" gorm:"size:256;not null"`
+	Status          string `json:"status" gorm:"size:32;not null;index"`
+	SubmitterUserID uint   `json:"submitter_user_id" gorm:"not null;default:0;index"`
+	RefType         string `json:"ref_type" gorm:"size:64;not null;default:'';index"`
+	RefID           uint   `json:"ref_id" gorm:"not null;default:0;uniqueIndex:idx_wf_ticket_ref_uq,priority:2"`
+	// RefTypeUQ 幂等唯一键辅助列：无关联对象时保持 NULL（MySQL/PG 唯一索引允许多个 NULL，
+	// 从而不约束普通工单），有 ref 时等于 ref_type，与 (ref_id, ticket_type) 组成唯一键防重复建单。
+	RefTypeUQ   *string        `json:"-" gorm:"column:ref_type_uq;size:64;uniqueIndex:idx_wf_ticket_ref_uq,priority:1"`
+	PayloadJSON string         `json:"payload_json" gorm:"type:text"`
+	Remark      string         `json:"remark" gorm:"size:512"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	ClosedAt    *time.Time     `json:"closed_at,omitempty"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 func (WorkflowTicket) TableName() string { return "workflow_tickets" }
 
 // WorkflowTicketStep 工单审批步骤。
 type WorkflowTicketStep struct {
-	ID               uint           `json:"id" gorm:"primaryKey"`
-	TicketID         uint           `json:"ticket_id" gorm:"not null;index"`
-	StageKey         string         `json:"stage_key" gorm:"size:64;not null"`
-	StageName        string         `json:"stage_name" gorm:"size:64;not null"`
-	SortOrder        int            `json:"sort_order" gorm:"not null;default:0"`
-	Status           string         `json:"status" gorm:"size:32;not null;default:pending;index"`
-	AssigneeRuleType string         `json:"assignee_rule_type" gorm:"size:32;not null;default:user_group"`
-	UserGroupID      *uint          `json:"user_group_id,omitempty"`
-	DutyMonitorRuleID *uint         `json:"duty_monitor_rule_id,omitempty"`
-	AssigneeUserID   *uint          `json:"assignee_user_id,omitempty" gorm:"index;comment:排班解析出的当班处理人"`
-	ReviewerUserID   *uint          `json:"reviewer_user_id,omitempty" gorm:"index"`
-	ReviewComment    string         `json:"review_comment" gorm:"size:512"`
-	ActivatedAt      *time.Time     `json:"activated_at,omitempty"`
-	LastRemindedAt   *time.Time     `json:"last_reminded_at,omitempty" gorm:"comment:上次 SLA 提醒邮件时间"`
-	ReviewedAt       *time.Time     `json:"reviewed_at,omitempty"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `json:"-" gorm:"index"`
+	ID                uint           `json:"id" gorm:"primaryKey"`
+	TicketID          uint           `json:"ticket_id" gorm:"not null;index"`
+	StageKey          string         `json:"stage_key" gorm:"size:64;not null"`
+	StageName         string         `json:"stage_name" gorm:"size:64;not null"`
+	SortOrder         int            `json:"sort_order" gorm:"not null;default:0"`
+	Status            string         `json:"status" gorm:"size:32;not null;default:pending;index"`
+	AssigneeRuleType  string         `json:"assignee_rule_type" gorm:"size:32;not null;default:user_group"`
+	UserGroupID       *uint          `json:"user_group_id,omitempty"`
+	DutyMonitorRuleID *uint          `json:"duty_monitor_rule_id,omitempty"`
+	AssigneeUserID    *uint          `json:"assignee_user_id,omitempty" gorm:"index;comment:排班解析出的当班处理人"`
+	ReviewerUserID    *uint          `json:"reviewer_user_id,omitempty" gorm:"index"`
+	ReviewComment     string         `json:"review_comment" gorm:"size:512"`
+	ActivatedAt       *time.Time     `json:"activated_at,omitempty"`
+	LastRemindedAt    *time.Time     `json:"last_reminded_at,omitempty" gorm:"comment:上次 SLA 提醒邮件时间"`
+	ReviewedAt        *time.Time     `json:"reviewed_at,omitempty"`
+	CreatedAt         time.Time      `json:"created_at"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	DeletedAt         gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 func (WorkflowTicketStep) TableName() string { return "workflow_ticket_steps" }

@@ -37,6 +37,16 @@ func (r *MenuRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&model.Menu{}, id).Error
 }
 
+// DeleteWithBindings 在同一事务内删除菜单及关联权限绑定，避免孤儿绑定残留。
+func (r *MenuRepository) DeleteWithBindings(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.Menu{}, id).Error; err != nil {
+			return err
+		}
+		return tx.Where("menu_id = ?", id).Delete(&model.MenuPermissionBinding{}).Error
+	})
+}
+
 func (r *MenuRepository) ListAll(ctx context.Context) ([]model.Menu, error) {
 	var list []model.Menu
 	err := r.db.WithContext(ctx).Order("sort ASC, id ASC").Find(&list).Error

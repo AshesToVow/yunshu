@@ -90,7 +90,7 @@ dbmgmt:
 | | POST | `/app-user-requests/:requestId/approve\|reject` |
 | MySQL 用户 | GET | `/instances/:instanceId/mysql-users` |
 | | GET | `/instances/:instanceId/mysql-user-privileges` |
-| | GET | `/instances/:instanceId/accounts/:accountId/password` |
+| | POST | `/instances/:instanceId/accounts/:accountId/password`（审计留痕，`Cache-Control: no-store`） |
 | 工单 | GET | `/tickets`、`/tickets/:ticketId`、`/tickets/:ticketId/steps` |
 | | POST | `/tickets/:ticketId/approve\|reject\|execute` |
 | 回滚 | GET | `/tickets/:ticketId/rollback`、`/rollback/preview` |

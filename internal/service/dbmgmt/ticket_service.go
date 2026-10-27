@@ -6,7 +6,10 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"strings"
 	"time"
 
@@ -30,11 +33,11 @@ type ExecuteRequest struct {
 }
 
 type ExecuteResponse struct {
-	Status    string `json:"status"`
-	TicketID  uint   `json:"ticket_id,omitempty"`
-	RiskLevel string `json:"risk_level,omitempty"`
-	Message   string `json:"message,omitempty"`
-	RowsAffected int64 `json:"rows_affected,omitempty"`
+	Status       string `json:"status"`
+	TicketID     uint   `json:"ticket_id,omitempty"`
+	RiskLevel    string `json:"risk_level,omitempty"`
+	Message      string `json:"message,omitempty"`
+	RowsAffected int64  `json:"rows_affected,omitempty"`
 }
 
 type ImportRequest struct {
@@ -74,31 +77,39 @@ type TicketItem struct {
 
 type TicketListQuery struct {
 	ProjectID  uint
-	Status     string `form:"status"`
-	TicketType string `form:"ticket_type"`
-	Mine       bool   `form:"mine"`
-	MineScope  string `form:"mine_scope"`
-	MineTab    string `form:"-"`
-	Page       int    `form:"page"`
-	PageSize   int    `form:"page_size"`
+	Status     string            `form:"status"`
+	TicketType string            `form:"ticket_type"`
+	Keyword    string            `form:"keyword"`
+	Mine       bool              `form:"mine"`
+	MineScope  string            `form:"mine_scope"`
+	MineTab    string            `form:"-"`
+	Page       int               `form:"page"`
+	PageSize   int               `form:"page_size"`
 	MineViewer *auth.CurrentUser `form:"-"`
+	Viewer     *auth.CurrentUser `form:"-"`
 }
 
 type ReviewRequest struct {
 	Comment string `json:"comment"`
 }
 
-func (s *Service) toTicketItem(ctx context.Context, t model.DbSqlTicket) TicketItem {
+// toTicketItem 装配列表/详情项。SQL 正文、预检/执行结果均含完整语句，
+// 仅对 canViewSQL 为真的调用方返回；其余调用方拿到空字段。
+func (s *Service) toTicketItem(ctx context.Context, t model.DbSqlTicket, canViewSQL bool) TicketItem {
 	item := TicketItem{
 		ID: t.ID, ProjectID: t.ProjectID, InstanceID: t.InstanceID,
 		TicketType: t.TicketType, SubmitterUserID: t.SubmitterUserID, SubmitterName: t.SubmitterName,
 		DatabaseName: t.DatabaseName, RiskLevel: t.RiskLevel, SyntaxType: t.SyntaxType, IsBackup: t.IsBackup,
-		Status: t.Status, ReviewJSON: t.ReviewJSON, ExecuteJSON: t.ExecuteJSON,
-		SqlExcerpt: truncateSQL(t.SqlText, 200), Reason: t.Reason,
-		CreatedAt: t.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: t.UpdatedAt.Format(time.RFC3339),
+		Status: t.Status, Reason: t.Reason,
+		CreatedAt:  t.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:  t.UpdatedAt.Format(time.RFC3339),
 		SqlFileRef: t.SqlFileRef,
-		AuditMode: normalizeAuditMode(t.AuditMode),
+		AuditMode:  normalizeAuditMode(t.AuditMode),
+	}
+	if canViewSQL {
+		item.ReviewJSON = sanitizeReviewJSON(t.ReviewJSON)
+		item.ExecuteJSON = sanitizeReviewJSON(t.ExecuteJSON)
+		item.SqlExcerpt = truncateSQL(t.SqlText, 200)
 	}
 	if inst, err := s.repo.GetInstance(ctx, t.InstanceID); err == nil {
 		item.InstanceName = inst.Name
@@ -111,7 +122,8 @@ func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor
 	if err != nil {
 		return nil, err
 	}
-	item := s.toTicketItem(ctx, *t)
+	canViewSQL := s.canViewTicketSQL(ctx, projectID, t, actor)
+	item := s.toTicketItem(ctx, *t, canViewSQL)
 	s.fillTicketStageName(ctx, &item, t)
 	// 详情页审批/执行按钮依赖 mine_status；按状态选择视角填充。
 	mineTab := "approval"
@@ -120,17 +132,16 @@ func (s *Service) GetTicket(ctx context.Context, projectID, ticketID uint, actor
 		model.DbTicketStatusExecuting,
 		model.DbTicketStatusSuccess,
 		model.DbTicketStatusFailed,
+		model.DbTicketStatusResultUnknown,
 		model.DbTicketStatusApproved:
 		mineTab = "execution"
 	}
 	items := []TicketItem{item}
 	s.enrichTicketMineStatus(ctx, items, actor, mineTab)
 	item = items[0]
-	if s.canViewTicketSQL(ctx, projectID, t, actor) {
+	if canViewSQL {
 		item.SqlText = t.SqlText
 	}
-	item.ReviewJSON = sanitizeReviewJSON(t.ReviewJSON)
-	item.ExecuteJSON = sanitizeReviewJSON(t.ExecuteJSON)
 	return &item, nil
 }
 
@@ -183,7 +194,7 @@ func (s *Service) preCheckForTicket(
 }
 
 func (s *Service) executeWriteViaEngine(ctx context.Context, inst *model.DbInstance, database, sqlText string, backup bool, actor *auth.CurrentUser, ticketID *uint) (executeJSON string, err error) {
-	if s.goInceptionAvailable(ctx,inst) {
+	if s.goInceptionAvailable(ctx, inst) {
 		rs, execErr := s.runGoInceptionExecute(ctx, inst, database, sqlText, backup)
 		executeJSON = marshalReviewSet(rs)
 		if execErr != nil {
@@ -290,7 +301,7 @@ func (s *Service) ExecuteSQL(ctx context.Context, projectID, instanceID uint, re
 			SubmitterUserID: actorUserID(actor), SubmitterName: actorUsername(actor),
 			DatabaseName: req.Database, SqlText: sqlText, RiskLevel: assess.RiskLevel,
 			SyntaxType: syntaxType, IsBackup: backup, AuditMode: auditMode,
-			SqlFileRef: strings.TrimSpace(req.SqlFileRef),
+			SqlFileRef:    strings.TrimSpace(req.SqlFileRef),
 			ParsedOpsJSON: string(ops), ReviewJSON: reviewJSON, Reason: strings.TrimSpace(req.Reason),
 			Status: model.DbTicketStatusDraft,
 		}
@@ -307,7 +318,7 @@ func (s *Service) ExecuteSQL(ctx context.Context, projectID, instanceID uint, re
 		}, nil
 	}
 	var execErr error
-	if s.goInceptionAvailable(ctx,inst) {
+	if s.goInceptionAvailable(ctx, inst) {
 		_, execErr = s.executeWriteViaEngine(ctx, inst, req.Database, sqlText, backup, actor, nil)
 	} else {
 		_, execErr = s.runWriteSQL(ctx, inst, req.Database, sqlText, actor, nil)
@@ -428,7 +439,7 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 			SubmitterUserID: actorUserID(actor), SubmitterName: actorUsername(actor),
 			DatabaseName: req.Database, SqlText: req.Sql, RiskLevel: maxRisk,
 			SyntaxType: syntaxType, IsBackup: backup, AuditMode: auditMode,
-			SqlFileRef: strings.TrimSpace(req.SqlFileRef),
+			SqlFileRef:    strings.TrimSpace(req.SqlFileRef),
 			ParsedOpsJSON: string(ops), ReviewJSON: reviewJSON, Reason: strings.TrimSpace(req.Reason),
 			Status: model.DbTicketStatusDraft,
 		}
@@ -445,7 +456,7 @@ func (s *Service) ImportSQL(ctx context.Context, projectID, instanceID uint, req
 		}, nil
 	}
 	var total int64
-	if s.goInceptionAvailable(ctx,inst) {
+	if s.goInceptionAvailable(ctx, inst) {
 		_, execErr := s.executeWriteViaEngine(ctx, inst, req.Database, req.Sql, backup, actor, nil)
 		if execErr != nil {
 			return nil, execErr
@@ -479,6 +490,11 @@ func riskRank(level string) int {
 	}
 }
 
+// sqlStatementExecer 让同一执行逻辑既能跑在连接池（*sql.DB）也能跑在已切库的单连接（*sql.Conn）上。
+type sqlStatementExecer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 func (s *Service) runWriteSQL(ctx context.Context, inst *model.DbInstance, database, sqlText string, actor *auth.CurrentUser, ticketID *uint) (int64, error) {
 	release := s.acquireInstance(inst.ID)
 	defer release()
@@ -494,7 +510,7 @@ func (s *Service) runWriteSQL(ctx context.Context, inst *model.DbInstance, datab
 	defer cancel()
 
 	start := time.Now()
-	execStmt := func(ctx context.Context, db *sql.DB) (int64, error) {
+	execStmt := func(ctx context.Context, db sqlStatementExecer) (int64, error) {
 		res, err := db.ExecContext(ctx, sqlText)
 		if err != nil {
 			return 0, err
@@ -508,9 +524,9 @@ func (s *Service) runWriteSQL(ctx context.Context, inst *model.DbInstance, datab
 	if isInstanceLevelDDL(sqlText) {
 		rows, execErr = execStmt(qctx, sess.DB)
 	} else {
-		execErr = withDatabase(qctx, sess, inst, database, func(ctx context.Context, db *sql.DB) error {
+		execErr = withDatabase(qctx, sess, inst, database, func(ctx context.Context, conn *sql.Conn) error {
 			var innerErr error
-			rows, innerErr = execStmt(ctx, db)
+			rows, innerErr = execStmt(ctx, conn)
 			return innerErr
 		})
 	}
@@ -521,7 +537,9 @@ func (s *Service) runWriteSQL(ctx context.Context, inst *model.DbInstance, datab
 			DatabaseName: database, SqlExcerpt: truncateSQL(sqlText, 2000),
 			ErrorMessage: execErr.Error(), DurationMs: time.Since(start).Milliseconds(),
 		}
-		_ = s.repo.CreateSqlExecution(ctx, ex)
+		if err := s.repo.CreateSqlExecution(ctx, ex); err != nil {
+			slog.Default().With("component", "dbmgmt").Warn("record failed sql execution failed", "ticket_id", ticketID, "error", err)
+		}
 		return 0, execErr
 	}
 	hash := sha256.Sum256([]byte(sqlText))
@@ -532,7 +550,9 @@ func (s *Service) runWriteSQL(ctx context.Context, inst *model.DbInstance, datab
 		SqlExcerpt: truncateSQL(sqlText, 2000), RowsAffected: rows,
 		DurationMs: time.Since(start).Milliseconds(),
 	}
-	_ = s.repo.CreateSqlExecution(ctx, ex)
+	if err := s.repo.CreateSqlExecution(ctx, ex); err != nil {
+		slog.Default().With("component", "dbmgmt").Warn("record sql execution failed", "ticket_id", ticketID, "error", err)
+	}
 	return rows, nil
 }
 
@@ -558,14 +578,16 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 				PageSize:     pageSize,
 			},
 			TicketType: q.TicketType,
+			Keyword:    q.Keyword,
 			MineTab:    mineTab,
 		})
 		if err != nil {
 			return nil, err
 		}
 		items := make([]TicketItem, 0, len(list))
-		for _, t := range list {
-			item := s.toTicketItem(ctx, t)
+		visibility := s.ticketSQLVisibility(ctx, q.ProjectID, q.MineViewer, list)
+		for i, t := range list {
+			item := s.toTicketItem(ctx, t, visibility[i])
 			s.fillTicketStageName(ctx, &item, &t)
 			items = append(items, item)
 		}
@@ -573,15 +595,16 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 		return paginate(items, total, page, pageSize), nil
 	}
 	list, total, err := s.repo.ListSqlTickets(ctx, repository.DbSqlTicketListParams{
-		ProjectID: q.ProjectID, Status: q.Status, TicketType: q.TicketType,
+		ProjectID: q.ProjectID, Status: q.Status, TicketType: q.TicketType, Keyword: q.Keyword,
 		Page: q.Page, PageSize: q.PageSize,
 	})
 	if err != nil {
 		return nil, err
 	}
 	items := make([]TicketItem, 0, len(list))
-	for _, t := range list {
-		item := s.toTicketItem(ctx, t)
+	visibility := s.ticketSQLVisibility(ctx, q.ProjectID, q.Viewer, list)
+	for i, t := range list {
+		item := s.toTicketItem(ctx, t, visibility[i])
 		s.fillTicketStageName(ctx, &item, &t)
 		items = append(items, item)
 	}
@@ -633,14 +656,22 @@ func (s *Service) ApproveTicket(ctx context.Context, projectID, ticketID uint, c
 	}
 	now := time.Now()
 	uid := actorUserID(actor)
+	claimed, err := s.repo.ClaimSqlTicketStep(ctx, cur.ID, ticketID, map[string]any{
+		"status": model.DbApprovalStepApproved, "reviewer_user_id": uid,
+		"reviewer_name": actorUsername(actor), "review_comment": strings.TrimSpace(comment),
+		"reviewed_at": now, "updated_at": now,
+	})
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		return constants.ErrBadRequestWithMsg("该审批节点已被处理，请刷新后重试")
+	}
 	cur.Status = model.DbApprovalStepApproved
 	cur.ReviewerUserID = &uid
 	cur.ReviewerName = actorUsername(actor)
 	cur.ReviewComment = strings.TrimSpace(comment)
 	cur.ReviewedAt = &now
-	if err := s.repo.UpdateSqlTicketStep(ctx, cur); err != nil {
-		return err
-	}
 	if err := s.advanceSqlTicketAfterApproval(ctx, ticket, cur); err != nil {
 		return err
 	}
@@ -679,21 +710,30 @@ func (s *Service) RejectTicket(ctx context.Context, projectID, ticketID uint, co
 			}
 			now := time.Now()
 			uid := actorUserID(actor)
-			steps[i].Status = model.DbApprovalStepRejected
-			steps[i].ReviewerUserID = &uid
-			steps[i].ReviewerName = actorUsername(actor)
-			steps[i].ReviewComment = strings.TrimSpace(comment)
-			steps[i].ReviewedAt = &now
-			if err := s.repo.UpdateSqlTicketStep(ctx, &steps[i]); err != nil {
+			claimed, err := s.repo.ClaimSqlTicketStep(ctx, steps[i].ID, ticketID, map[string]any{
+				"status": model.DbApprovalStepRejected, "reviewer_user_id": uid,
+				"reviewer_name": actorUsername(actor), "review_comment": strings.TrimSpace(comment),
+				"reviewed_at": now, "updated_at": now,
+			})
+			if err != nil {
 				return err
+			}
+			if claimed == 0 {
+				return constants.ErrBadRequestWithMsg("该审批节点已被处理，请刷新后重试")
 			}
 			break
 		}
 	}
-	ticket.Status = model.DbTicketStatusRejected
-	if err := s.repo.UpdateSqlTicket(ctx, ticket); err != nil {
+	n, err := s.repo.UpdateSqlTicketFieldsIfStatus(ctx, ticketID, model.DbTicketStatusPendingApproval, map[string]any{
+		"status": model.DbTicketStatusRejected, "updated_at": time.Now(),
+	})
+	if err != nil {
 		return err
 	}
+	if n == 0 {
+		return constants.ErrBadRequestWithMsg("工单状态已变更，请刷新后重试")
+	}
+	ticket.Status = model.DbTicketStatusRejected
 	s.auditTicketEvent(ctx, projectID, ticket.InstanceID, actor, "ticket_reject", ticket, map[string]any{"comment": strings.TrimSpace(comment)})
 	return nil
 }
@@ -706,7 +746,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	if ticket.Status != model.DbTicketStatusPendingExecution && ticket.Status != model.DbTicketStatusApproved {
 		return constants.ErrBadRequestWithMsg("工单状态不允许执行")
 	}
-	if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
+	if ticket.SubmitterUserID != actorUserID(actor) && !isSuperAdmin(actor) {
 		perm, permErr := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
 		if permErr != nil {
 			return permErr
@@ -739,7 +779,7 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	backup := ticket.IsBackup
 	var execJSON string
 	var execErr error
-	if s.goInceptionAvailable(ctx,inst) {
+	if s.goInceptionAvailable(ctx, inst) {
 		execJSON, execErr = s.executeWriteViaEngine(ctx, inst, ticket.DatabaseName, ticket.SqlText, backup, actor, &tid)
 	} else {
 		switch ticket.TicketType {
@@ -754,10 +794,29 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 		}
 	}
 	ticket.ExecuteJSON = execJSON
+	now := time.Now()
 	if execErr != nil {
-		ticket.Status = model.DbTicketStatusFailed
-		_ = s.repo.UpdateSqlTicket(ctx, ticket)
-		_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID)
+		status := model.DbTicketStatusFailed
+		errMsg := "SQL 执行失败: " + execErr.Error()
+		if isExecutionResultUnknown(execErr) {
+			// 超时/中断时服务端可能已经生效，不能判失败，更不能自动重试。
+			status = model.DbTicketStatusResultUnknown
+			errMsg = "SQL 执行超时或连接中断，执行结果未知（可能已生效），请先在数据库核实数据后再决定是否重试"
+		}
+		ticket.Status = status
+		n, uerr := s.repo.UpdateSqlTicketFieldsIfStatus(ctx, ticket.ID, model.DbTicketStatusExecuting, map[string]any{
+			"status": status, "execute_json": execJSON, "updated_at": now,
+		})
+		if uerr != nil {
+			slog.Default().With("component", "dbmgmt").Error("update ticket execution status failed",
+				"ticket_id", ticket.ID, "status", status, "error", uerr)
+		} else if n == 0 {
+			slog.Default().With("component", "dbmgmt").Warn("ticket execution status changed concurrently",
+				"ticket_id", ticket.ID, "expected_status", model.DbTicketStatusExecuting)
+		}
+		if cerr := s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID); cerr != nil {
+			slog.Default().With("component", "dbmgmt").Warn("close linked workflow ticket failed", "ticket_id", ticket.ID, "error", cerr)
+		}
 		changeevent.Record(ctx, changeevent.Input{
 			ProjectID: projectID,
 			Source:    model.ChangeSourceDbmgmt,
@@ -765,15 +824,25 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 			RiskLevel: model.ChangeRiskHigh,
 			Status:    model.ChangeStatusFailed,
 			Summary:   fmt.Sprintf("SQL 工单 #%d 执行失败", ticket.ID),
-			Payload:   map[string]any{"ticket_id": ticket.ID, "instance_id": ticket.InstanceID},
+			Payload:   map[string]any{"ticket_id": ticket.ID, "instance_id": ticket.InstanceID, "result_unknown": status == model.DbTicketStatusResultUnknown},
 		})
-		return constants.ErrBadRequestWithMsg("SQL 执行失败: " + execErr.Error())
+		return constants.ErrBadRequestWithMsg(errMsg)
 	}
 	ticket.Status = model.DbTicketStatusSuccess
-	if err := s.repo.UpdateSqlTicket(ctx, ticket); err != nil {
+	n, err := s.repo.UpdateSqlTicketFieldsIfStatus(ctx, ticket.ID, model.DbTicketStatusExecuting, map[string]any{
+		"status": model.DbTicketStatusSuccess, "execute_json": execJSON, "updated_at": now,
+	})
+	if err != nil {
 		return err
 	}
-	_ = s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID)
+	if n == 0 {
+		// SQL 已确认执行成功，这里只是状态回写被并发改动，不能向调用方谎报执行失败。
+		slog.Default().With("component", "dbmgmt").Error("persist ticket success status failed",
+			"ticket_id", ticket.ID, "expected_status", model.DbTicketStatusExecuting)
+	}
+	if cerr := s.workflowEngine().CloseLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, ticket.ID); cerr != nil {
+		slog.Default().With("component", "dbmgmt").Warn("close linked workflow ticket failed", "ticket_id", ticket.ID, "error", cerr)
+	}
 	changeevent.Record(ctx, changeevent.Input{
 		ProjectID: projectID,
 		Source:    model.ChangeSourceDbmgmt,
@@ -787,13 +856,38 @@ func (s *Service) ExecuteTicket(ctx context.Context, projectID, ticketID uint, a
 	return nil
 }
 
+// isExecutionResultUnknown 判断错误是否发生在「语句可能已被服务端执行」之后：
+// 超时、取消、连接中途断开时无法确定是否生效，只能标记结果未知并人工核实。
+func isExecutionResultUnknown(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, marker := range []string{
+		"timeout", "timed out", "invalid connection", "unexpected eof",
+		"connection reset", "broken pipe", "connection abort",
+	} {
+		if strings.Contains(msg, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) ListTicketSteps(ctx context.Context, projectID, ticketID uint) ([]model.DbSqlTicketStep, error) {
 	if _, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID); err != nil {
 		return nil, err
 	}
 	wf := s.workflowEngine()
 	if linked, err := wf.GetTicketByRef(ctx, model.WorkflowRefDbSqlTicket, ticketID); err == nil && linked != nil {
-		detail, dErr := wf.TicketDetail(ctx, linked.ID)
+		detail, dErr := wf.TicketDetail(ctx, linked.ID, nil)
 		if dErr != nil {
 			return nil, dErr
 		}

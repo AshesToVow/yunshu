@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -88,10 +89,14 @@ func (s *AlertConsulService) CreateEndpoint(ctx context.Context, req AlertConsul
 	if tag == "" {
 		tag = "yunshu-metrics"
 	}
+	address, err := normalizeConsulAddress(req.Address)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
 	row := &model.AlertConsulEndpoint{
 		ProjectID:  req.ProjectID,
 		Name:       strings.TrimSpace(req.Name),
-		Address:    strings.TrimSpace(req.Address),
+		Address:    address,
 		Token:      strings.TrimSpace(req.Token),
 		Datacenter: strings.TrimSpace(req.Datacenter),
 		ServiceTag: tag,
@@ -110,9 +115,13 @@ func (s *AlertConsulService) UpdateEndpoint(ctx context.Context, id uint, req Al
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.consul", "UpdateEndpoint", err)
 	}
+	address, err := normalizeConsulAddress(req.Address)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
 	row.ProjectID = req.ProjectID
 	row.Name = strings.TrimSpace(req.Name)
-	row.Address = strings.TrimSpace(req.Address)
+	row.Address = address
 	row.Datacenter = strings.TrimSpace(req.Datacenter)
 	tag := strings.TrimSpace(req.ServiceTag)
 	if tag == "" {
@@ -147,7 +156,11 @@ func (s *AlertConsulService) PingEndpoint(ctx context.Context, id uint) error {
 	if err != nil {
 		return err
 	}
-	cli := &consulclient.Client{Address: ep.Address, Token: ep.Token, Datacenter: ep.Datacenter}
+	address, err := normalizeConsulAddress(ep.Address)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("Consul 地址无效: " + err.Error())
+	}
+	cli := &consulclient.Client{Address: address, Token: ep.Token, Datacenter: ep.Datacenter}
 	if err := cli.Ping(ctx); err != nil {
 		return constants.ErrBadRequestWithMsg("Consul 连通失败: " + err.Error())
 	}
@@ -184,7 +197,12 @@ func (s *AlertConsulService) SyncEndpoint(ctx context.Context, id uint) (*AlertC
 	if !ep.Enabled {
 		return nil, constants.ErrBadRequestWithMsg("Consul 端点已停用")
 	}
-	cli := &consulclient.Client{Address: ep.Address, Token: ep.Token, Datacenter: ep.Datacenter}
+	// 存量数据可能绕过了创建时校验：请求前再校验一次，避免 Token 被发往本机/元数据地址。
+	address, err := normalizeConsulAddress(ep.Address)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg("Consul 地址无效: " + err.Error())
+	}
+	cli := &consulclient.Client{Address: address, Token: ep.Token, Datacenter: ep.Datacenter}
 	names, err := cli.ListServiceNames(ctx)
 	if err != nil {
 		_ = s.repo.UpdateEndpointMeta(ctx, ep.ID, map[string]any{
@@ -279,6 +297,22 @@ func (s *AlertConsulService) SyncEndpoint(ctx context.Context, id uint) (*AlertC
 		Removed:    removed,
 		Message:    "ok",
 	}, nil
+}
+
+// normalizeConsulAddress 规范并校验 Consul 地址：仅 http/https，禁止本机/链路本地/云元数据。
+// Consul Token 会随请求发往该地址，地址可控等同于 Token 外泄与内网探测。
+func normalizeConsulAddress(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("Consul 地址为空")
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "http://" + raw
+	}
+	if err := validateDatasourceBaseURL(raw); err != nil {
+		return "", err
+	}
+	return raw, nil
 }
 
 func firstMeta(meta map[string]string, keys ...string) string {

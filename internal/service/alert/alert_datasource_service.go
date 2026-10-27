@@ -3,14 +3,18 @@ package alert
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/pkg/platformhttp"
 	"yunshu/internal/pkg/promapi"
 	"yunshu/internal/repository"
 
@@ -68,11 +72,12 @@ type DatasourcePingResult struct {
 }
 
 type AlertDatasourceService struct {
-	repo interfaces.AlertDatasourceRepository
+	repo       interfaces.AlertDatasourceRepository
+	memberRepo interfaces.ProjectMemberRepository
 }
 
-func NewAlertDatasourceService(repo interfaces.AlertDatasourceRepository) *AlertDatasourceService {
-	return &AlertDatasourceService{repo: repo}
+func NewAlertDatasourceService(repo interfaces.AlertDatasourceRepository, memberRepo interfaces.ProjectMemberRepository) *AlertDatasourceService {
+	return &AlertDatasourceService{repo: repo, memberRepo: memberRepo}
 }
 
 func (s *AlertDatasourceService) mask(ds *model.AlertDatasource) {
@@ -86,6 +91,9 @@ func (s *AlertDatasourceService) mask(ds *model.AlertDatasource) {
 
 func (s *AlertDatasourceService) List(ctx context.Context, q AlertDatasourceListQuery) ([]AlertDatasourceItem, int64, int, int, error) {
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, q.ProjectID); err != nil {
+		return nil, 0, page, pageSize, err
+	}
 	rows, total, err := s.repo.ListWithProject(ctx, repository.AlertDatasourceListFilter{
 		ProjectID: q.ProjectID,
 		Keyword:   q.Keyword,
@@ -108,6 +116,9 @@ func (s *AlertDatasourceService) Get(ctx context.Context, id uint) (*model.Alert
 			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
 		}
 		return nil, bizerrors.Pass(ctx, "alert.datasource", "Get", err)
+	}
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
 	}
 	s.mask(row)
 	return row, nil
@@ -146,11 +157,18 @@ func (s *AlertDatasourceService) Create(ctx context.Context, req AlertDatasource
 	if req.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg9a7f154a70af)
 	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+		return nil, err
+	}
+	baseURL := strings.TrimSpace(req.BaseURL)
+	if err := validateDatasourceBaseURL(baseURL); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("base_url 无效: " + err.Error())
+	}
 	row := model.AlertDatasource{
 		ProjectID:       req.ProjectID,
 		Name:            strings.TrimSpace(req.Name),
 		Type:            t,
-		BaseURL:         strings.TrimSpace(req.BaseURL),
+		BaseURL:         baseURL,
 		AlertmanagerURL: "", // 已废弃：AM 静默下线，不再写入
 		BearerToken:     strings.TrimSpace(req.BearerToken),
 		BasicUser:       strings.TrimSpace(req.BasicUser),
@@ -174,10 +192,16 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 		}
 		return nil, bizerrors.Pass(ctx, "alert.datasource", "Update", err)
 	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
+	}
 	if req.ProjectID == 0 {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg9a7f154a70af)
 	}
 	if req.ProjectID != row.ProjectID {
+		if err := assertAlertProjectWrite(ctx, s.memberRepo, req.ProjectID); err != nil {
+			return nil, err
+		}
 		row.ProjectID = req.ProjectID
 	}
 	if strings.TrimSpace(req.Name) != "" {
@@ -190,8 +214,13 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 		}
 		row.Type = t
 	}
-	if strings.TrimSpace(req.BaseURL) != "" {
-		row.BaseURL = strings.TrimSpace(req.BaseURL)
+	hostChanged := false
+	if newURL := strings.TrimSpace(req.BaseURL); newURL != "" {
+		if err := validateDatasourceBaseURL(newURL); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("base_url 无效: " + err.Error())
+		}
+		hostChanged = datasourceURLHost(newURL) != datasourceURLHost(row.BaseURL)
+		row.BaseURL = newURL
 	}
 	// AlertmanagerURL 已废弃：更新时保留原值，忽略请求写入
 	if req.SkipTLSVerify != nil {
@@ -201,20 +230,24 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 		row.Enabled = *req.Enabled
 	}
 	row.Remark = strings.TrimSpace(req.Remark)
-	if req.ClearBearerToken {
+	newToken := strings.TrimSpace(req.BearerToken)
+	// 切换主机时旧凭据不得外带到新地址；未显式提供新凭据则清空。
+	if req.ClearBearerToken || (hostChanged && (newToken == "" || newToken == "***")) {
 		row.BearerToken = ""
-	} else if strings.TrimSpace(req.BearerToken) != "" && req.BearerToken != "***" {
-		row.BearerToken = strings.TrimSpace(req.BearerToken)
+	} else if newToken != "" && newToken != "***" {
+		row.BearerToken = newToken
 	}
-	if req.ClearBasicAuth {
+	newUser := strings.TrimSpace(req.BasicUser)
+	newPass := strings.TrimSpace(req.BasicPassword)
+	if req.ClearBasicAuth || (hostChanged && (newUser == "" || newPass == "" || newPass == "***")) {
 		row.BasicUser = ""
 		row.BasicPassword = ""
 	} else {
-		if strings.TrimSpace(req.BasicUser) != "" {
-			row.BasicUser = strings.TrimSpace(req.BasicUser)
+		if newUser != "" {
+			row.BasicUser = newUser
 		}
-		if strings.TrimSpace(req.BasicPassword) != "" && req.BasicPassword != "***" {
-			row.BasicPassword = strings.TrimSpace(req.BasicPassword)
+		if newPass != "" && newPass != "***" {
+			row.BasicPassword = newPass
 		}
 	}
 	if err := s.repo.Save(ctx, row); err != nil {
@@ -225,6 +258,16 @@ func (s *AlertDatasourceService) Update(ctx context.Context, id uint, req AlertD
 }
 
 func (s *AlertDatasourceService) Delete(ctx context.Context, id uint) error {
+	row, err := s.getRaw(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
+		}
+		return bizerrors.Pass(ctx, "alert.datasource", "Delete", err)
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return err
+	}
 	n, err := s.repo.Delete(ctx, id)
 	if err != nil {
 		return bizerrors.Pass(ctx, "alert.datasource", "Delete", err)
@@ -248,19 +291,52 @@ func (s *AlertDatasourceService) clientFor(ctx context.Context, id uint) (*proma
 		}
 		return nil, nil, bizerrors.Pass(ctx, "alert.datasource", "clientFor", err)
 	}
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, nil, err
+	}
 	if !row.Enabled {
 		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsgfa357d889ce0)
 	}
 	if !isPromCompatibleDatasourceType(row.Type) {
 		return nil, nil, constants.ErrBadRequestWithMsg(constants.ErrMsg480bba83b97b)
 	}
+	return newPromClient(row), row, nil
+}
+
+func newPromClient(row *model.AlertDatasource) *promapi.Client {
 	return &promapi.Client{
 		BaseURL:       row.BaseURL,
 		BearerToken:   row.BearerToken,
 		BasicUser:     row.BasicUser,
 		BasicPassword: row.BasicPassword,
 		SkipTLSVerify: row.SkipTLSVerify,
-	}, row, nil
+		HTTPClient:    newDatasourceHTTPClient(row.SkipTLSVerify),
+	}
+}
+
+// newDatasourceHTTPClient 复用连接并在每次重定向时重新校验目标地址，避免绕过初次 SSRF 校验。
+func newDatasourceHTTPClient(skipTLSVerify bool) *http.Client {
+	var cli *http.Client
+	if skipTLSVerify {
+		cli = platformhttp.NewInsecureTLSClient(30*time.Second, "")
+	} else {
+		cli = &http.Client{Timeout: 30 * time.Second}
+	}
+	cli.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("重定向次数过多")
+		}
+		return validateDatasourceBaseURL(req.URL.String())
+	}
+	return cli
+}
+
+func datasourceURLHost(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSpace(u.Hostname()))
 }
 
 func (s *AlertDatasourceService) PromQuery(ctx context.Context, id uint, req PromQueryRequest) (json.RawMessage, error) {

@@ -23,7 +23,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AiYamlGeneratePanel } from "../components/k8s/ai-yaml-generate-panel";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
 import { getClusters, listNamespaces as listClusterNamespaces, type ClusterItem } from "../services/clusters";
@@ -64,6 +64,9 @@ export function CrsPage() {
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<CrItem[]>([]);
+  const listSeqRef = useRef(0);
+  const resourcesSeqRef = useRef(0);
+  const namespacesSeqRef = useRef(0);
   const [pendingTemplateId, setPendingTemplateId] = useState<number>(() => {
     const n = Number(searchParams.get("template_id") || 0);
     return Number.isFinite(n) && n > 0 ? n : 0;
@@ -205,7 +208,9 @@ export function CrsPage() {
   }
 
   async function loadResources(cid: number) {
+    const seq = ++resourcesSeqRef.current;
     const list = await listCrResources(cid);
+    if (seq !== resourcesSeqRef.current) return;
     setResources(list);
     if (!list.some((x) => x.name === selectedResourceName)) {
       setSelectedResourceName(list[0]?.name);
@@ -213,7 +218,9 @@ export function CrsPage() {
   }
 
   async function loadNamespaces(cid: number) {
+    const seq = ++namespacesSeqRef.current;
     const res = await listClusterNamespaces(cid);
+    if (seq !== namespacesSeqRef.current) return;
     const opts = (res.list ?? []).map((n) => ({ label: n.name, value: n.name }));
     setNamespaces(opts);
     if (!opts.some((o) => o.value === namespace)) {
@@ -224,6 +231,7 @@ export function CrsPage() {
   async function reload() {
     if (!clusterId || !selectedResource) return;
     if (selectedResource.namespaced && !namespace) return;
+    const seq = ++listSeqRef.current;
     setLoading(true);
     try {
       const list = await listCrs({
@@ -234,9 +242,10 @@ export function CrsPage() {
         namespace: selectedResource.namespaced ? namespace : undefined,
         keyword: keyword.trim() || undefined,
       });
+      if (seq !== listSeqRef.current) return;
       setData(list ?? []);
     } finally {
-      setLoading(false);
+      if (seq === listSeqRef.current) setLoading(false);
     }
   }
 

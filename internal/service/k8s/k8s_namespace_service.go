@@ -595,18 +595,7 @@ func (s *K8sNamespaceService) Apply(ctx context.Context, req NamespaceApplyReque
 			}
 		}
 	}
-	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 {
-			return false
-		}
-		for _, name := range refs {
-			if _, e := s.dyn.GetByGVK(c, k, namespaceGVK, "", name); e != nil {
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
+	if err = s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.namespace", "api", err)
 	}
 	return nil
@@ -664,8 +653,11 @@ func extractNamespaceRefs(manifest string) []string {
 
 // Delete ??????????
 func (s *K8sNamespaceService) Delete(ctx context.Context, req NamespaceDeleteRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
+		return err
+	}
+	if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
 		return err
 	}
 	if err := s.dyn.DeleteByGVK(ctx, k, namespaceGVK, "", req.Name, req.K8sDeleteOptions); err != nil {

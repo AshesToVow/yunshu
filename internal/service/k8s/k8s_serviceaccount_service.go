@@ -156,10 +156,7 @@ func (s *K8sServiceAccountService) Apply(ctx context.Context, req ServiceAccount
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
 
-	refs := extractServiceAccountRefs(req.Manifest)
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		return serviceAccountRefsAllExist(c, s.dyn, k, refs)
-	}); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.serviceaccount", "api", err)
 	}
 	return nil

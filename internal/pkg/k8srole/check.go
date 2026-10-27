@@ -16,6 +16,9 @@ func ActionFromHTTP(method, routePath string) string {
 		strings.Contains(p, "/pods/file/upload") || strings.Contains(p, "/pods/file/delete") {
 		return "exec"
 	}
+	if strings.HasSuffix(p, "/secrets/reveal") {
+		return "secret_reveal"
+	}
 	switch m {
 	case "DELETE":
 		return "delete"
@@ -115,6 +118,21 @@ func checkNS(grants []model.K8sClusterAccessGrant, nsList []string, username, cl
 	return nil
 }
 
+// HasUnrestrictedAdmin 是否存在「无命名空间白/黑名单」的 cluster_admin 授权。
+// 集群级资源（ClusterRoleBinding、CRD、PV、webhook 等）会影响整个集群，只允许此类授权操作。
+func HasUnrestrictedAdmin(grants []model.K8sClusterAccessGrant) bool {
+	for _, g := range grants {
+		if Normalize(g.Preset) != ClusterAdmin {
+			continue
+		}
+		if strings.TrimSpace(g.Namespaces) != "" || strings.TrimSpace(g.BlacklistNamespaces) != "" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // Check 对齐 k8m pkg/comm.CheckPermissionLogic（不含平台管理员旁路；由调用方处理）。
 // grants 须已按主体 + 集群（含 cluster_id=0）筛过。name 仅用于日志，不参与判定。
 func Check(grants []model.K8sClusterAccessGrant, cluster, username, action string, nsList []string) error {
@@ -142,6 +160,12 @@ func Check(grants []model.K8sClusterAccessGrant, cluster, username, action strin
 			return fmt.Errorf("用户[%s]没有集群[%s] 操作权限", username, cluster)
 		}
 		return checkNS(admins, nsList, username, cluster, "操作")
+	case "secret_reveal":
+		admins := filterByRole(grants, ClusterAdmin)
+		if len(admins) == 0 {
+			return fmt.Errorf("用户[%s]没有集群[%s] Secret 明文权限（需集群管理员）", username, cluster)
+		}
+		return checkNS(admins, nsList, username, cluster, "Secret 明文")
 	default:
 		readers := append(filterByRole(grants, ClusterReadonly), filterByRole(grants, ClusterAdmin)...)
 		if len(readers) == 0 {

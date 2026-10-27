@@ -144,6 +144,17 @@ export function listAlertEventsGrouped(params: {
   page_size: number;
   keyword?: string;
   cluster?: string;
+  alertIP?: string;
+  status?: string;
+  /** critical/warning/info 或 p1/p2/p3，可逗号分隔 */
+  severity?: string;
+  monitorPipeline?: string;
+  /** 与后端 datasourceId 一致，按已配置 Prometheus 数据源筛选 */
+  datasourceId?: number;
+  groupKey?: string;
+  fingerprint?: string;
+  /** 策略分类，与后端 category 一致：inhibition|silence|timing|… */
+  category?: string;
   projectId?: number;
 }) {
   return getData<{

@@ -32,11 +32,11 @@ type toolStep struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func (s *Service) toolDefinitions(includeWrite bool) []llm.ToolDefinition {
+func (s *Service) toolDefinitions(ctx context.Context, includeWrite bool) []llm.ToolDefinition {
 	s.ensureSeed()
 	defs := s.builtinToolDefinitions(includeWrite)
 	// 追加已启用的脚本工具
-	scripts, _ := s.repo.ListEnabledScriptTools(context.Background())
+	scripts, _ := s.repo.ListEnabledScriptTools(ctx)
 	for _, t := range scripts {
 		schema := map[string]any{"type": "object", "properties": map[string]any{}}
 		if strings.TrimSpace(t.InputSchemaJSON) != "" {
@@ -305,7 +305,7 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			step.OK = false
 			step.Error = "工具已禁用"
 			step.Result = step.Error
-			s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+			s.recordAudit(ctx, userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
 			return step
 		}
 		if strings.EqualFold(reg.Runtime, "script") {
@@ -314,7 +314,7 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 				step.OK = false
 				step.Error = "未登录或用户上下文缺失，拒绝执行工具"
 				step.Result = step.Error
-				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
+				s.recordAudit(ctx, userID, 0, "tool", name, reg.RiskLevel, false, step.Error)
 				return step
 			}
 			if scriptToolRequiresApproval(reg.RiskLevel, reg.Permission) {
@@ -323,13 +323,13 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 					step.OK = false
 					step.Error = err.Error()
 					step.Result = err.Error()
-					s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
+					s.recordAudit(ctx, userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
 					return step
 				}
 				raw, _ := json.Marshal(out)
 				step.OK = true
 				step.Result = truncateStr(string(raw), 24_000)
-				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, true, "created approval")
+				s.recordAudit(ctx, userID, 0, "tool", name, reg.RiskLevel, true, "created approval")
 				return step
 			}
 			out, err := s.runScriptTool(ctx, toolDefRow{
@@ -339,12 +339,12 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 				step.OK = false
 				step.Error = err.Error()
 				step.Result = err.Error()
-				s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
+				s.recordAudit(ctx, userID, 0, "tool", name, reg.RiskLevel, false, err.Error())
 				return step
 			}
 			step.OK = true
 			step.Result = out
-			s.recordAudit(userID, 0, "tool", name, reg.RiskLevel, true, truncateStr(out, 500))
+			s.recordAudit(ctx, userID, 0, "tool", name, reg.RiskLevel, true, truncateStr(out, 500))
 			return step
 		}
 	}
@@ -628,14 +628,31 @@ func (s *Service) executeTool(ctx context.Context, userID uint, name, argsJSON s
 			out = map[string]any{"list": list, "total": total, "page": page, "page_size": pageSize}
 		}
 	case "explain_alert":
-		if err = requireActor(); err != nil {
+		if err = requireProject(); err != nil {
 			break
 		}
 		if s.alertSvc == nil {
 			err = fmt.Errorf("告警服务不可用")
 			break
 		}
-		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, getStr("fingerprint"))
+		fp := getStr("fingerprint")
+		if fp == "" {
+			err = fmt.Errorf("fingerprint 必填")
+			break
+		}
+		// fingerprint 必须属于当前项目，防跨项目枚举投递信息
+		_, total, _, _, e := s.alertSvc.ListEvents(ctx, alert.AlertEventListQuery{
+			ProjectID: projectID, Fingerprint: fp, Page: 1, PageSize: 1,
+		})
+		if e != nil {
+			err = e
+			break
+		}
+		if total == 0 {
+			err = fmt.Errorf("fingerprint 不存在或不属于当前项目")
+			break
+		}
+		out, err = s.alertSvc.ExplainFingerprintDelivery(ctx, fp)
 	case "list_alert_datasources", "query_prometheus", "query_prometheus_range", "list_prometheus_active_alerts", "get_alert_detail":
 		out, err = s.executeMonitorTool(ctx, name, getUint, getStr, projectID, actor, requireProject, requireActor)
 	case "list_servers", "get_server", "test_server_connectivity", "probe_server_metrics", "list_change_events", "list_db_instances", "list_es_connections":

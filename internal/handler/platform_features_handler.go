@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"yunshu/internal/interfaces"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -16,6 +17,7 @@ type PlatformFeaturesHandler struct {
 	ruleChangeRepo  interfaces.AlertRuleChangeRepository
 	promqlSavedRepo interfaces.PromqlSavedQueryRepository
 	crTemplateRepo  interfaces.K8sCrTemplateRepository
+	projectMembers  interfaces.ProjectMemberRepository
 }
 
 func NewPlatformFeaturesHandler(
@@ -23,12 +25,14 @@ func NewPlatformFeaturesHandler(
 	ruleChangeRepo interfaces.AlertRuleChangeRepository,
 	promqlSavedRepo interfaces.PromqlSavedQueryRepository,
 	crTemplateRepo interfaces.K8sCrTemplateRepository,
+	projectMembers interfaces.ProjectMemberRepository,
 ) *PlatformFeaturesHandler {
 	return &PlatformFeaturesHandler{
 		monitorRules:    monitorRules,
 		ruleChangeRepo:  ruleChangeRepo,
 		promqlSavedRepo: promqlSavedRepo,
 		crTemplateRepo:  crTemplateRepo,
+		projectMembers:  projectMembers,
 	}
 }
 
@@ -37,7 +41,7 @@ func (h *PlatformFeaturesHandler) ruleChangeSvc() *service.AlertRuleChangeServic
 }
 
 func (h *PlatformFeaturesHandler) crTemplateSvc() *service.K8sCrTemplateService {
-	return service.NewK8sCrTemplateService(h.crTemplateRepo)
+	return service.NewK8sCrTemplateService(h.crTemplateRepo, h.projectMembers)
 }
 
 func (h *PlatformFeaturesHandler) ListPromqlSavedQueries(c *gin.Context) {
@@ -117,11 +121,12 @@ func (h *PlatformFeaturesHandler) RejectRuleChange(c *gin.Context) {
 }
 
 func (h *PlatformFeaturesHandler) ListCrTemplates(c *gin.Context) {
-	ServeQuery(c, func(ctx context.Context, q struct {
+	svc := h.crTemplateSvc()
+	ServeQuery(c, func(_ context.Context, q struct {
 		ProjectID uint   `form:"project_id"`
 		Kind      string `form:"kind"`
 	}) (gin.H, error) {
-		list, err := h.crTemplateSvc().List(ctx, q.ProjectID, q.Kind)
+		list, err := svc.List(auth.RequestContext(c), q.ProjectID, q.Kind)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +140,7 @@ func (h *PlatformFeaturesHandler) GetCrTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	row, err := h.crTemplateSvc().Get(c.Request.Context(), id)
+	row, err := h.crTemplateSvc().Get(auth.RequestContext(c), id)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -144,7 +149,10 @@ func (h *PlatformFeaturesHandler) GetCrTemplate(c *gin.Context) {
 }
 
 func (h *PlatformFeaturesHandler) CreateCrTemplate(c *gin.Context) {
-	ServeJSON(c, h.crTemplateSvc().Create)
+	svc := h.crTemplateSvc()
+	ServeJSON(c, func(_ context.Context, req service.K8sCrTemplateUpsertRequest) (any, error) {
+		return svc.Create(auth.RequestContext(c), req)
+	})
 }
 
 func (h *PlatformFeaturesHandler) UpdateCrTemplate(c *gin.Context) {
@@ -153,8 +161,9 @@ func (h *PlatformFeaturesHandler) UpdateCrTemplate(c *gin.Context) {
 		abortService(c, err)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req service.K8sCrTemplateUpsertRequest) (any, error) {
-		return h.crTemplateSvc().Update(ctx, id, req)
+	svc := h.crTemplateSvc()
+	ServeJSON(c, func(_ context.Context, req service.K8sCrTemplateUpsertRequest) (any, error) {
+		return svc.Update(auth.RequestContext(c), id, req)
 	})
 }
 
@@ -164,7 +173,7 @@ func (h *PlatformFeaturesHandler) DeleteCrTemplate(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.crTemplateSvc().Delete(c.Request.Context(), id); err != nil {
+	if err := h.crTemplateSvc().Delete(auth.RequestContext(c), id); err != nil {
 		abortService(c, err)
 		return
 	}

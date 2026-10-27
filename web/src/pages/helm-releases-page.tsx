@@ -1,5 +1,6 @@
 import { ArrowUpOutlined, DeleteOutlined, HistoryOutlined, RocketOutlined, RollbackOutlined } from "@ant-design/icons";
 import {
+  Alert,
   AutoComplete,
   Button,
   Card,
@@ -17,7 +18,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { K8sPageToolbar } from "../components/ops/k8s-page-toolbar";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
@@ -101,6 +102,11 @@ export function HelmReleasesPage() {
   const [upgradeTarget, setUpgradeTarget] = useState<HelmReleaseItem | null>(null);
   const [upgradeForm] = Form.useForm();
 
+  const releaseSeqRef = useRef(0);
+  const historySeqRef = useRef(0);
+  const valuesSeqRef = useRef(0);
+  const chartsSeqRef = useRef(0);
+
   const anyPanelOpen = historyOpen || valuesOpen || installOpen || upgradeOpen;
 
   useEffect(() => {
@@ -122,14 +128,17 @@ export function HelmReleasesPage() {
 
   const loadReleases = useCallback(async () => {
     if (!clusterId) return;
+    const seq = ++releaseSeqRef.current;
     setLoading(true);
     try {
       const rows = await listHelmReleases(clusterId, namespace || undefined, debouncedKeyword || undefined);
+      if (seq !== releaseSeqRef.current) return;
       setList(rows ?? []);
     } catch {
+      if (seq !== releaseSeqRef.current) return;
       setList([]);
     } finally {
-      setLoading(false);
+      if (seq === releaseSeqRef.current) setLoading(false);
     }
   }, [clusterId, namespace, debouncedKeyword]);
 
@@ -168,26 +177,33 @@ export function HelmReleasesPage() {
 
   const openHistory = async (row: HelmReleaseItem) => {
     if (!clusterId) return;
+    const seq = ++historySeqRef.current;
     setHistoryTarget(row);
     setHistoryOpen(true);
     setHistoryLoading(true);
     try {
-      setHistoryRows(await getHelmReleaseHistory(clusterId, row.namespace, row.name));
+      const rows = await getHelmReleaseHistory(clusterId, row.namespace, row.name);
+      if (seq !== historySeqRef.current) return;
+      setHistoryRows(rows);
     } catch {
+      if (seq !== historySeqRef.current) return;
       setHistoryRows([]);
     } finally {
-      setHistoryLoading(false);
+      if (seq === historySeqRef.current) setHistoryLoading(false);
     }
   };
 
   const openValues = async (row: HelmReleaseItem) => {
     if (!clusterId) return;
+    const seq = ++valuesSeqRef.current;
     setValuesOpen(true);
     setValuesText("加载中…");
     try {
       const res = await getHelmReleaseValues(clusterId, row.namespace, row.name);
+      if (seq !== valuesSeqRef.current) return;
       setValuesText(JSON.stringify(res.values ?? {}, null, 2));
     } catch {
+      if (seq !== valuesSeqRef.current) return;
       setValuesText("");
     }
   };
@@ -195,7 +211,13 @@ export function HelmReleasesPage() {
   const doRollback = async (row: HelmReleaseItem, revision: number) => {
     if (!clusterId) return;
     try {
-      await rollbackHelmRelease({ cluster_id: clusterId, namespace: row.namespace, release_name: row.name, revision });
+      await rollbackHelmRelease({
+        cluster_id: clusterId,
+        namespace: row.namespace,
+        release_name: row.name,
+        revision,
+        confirm: true,
+      });
       message.success(`已回滚 ${row.name} 到 revision ${revision}`);
       setHistoryOpen(false);
       void loadReleases();
@@ -219,10 +241,13 @@ export function HelmReleasesPage() {
     setInstallOpen(true);
     installForm.resetFields();
     installForm.setFieldsValue({ namespace: namespace || "default", create_namespace: true });
+    const seq = ++chartsSeqRef.current;
     try {
       const charts = await listHarborCharts();
+      if (seq !== chartsSeqRef.current) return;
       setChartOptions(toChartNameOptions((charts ?? []).map((c) => c.name)));
     } catch {
+      if (seq !== chartsSeqRef.current) return;
       setChartOptions([]);
     }
   };
@@ -230,22 +255,32 @@ export function HelmReleasesPage() {
   const submitInstall = async () => {
     if (!clusterId) return;
     const v = await installForm.validateFields();
-    setInstallSubmitting(true);
-    try {
-      await installHelmRelease({
-        cluster_id: clusterId,
-        namespace: v.namespace,
-        release_name: v.release_name,
-        chart_name: v.chart_name.trim(),
-        chart_version: v.chart_version || undefined,
-        create_namespace: !!v.create_namespace,
-      });
-      message.success("Helm 安装成功");
-      setInstallOpen(false);
-      void loadReleases();
-    } finally {
-      setInstallSubmitting(false);
-    }
+    const run = async () => {
+      setInstallSubmitting(true);
+      try {
+        await installHelmRelease({
+          cluster_id: clusterId,
+          namespace: v.namespace,
+          release_name: v.release_name,
+          chart_name: v.chart_name.trim(),
+          chart_version: v.chart_version || undefined,
+          create_namespace: !!v.create_namespace,
+          confirm: true,
+        });
+        message.success("Helm 安装成功");
+        setInstallOpen(false);
+        void loadReleases();
+      } finally {
+        setInstallSubmitting(false);
+      }
+    };
+    Modal.confirm({
+      title: `确认安装 Release ${v.release_name}？`,
+      content: `将在命名空间 ${v.namespace} 中安装 Chart ${String(v.chart_name ?? "").trim() || "（未填写）"}。`,
+      okText: "安装",
+      okButtonProps: { danger: true },
+      onOk: run,
+    });
   };
 
   const openUpgrade = async (row: HelmReleaseItem) => {
@@ -259,10 +294,13 @@ export function HelmReleasesPage() {
       chart_version: "",
       values_json: "",
     });
+    const seq = ++chartsSeqRef.current;
     try {
       const charts = await listHarborCharts();
+      if (seq !== chartsSeqRef.current) return;
       setChartOptions(toChartNameOptions((charts ?? []).map((c) => c.name)));
     } catch {
+      if (seq !== chartsSeqRef.current) return;
       setChartOptions([]);
     }
   };
@@ -279,22 +317,32 @@ export function HelmReleasesPage() {
         return;
       }
     }
-    setUpgradeSubmitting(true);
-    try {
-      await upgradeHelmRelease({
-        cluster_id: clusterId,
-        namespace: v.namespace,
-        release_name: v.release_name,
-        chart_name: v.chart_name?.trim() || undefined,
-        chart_version: v.chart_version || undefined,
-        values,
-      });
-      message.success(`已升级 ${v.release_name}`);
-      setUpgradeOpen(false);
-      void loadReleases();
-    } finally {
-      setUpgradeSubmitting(false);
-    }
+    const run = async () => {
+      setUpgradeSubmitting(true);
+      try {
+        await upgradeHelmRelease({
+          cluster_id: clusterId,
+          namespace: v.namespace,
+          release_name: v.release_name,
+          chart_name: v.chart_name?.trim() || undefined,
+          chart_version: v.chart_version || undefined,
+          values,
+          confirm: true,
+        });
+        message.success(`已升级 ${v.release_name}`);
+        setUpgradeOpen(false);
+        void loadReleases();
+      } finally {
+        setUpgradeSubmitting(false);
+      }
+    };
+    Modal.confirm({
+      title: `确认升级 Release ${v.release_name}？`,
+      content: "升级会替换集群中的 Chart 配置与版本，业务可能短暂中断，请确认业务影响。",
+      okText: "升级",
+      okButtonProps: { danger: true },
+      onOk: run,
+    });
   };
 
   const columns: ColumnsType<HelmReleaseItem> = [
@@ -426,6 +474,12 @@ export function HelmReleasesPage() {
       </Drawer>
 
       <Drawer title="Release Values" width={560} open={valuesOpen} onClose={() => setValuesOpen(false)}>
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Values 可能包含密码、Token 等敏感配置，当前以明文展示，请勿截屏或分享。"
+        />
         <Input.TextArea
           value={valuesText}
           readOnly

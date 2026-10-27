@@ -12,8 +12,10 @@ import (
 	"yunshu/internal/service/k8s"
 
 	"github.com/robfig/cron/v3"
+	"github.com/weibaohui/kom/kom"
 	corev1 "k8s.io/api/core/v1"
 	eventsv1 "k8s.io/api/events/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
@@ -134,13 +136,16 @@ func (w *Watcher) watchCluster(ctx context.Context, clusterID string, id uint) {
 		if ctx.Err() != nil {
 			return
 		}
-		w.runClusterWatch(ctx, clusterID, id)
+		started := w.runClusterWatch(ctx, clusterID, id)
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
 		}
-		if backoff < 30*time.Second {
+		if started {
+			// 连接建立成功过：短退避，避免断线后长时间漏事件。
+			backoff = time.Second
+		} else if backoff < 30*time.Second {
 			backoff *= 2
 		} else {
 			backoff = 30 * time.Second
@@ -148,29 +153,28 @@ func (w *Watcher) watchCluster(ctx context.Context, clusterID string, id uint) {
 	}
 }
 
-func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint) {
+// runClusterWatch 启动一次事件 Watch；返回是否成功建立连接（用于重置退避）。
+func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint) bool {
 	// EnsureClusterRegistered 返回已注册到稳定 bare ID 的 kubectl；
 	// 勿再 kom.Cluster(clusterID)，控制台意图注册用的是 :r/:w 后缀，裸 ID 可能为 nil。
 	kubectl, err := w.runtime.EnsureClusterRegistered(ctx, id)
 	if err != nil {
 		forwardLog().Warn("Failed to register cluster for event watch", "cluster_id", clusterID, "error", err)
-		return
+		return false
 	}
 	if kubectl == nil {
 		forwardLog().Warn("Failed to register cluster for event watch: kubectl is nil", "cluster_id", clusterID)
-		return
+		return false
 	}
 
 	var watcher watch.Interface
 	useCoreV1 := false
-	var evtV1 eventsv1.Event
-	if err := kubectl.WithContext(ctx).Resource(&evtV1).AllNamespace().Watch(&watcher).Error; err != nil {
+	if err := startEventWatch(ctx, kubectl, false, &watcher); err != nil {
 		forwardLog().Warn("events.k8s.io/v1 watch failed, falling back to core/v1 Event",
 			"cluster_id", clusterID, "error", err)
-		var evtCore corev1.Event
-		if err2 := kubectl.WithContext(ctx).Resource(&evtCore).AllNamespace().Watch(&watcher).Error; err2 != nil {
+		if err2 := startEventWatch(ctx, kubectl, true, &watcher); err2 != nil {
 			forwardLog().Warn("Failed to start K8s event watch", "cluster_id", clusterID, "error", err2)
-			return
+			return false
 		}
 		useCoreV1 = true
 	}
@@ -184,11 +188,18 @@ func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return true
 		case e, ok := <-watcher.ResultChan():
 			if !ok {
 				forwardLog().Info("K8s event watch channel closed", "cluster_id", clusterID)
-				return
+				return true
+			}
+			if e.Type == watch.Bookmark {
+				continue
+			}
+			if e.Type == watch.Error {
+				forwardLog().Warn("K8s event watch returned error", "cluster_id", clusterID, "api", api)
+				return true
 			}
 			var m *model.K8sForwardedEvent
 			if useCoreV1 {
@@ -214,6 +225,29 @@ func (w *Watcher) runClusterWatch(ctx context.Context, clusterID string, id uint
 			}
 		}
 	}
+}
+
+// startEventWatch 先 List 取 resourceVersion，再从该版本开始 Watch：
+// 避免 Watch 建立瞬间的事件缺口，并支持 Bookmark 心跳。
+func startEventWatch(ctx context.Context, kube *kom.Kubectl, core bool, dest *watch.Interface) error {
+	listOpts := metav1.ListOptions{Limit: 1}
+	watchOpts := metav1.ListOptions{AllowWatchBookmarks: true}
+	if core {
+		var list corev1.EventList
+		if err := kube.WithContext(ctx).Resource(&corev1.Event{}).AllNamespace().List(&list, listOpts).Error; err != nil {
+			return err
+		}
+		watchOpts.ResourceVersion = list.ResourceVersion
+		var evt corev1.Event
+		return kube.WithContext(ctx).Resource(&evt).AllNamespace().Watch(dest, watchOpts).Error
+	}
+	var list eventsv1.EventList
+	if err := kube.WithContext(ctx).Resource(&eventsv1.Event{}).AllNamespace().List(&list, listOpts).Error; err != nil {
+		return err
+	}
+	watchOpts.ResourceVersion = list.ResourceVersion
+	var evt eventsv1.Event
+	return kube.WithContext(ctx).Resource(&evt).AllNamespace().Watch(dest, watchOpts).Error
 }
 
 func (w *Watcher) fromK8sEvent(clusterID string, evt *eventsv1.Event) *model.K8sForwardedEvent {

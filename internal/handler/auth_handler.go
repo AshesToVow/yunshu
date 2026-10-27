@@ -7,8 +7,8 @@ import (
 	"yunshu/internal/pkg/constants"
 
 	"yunshu/internal/model"
-	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/auth"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -87,7 +87,9 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/auth/login-code [post]
 func (h *AuthHandler) SendLoginCodeByUsername(c *gin.Context) {
-	ServeJSON(c, h.service.SendLoginCodeByUsername)
+	ServeJSON(c, func(ctx context.Context, req service.SendLoginCodeByUsernameRequest) (*service.SendEmailCodeResponse, error) {
+		return h.service.SendLoginCodeByUsernameWithIP(ctx, req, c.ClientIP())
+	})
 }
 
 // SendPasswordLoginCode godoc

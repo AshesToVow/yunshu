@@ -33,7 +33,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { type Dayjs } from "dayjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   analyzeProjectLogs,
@@ -164,6 +164,23 @@ export function ProjectLogsPage() {
   const [assignMembers, setAssignMembers] = useState<ProjectMemberItem[]>([]);
   const [assignUserId, setAssignUserId] = useState<number | undefined>(undefined);
   const [dropForm] = Form.useForm<{ name: string; field: string; operator: string; value: string; enabled: boolean }>();
+  const [searchError, setSearchError] = useState("");
+  const [intelError, setIntelError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [savingQuery, setSavingQuery] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [deletingQueryId, setDeletingQueryId] = useState<number>();
+  const [dropActingId, setDropActingId] = useState<number>();
+  const [anomalyActing, setAnomalyActing] = useState<string | null>(null);
+  const loadSeqRef = useRef(0);
+  const topnSeqRef = useRef(0);
+  const savedSeqRef = useRef(0);
+  const dropRulesSeqRef = useRef(0);
+  const serversSeqRef = useRef(0);
+  const servicesSeqRef = useRef(0);
+  const sourcesSeqRef = useRef(0);
 
   const [form] = Form.useForm<SearchForm>();
   const watchCollectorMode = Form.useWatch("collector_mode", form);
@@ -195,21 +212,51 @@ export function ProjectLogsPage() {
   const clusterOptions = useMemo(() => clusters.map((c) => ({ value: c.id, label: c.name })), [clusters]);
 
   const reloadServers = useCallback(async (projectId?: number) => {
-    if (!projectId) return;
-    const data = await getProjectServers(projectId, { page: 1, page_size: 1000 });
-    setServers(data.list);
+    const seq = ++serversSeqRef.current;
+    if (!projectId) {
+      setServers([]);
+      return;
+    }
+    try {
+      const data = await getProjectServers(projectId, { page: 1, page_size: 1000 });
+      if (seq !== serversSeqRef.current) return;
+      setServers(data.list);
+    } catch (e: unknown) {
+      if (seq !== serversSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载服务器列表失败"));
+    }
   }, []);
 
   const reloadServices = useCallback(async (projectId?: number, serverId?: number) => {
-    if (!projectId) return;
-    const data = await getProjectServices(projectId, { page: 1, page_size: 1000, server_id: serverId });
-    setServices(data.list);
+    const seq = ++servicesSeqRef.current;
+    if (!projectId) {
+      setServices([]);
+      return;
+    }
+    try {
+      const data = await getProjectServices(projectId, { page: 1, page_size: 1000, server_id: serverId });
+      if (seq !== servicesSeqRef.current) return;
+      setServices(data.list);
+    } catch (e: unknown) {
+      if (seq !== servicesSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载服务列表失败"));
+    }
   }, []);
 
   const reloadSources = useCallback(async (projectId?: number, serviceId?: number) => {
-    if (!projectId) return;
-    const data = await getProjectLogSources(projectId, { page: 1, page_size: 1000, service_id: serviceId });
-    setSources(data.list);
+    const seq = ++sourcesSeqRef.current;
+    if (!projectId) {
+      setSources([]);
+      return;
+    }
+    try {
+      const data = await getProjectLogSources(projectId, { page: 1, page_size: 1000, service_id: serviceId });
+      if (seq !== sourcesSeqRef.current) return;
+      setSources(data.list);
+    } catch (e: unknown) {
+      if (seq !== sourcesSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载日志源列表失败"));
+    }
   }, []);
 
   const [emptyHint, setEmptyHint] = useState<string>("");
@@ -242,35 +289,45 @@ export function ProjectLogsPage() {
   }, []);
 
   const reloadSavedQueries = useCallback(async (projectId?: number) => {
+    const seq = ++savedSeqRef.current;
     if (!projectId) {
       setSavedQueries([]);
       return;
     }
     try {
       const res = await listLogSavedQueries(projectId);
+      if (seq !== savedSeqRef.current) return;
       setSavedQueries(res?.list || []);
-    } catch {
+    } catch (e: unknown) {
+      if (seq !== savedSeqRef.current) return;
       setSavedQueries([]);
+      message.error(extractApiErrorMessage(e, "加载收藏查询失败"));
     }
   }, []);
 
   const reloadDropRules = useCallback(async (projectId?: number) => {
+    const seq = ++dropRulesSeqRef.current;
     if (!projectId) {
       setDropRules([]);
       return;
     }
     try {
       const res = await listLogDropRules(projectId);
+      if (seq !== dropRulesSeqRef.current) return;
       setDropRules(res?.list || []);
-    } catch {
+    } catch (e: unknown) {
+      if (seq !== dropRulesSeqRef.current) return;
       setDropRules([]);
+      message.error(extractApiErrorMessage(e, "加载丢弃规则失败"));
     }
   }, []);
 
   const loadTopN = useCallback(
-    async (dim?: string) => {
+    async (dim?: string, searchSeq?: number) => {
       const values = form.getFieldsValue();
       if (!values.project_id) return;
+      const seq = ++topnSeqRef.current;
+      const ownerSeq = searchSeq ?? loadSeqRef.current;
       const d = dim || topnDim;
       setTopnLoading(true);
       try {
@@ -279,24 +336,28 @@ export function ProjectLogsPage() {
           dim: d,
           size: 15,
         });
+        if (seq !== topnSeqRef.current || ownerSeq !== loadSeqRef.current) return;
         setTopn(res);
-      } catch {
+      } catch (e: unknown) {
+        if (seq !== topnSeqRef.current || ownerSeq !== loadSeqRef.current) return;
         setTopn(null);
+        message.error(extractApiErrorMessage(e, "加载排行榜失败"));
       } finally {
-        setTopnLoading(false);
+        if (seq === topnSeqRef.current) setTopnLoading(false);
       }
     },
     [form, buildSearchParams, topnDim],
   );
 
-  const refreshEmptyGuide = useCallback(async (projectId?: number, totalHits?: number) => {
+  const refreshEmptyGuide = useCallback(async (projectId?: number, totalHits?: number, seq = loadSeqRef.current) => {
     if (!projectId || (totalHits ?? 0) > 0) {
-      setGuideTips([]);
+      if (seq === loadSeqRef.current) setGuideTips([]);
       return;
     }
     const tips: string[] = ["当前筛选无日志命中，请按链路排查："];
     try {
       const st = await getLoggieStatus(projectId);
+      if (seq !== loadSeqRef.current) return;
       const list = st?.list || [];
       if (!list.length) {
         tips.push("① 未登记主机 Agent → 前往「Agent 管理」引导安装");
@@ -309,33 +370,45 @@ export function ProjectLogsPage() {
         }
       }
     } catch {
+      if (seq !== loadSeqRef.current) return;
       tips.push("① 无法拉取 Agent 状态，请确认权限与后端可用");
     }
+    if (seq !== loadSeqRef.current) return;
     tips.push("③ K8s 采集请确认 DaemonSet Ready，并到 Pipeline 仓库核对解析");
     tips.push("④ 可尝试扩大时间范围，或清空级别/服务/主机筛选");
     setGuideTips(tips);
   }, []);
 
   const loadOverviewAndIntel = useCallback(
-    async (values: SearchForm) => {
+    async (values: SearchForm, seq = loadSeqRef.current) => {
       if (!values.project_id) return;
       const params = buildSearchParams(values);
-      const [ov, pat, an, fields] = await Promise.all([
-        getProjectLogOverview(values.project_id, params).catch(() => null),
-        getProjectLogPatterns(values.project_id, { ...params, page: 1, page_size: 20 }).catch(() => ({
-          list: [],
-          total: 0,
-        })),
-        getProjectLogAnomalies(values.project_id, { page: 1, page_size: 50 }).catch(() => ({ list: [], total: 0 })),
-        getProjectLogFields(values.project_id, params).catch(() => null),
+      const [ov, pat, an, fields] = await Promise.allSettled([
+        getProjectLogOverview(values.project_id, params),
+        getProjectLogPatterns(values.project_id, { ...params, page: 1, page_size: 20 }),
+        getProjectLogAnomalies(values.project_id, { page: 1, page_size: 50 }),
+        getProjectLogFields(values.project_id, params),
       ]);
-      setOverview(ov);
-      setPatterns(pat?.list ?? []);
-      setPatternTotal(pat?.total ?? 0);
-      setAnomalies(an?.list ?? []);
-      setAnomalyTotal(an?.total ?? 0);
-      setFieldStats(fields?.fields ?? []);
-      void loadTopN();
+      if (seq !== loadSeqRef.current) return;
+      const errors: string[] = [];
+      if (ov.status === "fulfilled") setOverview(ov.value);
+      else errors.push(`概览：${extractApiErrorMessage(ov.reason, "加载失败")}`);
+      if (pat.status === "fulfilled") {
+        setPatterns(pat.value?.list ?? []);
+        setPatternTotal(pat.value?.total ?? 0);
+      } else {
+        errors.push(`模板：${extractApiErrorMessage(pat.reason, "加载失败")}`);
+      }
+      if (an.status === "fulfilled") {
+        setAnomalies(an.value?.list ?? []);
+        setAnomalyTotal(an.value?.total ?? 0);
+      } else {
+        errors.push(`错误追踪：${extractApiErrorMessage(an.reason, "加载失败")}`);
+      }
+      if (fields.status === "fulfilled") setFieldStats(fields.value?.fields ?? []);
+      else errors.push(`字段采样：${extractApiErrorMessage(fields.reason, "加载失败")}`);
+      setIntelError(errors.length ? `分析数据加载失败：${errors.join("；")}` : "");
+      void loadTopN(undefined, seq);
     },
     [buildSearchParams, loadTopN],
   );
@@ -354,17 +427,21 @@ export function ProjectLogsPage() {
       if (range?.[0] && range?.[1] && range[1].diff(range[0], "day") > 7) {
         message.warning("时间范围超过 7 天，检索可能较慢；建议缩小到 1 天内");
       }
+      const seq = ++loadSeqRef.current;
       setLoading(true);
       setEmptyHint("");
+      setSearchError("");
+      setIntelError("");
       try {
         const params = buildSearchParams(values, page, pageSize);
         const res = await searchProjectLogs(values.project_id, params);
+        if (seq !== loadSeqRef.current) return;
         setRows(res.list);
         setTotal(res.total);
         setScannedHint(`请求完成，共 ${res.total.toLocaleString()} 条（当前页 ${res.list.length} 条）`);
         form.setFieldsValue({ page, page_size: pageSize });
-        void loadOverviewAndIntel({ ...values, page, page_size: pageSize });
-        void refreshEmptyGuide(values.project_id, res.total);
+        void loadOverviewAndIntel({ ...values, page, page_size: pageSize }, seq);
+        void refreshEmptyGuide(values.project_id, res.total, seq);
         if ((res.total ?? 0) === 0 && filePath) {
           setEmptyHint(`按文件名「${filePath}」无命中，可清空文件名或扩大时间范围。`);
         } else if ((res.total ?? 0) === 0 && !range?.[0] && !range?.[1]) {
@@ -373,9 +450,11 @@ export function ProjectLogsPage() {
           setEmptyHint("");
         }
       } catch (e: unknown) {
-        message.error(extractApiErrorMessage(e));
+        if (seq !== loadSeqRef.current) return;
+        setSearchError(`日志检索失败：${extractApiErrorMessage(e)}。当前展示上次成功结果。`);
+        setScannedHint("");
       } finally {
-        setLoading(false);
+        if (seq === loadSeqRef.current) setLoading(false);
       }
     },
     [form, buildSearchParams, loadOverviewAndIntel, refreshEmptyGuide],
@@ -403,50 +482,54 @@ export function ProjectLogsPage() {
 
   useEffect(() => {
     void (async () => {
-      const [data, clusterRes] = await Promise.all([
-        getProjects({ page: 1, page_size: 1000 }),
-        getClusters({ page: 1, page_size: 1000 }).catch(() => ({ list: [] as ClusterItem[] })),
-      ]);
-      setProjects(data.list);
-      setClusters(clusterRes?.list || []);
+      try {
+        const [data, clusterRes] = await Promise.all([
+          getProjects({ page: 1, page_size: 1000 }),
+          getClusters({ page: 1, page_size: 1000 }).catch(() => ({ list: [] as ClusterItem[] })),
+        ]);
+        setProjects(data.list);
+        setClusters(clusterRes?.list || []);
 
-      const qPid = Number(searchParams.get("project_id") || 0);
-      const defaultProject = qPid || data.list[0]?.id;
-      const tab = searchParams.get("tab");
-      if (tab === "patterns" || tab === "anomalies" || tab === "logs" || tab === "overview") {
-        setActiveTab(tab === "overview" ? "analysis" : tab);
-      }
-      const anchorTime = searchParams.get("anchor_time");
-      const windowMinutes = Number(searchParams.get("window_minutes") || 5) || 5;
-      let timeRange: [Dayjs, Dayjs] = [dayjs().subtract(24, "hour"), dayjs()];
-      if (anchorTime) {
-        const anchor = dayjs(anchorTime);
-        if (anchor.isValid()) {
-          timeRange = [anchor.subtract(windowMinutes, "minute"), anchor.add(windowMinutes, "minute")];
-          setActivePreset("");
+        const qPid = Number(searchParams.get("project_id") || 0);
+        const defaultProject = qPid || data.list[0]?.id;
+        const tab = searchParams.get("tab");
+        if (tab === "patterns" || tab === "anomalies" || tab === "logs" || tab === "overview") {
+          setActiveTab(tab === "overview" ? "analysis" : tab);
         }
-      } else {
-        setActivePreset("24h");
-      }
-      const initial: Partial<SearchForm> = {
-        project_id: defaultProject,
-        page: 1,
-        page_size: 100,
-        time_range: timeRange,
-        level: searchParams.get("level") || undefined,
-        log_source_id: Number(searchParams.get("log_source_id") || 0) || undefined,
-        service_id: Number(searchParams.get("service_id") || 0) || undefined,
-      };
-      if (defaultProject) {
-        form.setFieldsValue(initial);
-        await reloadServers(defaultProject);
-        await reloadServices(defaultProject, initial.server_id);
-        if (initial.service_id) {
-          await reloadSources(defaultProject, initial.service_id);
+        const anchorTime = searchParams.get("anchor_time");
+        const windowMinutes = Number(searchParams.get("window_minutes") || 5) || 5;
+        let timeRange: [Dayjs, Dayjs] = [dayjs().subtract(24, "hour"), dayjs()];
+        if (anchorTime) {
+          const anchor = dayjs(anchorTime);
+          if (anchor.isValid()) {
+            timeRange = [anchor.subtract(windowMinutes, "minute"), anchor.add(windowMinutes, "minute")];
+            setActivePreset("");
+          }
+        } else {
+          setActivePreset("24h");
         }
-        await runSearch(initial);
-        void reloadSavedQueries(defaultProject);
-        void reloadDropRules(defaultProject);
+        const initial: Partial<SearchForm> = {
+          project_id: defaultProject,
+          page: 1,
+          page_size: 100,
+          time_range: timeRange,
+          level: searchParams.get("level") || undefined,
+          log_source_id: Number(searchParams.get("log_source_id") || 0) || undefined,
+          service_id: Number(searchParams.get("service_id") || 0) || undefined,
+        };
+        if (defaultProject) {
+          form.setFieldsValue(initial);
+          await reloadServers(defaultProject);
+          await reloadServices(defaultProject, initial.server_id);
+          if (initial.service_id) {
+            await reloadSources(defaultProject, initial.service_id);
+          }
+          await runSearch(initial);
+          void reloadSavedQueries(defaultProject);
+          void reloadDropRules(defaultProject);
+        }
+      } catch (e: unknown) {
+        message.error(extractApiErrorMessage(e, "加载项目列表失败"));
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -614,14 +697,29 @@ export function ProjectLogsPage() {
     }
   }
 
-  async function saveCurrentQuery() {
+  function openSaveQuery() {
     const pid = form.getFieldValue("project_id") as number | undefined;
     if (!pid) {
       message.warning("请选择项目");
       return;
     }
-    const name = window.prompt("收藏名称");
-    if (!name?.trim()) return;
+    setSaveName("");
+    setSaveOpen(true);
+  }
+
+  async function submitSaveQuery() {
+    const pid = form.getFieldValue("project_id") as number | undefined;
+    if (!pid) {
+      message.warning("请选择项目");
+      return;
+    }
+    const name = saveName.trim();
+    if (!name) {
+      message.warning("请输入收藏名称");
+      return;
+    }
+    if (savingQuery) return;
+    setSavingQuery(true);
     try {
       const values = form.getFieldsValue();
       const query = {
@@ -630,11 +728,86 @@ export function ProjectLogsPage() {
           ? [values.time_range[0]?.toISOString(), values.time_range[1]?.toISOString()]
           : undefined,
       };
-      await createLogSavedQuery(pid, { name: name.trim(), query });
+      await createLogSavedQuery(pid, { name, query });
       message.success("已收藏");
+      setSaveOpen(false);
       void reloadSavedQueries(pid);
     } catch (e: unknown) {
       message.error(extractApiErrorMessage(e, "收藏失败"));
+    } finally {
+      setSavingQuery(false);
+    }
+  }
+
+  async function deleteSavedQuery(item: LogSavedQueryItem) {
+    const pid = form.getFieldValue("project_id") as number | undefined;
+    if (!pid || deletingQueryId != null) return;
+    setDeletingQueryId(item.id);
+    try {
+      await deleteLogSavedQuery(pid, item.id);
+      message.success("已删除收藏");
+      await reloadSavedQueries(pid);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除收藏失败"));
+    } finally {
+      setDeletingQueryId(undefined);
+    }
+  }
+
+  async function toggleDropRule(row: LogDropRuleItem, checked: boolean) {
+    const pid = form.getFieldValue("project_id") as number | undefined;
+    if (!pid || dropActingId != null) return;
+    setDropActingId(row.id);
+    try {
+      await updateLogDropRule(pid, row.id, {
+        name: row.name,
+        field: row.field,
+        operator: row.operator,
+        value: row.value,
+        enabled: checked,
+        remark: row.remark,
+      });
+      message.success(checked ? "规则已启用" : "规则已停用");
+      await reloadDropRules(pid);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "更新丢弃规则失败"));
+    } finally {
+      setDropActingId(undefined);
+    }
+  }
+
+  async function removeDropRule(row: LogDropRuleItem) {
+    const pid = form.getFieldValue("project_id") as number | undefined;
+    if (!pid || dropActingId != null) return;
+    setDropActingId(row.id);
+    try {
+      await deleteLogDropRule(pid, row.id);
+      message.success("已删除");
+      await reloadDropRules(pid);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除丢弃规则失败"));
+    } finally {
+      setDropActingId(undefined);
+    }
+  }
+
+  async function patchAnomaly(
+    row: LogAnomalyItem,
+    payload: { status?: string; mute_minutes?: number },
+    successText: string,
+  ) {
+    const pid = form.getFieldValue("project_id") as number | undefined;
+    if (!pid || anomalyActing?.startsWith(`${row.id}:`)) return;
+    const action = payload.status ?? "mute";
+    setAnomalyActing(`${row.id}:${action}`);
+    try {
+      await updateProjectLogAnomaly(pid, row.id, payload);
+      message.success(successText);
+      await loadOverviewAndIntel(form.getFieldsValue());
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "更新错误追踪失败"));
+    } finally {
+      setAnomalyActing(null);
     }
   }
 
@@ -671,6 +844,16 @@ export function ProjectLogsPage() {
     setActivePreset(label);
     form.setFieldsValue({ time_range: range });
     void runSearch({ page: 1, time_range: range });
+  }
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await exportLogs(form);
+    } finally {
+      setExporting(false);
+    }
   }
 
   function goAdjustPipeline(sampleOverride?: string[]) {
@@ -732,6 +915,13 @@ export function ProjectLogsPage() {
                 placeholder="项目"
                 options={projectOptions}
                 onChange={(pid) => {
+                  loadSeqRef.current += 1;
+                  topnSeqRef.current += 1;
+                  savedSeqRef.current += 1;
+                  dropRulesSeqRef.current += 1;
+                  serversSeqRef.current += 1;
+                  servicesSeqRef.current += 1;
+                  sourcesSeqRef.current += 1;
                   form.setFieldsValue({
                     server_id: undefined,
                     service_id: undefined,
@@ -742,6 +932,19 @@ export function ProjectLogsPage() {
                   setServers([]);
                   setServices([]);
                   setSources([]);
+                  setRows([]);
+                  setTotal(0);
+                  setOverview(null);
+                  setPatterns([]);
+                  setPatternTotal(0);
+                  setAnomalies([]);
+                  setAnomalyTotal(0);
+                  setFieldStats([]);
+                  setTopn(null);
+                  setGuideTips([]);
+                  setLoading(false);
+                  setSearchError("");
+                  setIntelError("");
                   void reloadServers(pid);
                   void reloadServices(pid);
                   void reloadSavedQueries(pid);
@@ -806,14 +1009,14 @@ export function ProjectLogsPage() {
             </Form.Item>
           </Form>
         </div>
-        <Space wrap className="project-logs-viewer-actions">
+        <Space wrap className="toolbar project-logs-viewer-actions">
           <Button icon={<ReloadOutlined />} onClick={() => void runSearch()}>
             刷新
           </Button>
-          <Button icon={<DownloadOutlined />} onClick={() => void exportLogs(form)}>
+          <Button icon={<DownloadOutlined />} loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
             导出
           </Button>
-          <Button icon={<StarOutlined />} onClick={() => void saveCurrentQuery()}>
+          <Button icon={<StarOutlined />} onClick={openSaveQuery}>
             收藏查询
           </Button>
           <Dropdown
@@ -829,18 +1032,11 @@ export function ProjectLogsPage() {
                 ...(savedQueries.length
                   ? [
                       { type: "divider" as const },
-                      ...savedQueries.map((q) => ({
-                        key: `del-${q.id}`,
-                        label: `删除「${q.name}」`,
-                        danger: true,
-                        onClick: () =>
-                          void (async () => {
-                            const pid = form.getFieldValue("project_id") as number;
-                            await deleteLogSavedQuery(pid, q.id);
-                            message.success("已删除");
-                            void reloadSavedQueries(pid);
-                          })(),
-                      })),
+                      {
+                        key: "manage-saved",
+                        label: "管理收藏 / 删除",
+                        onClick: () => setSavedOpen(true),
+                      },
                     ]
                   : []),
               ],
@@ -1083,6 +1279,19 @@ export function ProjectLogsPage() {
         </aside>
 
         <main className="project-logs-main-panel">
+          {searchError ? (
+            <Alert type="error" showIcon message={searchError} closable onClose={() => setSearchError("")} />
+          ) : null}
+          {intelError ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="分析数据加载不完整"
+              description={intelError}
+              closable
+              onClose={() => setIntelError("")}
+            />
+          ) : null}
           {emptyHint ? <Alert type="warning" showIcon message={emptyHint} style={{ marginBottom: 8 }} /> : null}
 
           <div className="project-logs-chart-strip">
@@ -1144,7 +1353,7 @@ export function ProjectLogsPage() {
           <Tabs
             activeKey={activeTab}
             onChange={setActiveTab}
-            className="project-logs-main-tabs"
+            className="table-card project-logs-main-tabs"
             items={[
               {
                 key: "logs",
@@ -1193,7 +1402,7 @@ export function ProjectLogsPage() {
                               columns={logColumns}
                               dataSource={rows}
                               size="small"
-                              className={`project-logs-compact-table${listMode === "stacked" ? " is-stacked" : ""}`}
+                              className={`table-card project-logs-compact-table${listMode === "stacked" ? " is-stacked" : ""}`}
                               pagination={{
                                 current: form.getFieldValue("page") ?? 1,
                                 pageSize: form.getFieldValue("page_size") ?? 100,
@@ -1369,22 +1578,19 @@ export function ProjectLogsPage() {
                       {
                         title: "操作",
                         width: 180,
+                        fixed: "right",
                         className: "yunshu-table-actions-cell",
                         render: (_: unknown, row: LogAnomalyItem) => {
-                          const pid = form.getFieldValue("project_id") as number;
-                          const refresh = () => void loadOverviewAndIntel(form.getFieldsValue());
+                          const busy = anomalyActing?.startsWith(`${row.id}:`) ?? false;
                           return (
                             <Space size={0} wrap className="yunshu-table-actions">
                               {row.status !== "acknowledged" ? (
                                 <Button
                                   type="link"
                                   size="small"
-                                  onClick={() =>
-                                    void updateProjectLogAnomaly(pid, row.id, { status: "acknowledged" }).then(() => {
-                                      message.success("已确认");
-                                      refresh();
-                                    })
-                                  }
+                                  loading={anomalyActing === `${row.id}:acknowledged`}
+                                  disabled={busy}
+                                  onClick={() => void patchAnomaly(row, { status: "acknowledged" }, "已确认")}
                                 >
                                   确认
                                 </Button>
@@ -1393,24 +1599,23 @@ export function ProjectLogsPage() {
                                 <Button
                                   type="link"
                                   size="small"
-                                  onClick={() =>
-                                    void updateProjectLogAnomaly(pid, row.id, { status: "resolved" }).then(() => {
-                                      message.success("已解决");
-                                      refresh();
-                                    })
-                                  }
+                                  loading={anomalyActing === `${row.id}:resolved`}
+                                  disabled={busy}
+                                  onClick={() => void patchAnomaly(row, { status: "resolved" }, "已解决")}
                                 >
                                   解决
                                 </Button>
                               ) : null}
                               <Dropdown
                                 trigger={["click"]}
+                                disabled={busy}
                                 menu={{
                                   items: [
                                     {
                                       key: "assign",
                                       label: "指派",
                                       onClick: () => {
+                                        const pid = form.getFieldValue("project_id") as number;
                                         void (async () => {
                                           try {
                                             const res = await listProjectMembers(pid);
@@ -1427,11 +1632,7 @@ export function ProjectLogsPage() {
                                     {
                                       key: "mute",
                                       label: "静默 60 分钟",
-                                      onClick: () =>
-                                        void updateProjectLogAnomaly(pid, row.id, { mute_minutes: 60 }).then(() => {
-                                          message.success("已静默 60 分钟");
-                                          refresh();
-                                        }),
+                                      onClick: () => void patchAnomaly(row, { mute_minutes: 60 }, "已静默 60 分钟"),
                                     },
                                     row.signature
                                       ? {
@@ -1477,7 +1678,7 @@ export function ProjectLogsPage() {
         }}
         onOk={() => {
           void (async () => {
-            if (!assignAnomaly) return;
+            if (!assignAnomaly || assignLoading) return;
             const pid = form.getFieldValue("project_id") as number;
             const member = assignMembers.find((m) => m.user_id === assignUserId);
             setAssignLoading(true);
@@ -1755,17 +1956,9 @@ export function ProjectLogsPage() {
                 <Switch
                   size="small"
                   checked={v}
-                  onChange={(checked) => {
-                    const pid = form.getFieldValue("project_id") as number;
-                    void updateLogDropRule(pid, r.id, {
-                      name: r.name,
-                      field: r.field,
-                      operator: r.operator,
-                      value: r.value,
-                      enabled: checked,
-                      remark: r.remark,
-                    }).then(() => reloadDropRules(pid));
-                  }}
+                  loading={dropActingId === r.id}
+                  disabled={dropActingId != null}
+                  onChange={(checked) => void toggleDropRule(r, checked)}
                 />
               ),
             },
@@ -1775,15 +1968,11 @@ export function ProjectLogsPage() {
               render: (_: unknown, r: LogDropRuleItem) => (
                 <Popconfirm
                   title="删除该规则？"
-                  onConfirm={() => {
-                    const pid = form.getFieldValue("project_id") as number;
-                    void deleteLogDropRule(pid, r.id).then(() => {
-                      message.success("已删除");
-                      void reloadDropRules(pid);
-                    });
-                  }}
+                  okText="删除"
+                  cancelText="取消"
+                  onConfirm={() => removeDropRule(r)}
                 >
-                  <Button type="link" danger size="small">
+                  <Button type="link" danger size="small" loading={dropActingId === r.id} disabled={dropActingId != null}>
                     删除
                   </Button>
                 </Popconfirm>
@@ -1792,6 +1981,73 @@ export function ProjectLogsPage() {
           ]}
         />
       </Drawer>
+
+      <Modal
+        title="收藏当前查询"
+        open={saveOpen}
+        onCancel={() => setSaveOpen(false)}
+        onOk={() => void submitSaveQuery()}
+        confirmLoading={savingQuery}
+        okText="收藏"
+        cancelText="取消"
+        destroyOnClose
+      >
+        <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
+          保存当前筛选条件，后续可在「我的收藏」中一键恢复。
+        </Typography.Paragraph>
+        <Input
+          placeholder="请输入收藏名称"
+          value={saveName}
+          maxLength={60}
+          autoFocus
+          onChange={(e) => setSaveName(e.target.value)}
+          onPressEnter={() => void submitSaveQuery()}
+        />
+      </Modal>
+
+      <Modal title="我的收藏" open={savedOpen} onCancel={() => setSavedOpen(false)} footer={null} width={560}>
+        {savedQueries.length ? (
+          <List
+            size="small"
+            dataSource={savedQueries}
+            renderItem={(item) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key="apply"
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      setSavedOpen(false);
+                      applySavedQuery(item);
+                    }}
+                  >
+                    应用
+                  </Button>,
+                  <Popconfirm
+                    key="delete"
+                    title={`删除收藏「${item.name}」？`}
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => deleteSavedQuery(item)}
+                  >
+                    <Button type="link" size="small" danger loading={deletingQueryId === item.id}>
+                      删除
+                    </Button>
+                  </Popconfirm>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={item.name}
+                  description={item.updated_at ? `更新于 ${formatDateTime(item.updated_at)}` : undefined}
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Typography.Text type="secondary">暂无收藏查询</Typography.Text>
+        )}
+      </Modal>
     </div>
   );
 }

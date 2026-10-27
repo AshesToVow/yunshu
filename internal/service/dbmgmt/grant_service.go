@@ -306,7 +306,7 @@ func (s *Service) GetEffectivePermission(ctx context.Context, projectID, instanc
 		out.CanExport, out.CanImport, out.CanManage = true, true, true
 		return out, nil
 	}
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		out.CanConnect, out.CanQuery, out.CanDML, out.CanDDL = true, true, true, true
 		out.CanExport, out.CanImport, out.CanManage = true, true, true
 		return out, nil

@@ -40,7 +40,16 @@ import {
   type MenuPermissionBindingItem,
 } from "../services/menus";
 import type { MenuItem, MenuCreatePayload, MenuUpdatePayload } from "../services/menus";
-import { getAntdIconSelectOptions } from "../utils/antd-icon-options";
+import { getAntdIconSelectOptions, renderAntdIcon } from "../utils/antd-icon-options";
+
+// 路由路径为空表示目录节点；非空时必须是绝对路径且不含空白，避免菜单跳转到非法地址。
+function validateRoutePath(_: unknown, value?: string): Promise<void> {
+  const v = value?.trim();
+  if (!v) return Promise.resolve();
+  if (!v.startsWith("/")) return Promise.reject(new Error("路径须以 / 开头"));
+  if (/\s/.test(v)) return Promise.reject(new Error("路径不能包含空格"));
+  return Promise.resolve();
+}
 
 export function MenusPage() {
   const [treeData, setTreeData] = useState<MenuItem[]>([]);
@@ -49,6 +58,7 @@ export function MenusPage() {
   const [open, setOpen] = useState(false);
   const [expandedRowKeys, setExpandedRowKeys] = useState<number[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [batchLoading, setBatchLoading] = useState<0 | 1 | null>(null);
   const [current, setCurrent] = useState<MenuItem | null>(null);
   const [parentID, setParentID] = useState<number | undefined>();
   const [form] = Form.useForm<MenuCreatePayload>();
@@ -137,6 +147,9 @@ export function MenusPage() {
       const normalized = normalizeTreeOrder(data);
       setTreeData(normalized);
       setExpandedRowKeys(collectAllIDs(normalized));
+      // 树刷新后剔除已不存在的选中项，避免批量操作提交过期 ID。
+      const alive = new Set(collectAllIDs(normalized));
+      setSelectedRowKeys((prev) => prev.filter((id) => alive.has(id)));
     } finally {
       setLoading(false);
     }
@@ -191,20 +204,39 @@ export function MenusPage() {
   }
 
   async function handleDelete(id: number) {
-    await deleteMenu(id);
-    message.success("菜单已删除");
-    void loadTree();
+    try {
+      await deleteMenu(id);
+      message.success("菜单已删除");
+      void loadTree();
+    } catch {
+      /* interceptor */
+    }
   }
 
-  async function handleBatchStatus(status: 0 | 1) {
+  function handleBatchStatus(status: 0 | 1) {
     if (selectedRowKeys.length === 0) {
       message.warning("请先勾选菜单");
       return;
     }
-    await batchUpdateMenuStatus({ ids: selectedRowKeys, status });
-    message.success(status === 1 ? "批量启用成功" : "批量停用成功");
-    setSelectedRowKeys([]);
-    void loadTree();
+    const action = status === 1 ? "启用" : "停用";
+    Modal.confirm({
+      title: `确认批量${action} ${selectedRowKeys.length} 个菜单？`,
+      content: `批量${action}仅作用于已勾选节点，不会自动同步子节点。`,
+      okText: action,
+      cancelText: "取消",
+      okButtonProps: status === 0 ? { danger: true } : undefined,
+      onOk: async () => {
+        setBatchLoading(status);
+        try {
+          await batchUpdateMenuStatus({ ids: selectedRowKeys, status });
+          message.success(`批量${action}成功`);
+          setSelectedRowKeys([]);
+          await loadTree();
+        } finally {
+          setBatchLoading(null);
+        }
+      },
+    });
   }
 
   return (
@@ -222,10 +254,20 @@ export function MenusPage() {
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate()}>
               创建菜单
             </Button>
-            <Button icon={<CheckCircleOutlined />} onClick={() => void handleBatchStatus(1)}>
+            <Button
+              icon={<CheckCircleOutlined />}
+              loading={batchLoading === 1}
+              disabled={batchLoading === 0}
+              onClick={() => handleBatchStatus(1)}
+            >
               批量启用
             </Button>
-            <Button icon={<StopOutlined />} onClick={() => void handleBatchStatus(0)}>
+            <Button
+              icon={<StopOutlined />}
+              loading={batchLoading === 0}
+              disabled={batchLoading === 1}
+              onClick={() => handleBatchStatus(0)}
+            >
               批量停用
             </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void loadTree()}>
@@ -237,9 +279,11 @@ export function MenusPage() {
         <Table
           loading={loading}
           pagination={false}
+          scroll={{ x: 960 }}
           rowSelection={{
             selectedRowKeys,
             onChange: (keys) => setSelectedRowKeys(keys as number[]),
+            getCheckboxProps: () => ({ disabled: batchLoading !== null }),
           }}
           expandable={{
             expandedRowKeys,
@@ -254,7 +298,7 @@ export function MenusPage() {
               key: "name",
               render: (name: string, record: MenuItem) => (
                 <Space>
-                  {record.icon && <span style={{ fontSize: 16 }}>{record.icon}</span>}
+                  {record.icon && <span style={{ fontSize: 16 }}>{renderAntdIcon(record.icon)}</span>}
                   <span>{name}</span>
                   {record.hidden && <Tag color="default">隐藏</Tag>}
                 </Space>
@@ -341,7 +385,12 @@ export function MenusPage() {
             <Input placeholder="例如：系统管理" />
           </Form.Item>
           <Space style={{ width: "100%" }} size="middle">
-            <Form.Item label="路由路径" name="path" style={{ flex: 1, marginBottom: 0 }}>
+            <Form.Item
+              label="路由路径"
+              name="path"
+              style={{ flex: 1, marginBottom: 0 }}
+              rules={[{ validator: validateRoutePath }]}
+            >
               <Input placeholder="/system" />
             </Form.Item>
             <Form.Item
@@ -371,7 +420,7 @@ export function MenusPage() {
               <InputNumber min={0} style={{ width: "100%" }} />
             </Form.Item>
           </Space>
-          <Form.Item label="重定向" name="redirect">
+          <Form.Item label="重定向" name="redirect" rules={[{ validator: validateRoutePath }]}>
             <Input placeholder="/redirect/path" />
           </Form.Item>
           <Space style={{ width: "100%" }} size="middle">

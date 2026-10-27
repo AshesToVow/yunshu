@@ -322,29 +322,76 @@ func normalizeQuerySQL(sqlText string) (string, error) {
 func splitSQLStatements(content string) []string {
 	var stmts []string
 	var buf strings.Builder
-	inSingle := false
-	inDouble := false
-	for i := range len(content) {
-		ch := content[i]
-		if ch == '\'' && !inDouble {
-			inSingle = !inSingle
+	var quote byte // 0=普通文本；' " ` 表示处于对应引号内
+	inLineComment := false
+	inBlockComment := false
+	flush := func() {
+		s := strings.TrimSpace(buf.String())
+		buf.Reset()
+		if s == "" || strings.TrimSpace(stripSQLComments(s)) == "" {
+			return
 		}
-		if ch == '"' && !inSingle {
-			inDouble = !inDouble
-		}
-		if ch == ';' && !inSingle && !inDouble {
-			s := strings.TrimSpace(buf.String())
-			if s != "" {
-				stmts = append(stmts, s)
-			}
-			buf.Reset()
-			continue
-		}
-		buf.WriteByte(ch)
-	}
-	if s := strings.TrimSpace(buf.String()); s != "" {
 		stmts = append(stmts, s)
 	}
+	for i := 0; i < len(content); i++ {
+		ch := content[i]
+		if inLineComment {
+			buf.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			buf.WriteByte(ch)
+			if ch == '*' && i+1 < len(content) && content[i+1] == '/' {
+				buf.WriteByte('/')
+				i++
+				inBlockComment = false
+			}
+			continue
+		}
+		if quote != 0 {
+			buf.WriteByte(ch)
+			if ch == '\\' && quote != '`' && i+1 < len(content) {
+				buf.WriteByte(content[i+1])
+				i++
+				continue
+			}
+			if ch == quote {
+				// 连续两个引号表示转义，不结束字符串。
+				if i+1 < len(content) && content[i+1] == quote {
+					buf.WriteByte(quote)
+					i++
+					continue
+				}
+				quote = 0
+			}
+			continue
+		}
+		switch {
+		case ch == '-' && i+1 < len(content) && content[i+1] == '-' &&
+			(i+2 >= len(content) || content[i+2] == ' ' || content[i+2] == '\t' || content[i+2] == '\n' || content[i+2] == '\r'):
+			inLineComment = true
+			buf.WriteString("--")
+			i++
+		case ch == '#':
+			inLineComment = true
+			buf.WriteByte(ch)
+		case ch == '/' && i+1 < len(content) && content[i+1] == '*':
+			inBlockComment = true
+			buf.WriteString("/*")
+			i++
+		case ch == '\'' || ch == '"' || ch == '`':
+			quote = ch
+			buf.WriteByte(ch)
+		case ch == ';':
+			flush()
+		default:
+			buf.WriteByte(ch)
+		}
+	}
+	flush()
 	return stmts
 }
 

@@ -71,6 +71,10 @@ func (h *LoggieHandler) DownloadPipeline(c *gin.Context) {
 		return
 	}
 	kind := c.DefaultQuery("file", "pipeline")
+	if (kind == "env" || kind == "pipelines") && !h.svc.CanViewAgentCredentials(c.Request.Context(), projectID) {
+		response.Error(c, constants.ErrForbiddenWithMsg("只读成员不可下载包含凭据的配置文件"))
+		return
+	}
 	switch kind {
 	case "env":
 		exportutil.ServeBytes(c, bundle.EnvFilename, "text/plain; charset=utf-8", []byte(bundle.EnvFile))

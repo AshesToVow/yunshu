@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/pkg/validateutil"
 	"yunshu/internal/repository"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -40,7 +41,7 @@ func toServiceItem(it model.Service) ServiceItem {
 }
 
 type ServiceListQuery struct {
-	ProjectID uint   `form:"project_id" binding:"required"`
+	ProjectID uint   `form:"project_id"`
 	ServerID  *uint  `form:"server_id"`
 	Keyword   string `form:"keyword"`
 	Page      int    `form:"page"`
@@ -48,6 +49,9 @@ type ServiceListQuery struct {
 }
 
 func (s *ProjectMgmtService) ListServices(ctx context.Context, q ServiceListQuery) (*pagination.Result[ServiceItem], error) {
+	if q.ProjectID == 0 {
+		return nil, constants.ErrProjectIDRequired
+	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	list, total, err := s.serviceRepo.List(ctx, repository.ServiceListParams{
 		ProjectID: q.ProjectID,
@@ -76,21 +80,52 @@ type ServiceUpsertRequest struct {
 	Status   int     `json:"status"`
 }
 
+// ensureServiceInProject 校验服务归属项目（经服务器关联），跨项目按不存在处理。
+func (s *ProjectMgmtService) ensureServiceInProject(ctx context.Context, projectID, serviceID uint) (*model.Service, error) {
+	it, err := s.serviceRepo.GetByID(ctx, serviceID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgac7e51a53391)
+		}
+		return nil, bizerrors.Pass(ctx, "project", "ensureServiceInProject", err)
+	}
+	sv, err := s.serverRepo.GetByID(ctx, it.ServerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgac7e51a53391)
+		}
+		return nil, bizerrors.Pass(ctx, "project", "ensureServiceInProject", err)
+	}
+	if sv.ProjectID != projectID {
+		return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgac7e51a53391)
+	}
+	return it, nil
+}
+
 // UpsertService 执行对应的业务逻辑。
-func (s *ProjectMgmtService) UpsertService(ctx context.Context, req ServiceUpsertRequest) (*ServiceItem, error) {
+func (s *ProjectMgmtService) UpsertService(ctx context.Context, projectID uint, req ServiceUpsertRequest) (*ServiceItem, error) {
+	if projectID == 0 {
+		return nil, constants.ErrProjectIDRequired
+	}
+	sv, err := s.serverRepo.GetByID(ctx, req.ServerID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, constants.ErrServerNotFound
+		}
+		return nil, bizerrors.Pass(ctx, "project", "UpsertService", err)
+	}
+	if sv.ProjectID != projectID {
+		return nil, constants.ErrServerNotInCurrentProject
+	}
 	status := req.Status
 	if status != model.StatusDisabled {
 		status = model.StatusEnabled
 	}
 	var it *model.Service
-	var err error
 	if req.ID != nil && *req.ID > 0 {
-		it, err = s.serviceRepo.GetByID(ctx, *req.ID)
+		it, err = s.ensureServiceInProject(ctx, projectID, *req.ID)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, constants.ErrNotFoundWithMsg(constants.ErrMsgac7e51a53391)
-			}
-			return nil, bizerrors.Pass(ctx, "project", "UpsertService", err)
+			return nil, err
 		}
 	} else {
 		it = &model.Service{}
@@ -115,7 +150,10 @@ func (s *ProjectMgmtService) UpsertService(ctx context.Context, req ServiceUpser
 }
 
 // DeleteService 删除相关的业务逻辑。
-func (s *ProjectMgmtService) DeleteService(ctx context.Context, id uint) error {
+func (s *ProjectMgmtService) DeleteService(ctx context.Context, projectID, id uint) error {
+	if _, err := s.ensureServiceInProject(ctx, projectID, id); err != nil {
+		return err
+	}
 	return s.serviceRepo.DeleteByID(ctx, id)
 }
 
@@ -150,7 +188,7 @@ func toLogSourceItem(it model.ServiceLogSource) LogSourceItem {
 }
 
 type LogSourceListQuery struct {
-	ProjectID uint  `form:"project_id" binding:"required"`
+	ProjectID uint  `form:"project_id"`
 	ServiceID *uint `form:"service_id"`
 	Page      int   `form:"page"`
 	PageSize  int   `form:"page_size"`
@@ -158,6 +196,9 @@ type LogSourceListQuery struct {
 
 // ListLogSources 查询列表相关的业务逻辑。
 func (s *ProjectMgmtService) ListLogSources(ctx context.Context, q LogSourceListQuery) (*pagination.Result[LogSourceItem], error) {
+	if q.ProjectID == 0 {
+		return nil, constants.ErrProjectIDRequired
+	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
 	list, total, err := s.logRepo.List(ctx, repository.LogSourceListParams{ProjectID: q.ProjectID, ServiceID: q.ServiceID, Page: page, PageSize: pageSize})
 	if err != nil {
@@ -184,7 +225,13 @@ type LogSourceUpsertRequest struct {
 }
 
 // UpsertLogSource 执行对应的业务逻辑。
-func (s *ProjectMgmtService) UpsertLogSource(ctx context.Context, req LogSourceUpsertRequest) (*LogSourceItem, error) {
+func (s *ProjectMgmtService) UpsertLogSource(ctx context.Context, projectID uint, req LogSourceUpsertRequest) (*LogSourceItem, error) {
+	if projectID == 0 {
+		return nil, constants.ErrProjectIDRequired
+	}
+	if _, err := s.ensureServiceInProject(ctx, projectID, req.ServiceID); err != nil {
+		return nil, err
+	}
 	status := req.Status
 	if status != model.StatusDisabled {
 		status = model.StatusEnabled
@@ -193,10 +240,16 @@ func (s *ProjectMgmtService) UpsertLogSource(ctx context.Context, req LogSourceU
 	if logType == "" {
 		logType = "file"
 	}
+	collectPath := strings.TrimSpace(req.Path)
+	if !strings.EqualFold(logType, "journal") {
+		if err := validateutil.ValidateLogCollectPath(collectPath); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("采集路径不合法: " + err.Error())
+		}
+	}
 	var it *model.ServiceLogSource
 	var err error
 	if req.ID != nil && *req.ID > 0 {
-		it, err = s.logRepo.GetByID(ctx, *req.ID)
+		it, err = s.logRepo.GetByIDInProject(ctx, projectID, *req.ID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg9d63941807e2)
@@ -208,7 +261,7 @@ func (s *ProjectMgmtService) UpsertLogSource(ctx context.Context, req LogSourceU
 	}
 	it.ServiceID = req.ServiceID
 	it.LogType = logType
-	it.Path = strings.TrimSpace(req.Path)
+	it.Path = collectPath
 	it.Encoding = req.Encoding
 	it.Timezone = req.Timezone
 	it.MultilineRule = req.MultilineRule
@@ -229,7 +282,13 @@ func (s *ProjectMgmtService) UpsertLogSource(ctx context.Context, req LogSourceU
 }
 
 // DeleteLogSource 删除相关的业务逻辑。
-func (s *ProjectMgmtService) DeleteLogSource(ctx context.Context, id uint) error {
+func (s *ProjectMgmtService) DeleteLogSource(ctx context.Context, projectID, id uint) error {
+	if _, err := s.logRepo.GetByIDInProject(ctx, projectID, id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return constants.ErrNotFoundWithMsg(constants.ErrMsg9d63941807e2)
+		}
+		return bizerrors.Pass(ctx, "project", "DeleteLogSource", err)
+	}
 	return s.logRepo.DeleteByID(ctx, id)
 }
 

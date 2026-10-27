@@ -34,9 +34,9 @@ type AlertDutyBlockUpsertRequest struct {
 }
 
 type AlertDutyService struct {
-	repo         interfaces.AlertDutyRepository
-	ruleRepo     interfaces.AlertMonitorRuleRepository
-	userRepo     interfaces.UserRepository
+	repo     interfaces.AlertDutyRepository
+	ruleRepo interfaces.AlertMonitorRuleRepository
+	userRepo interfaces.UserRepository
 }
 
 func NewAlertDutyService(

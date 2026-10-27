@@ -6,9 +6,9 @@ import {
   ReloadOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, Popconfirm, Select, Space, Switch, Table, Typography, message } from "antd";
+import { Alert, Button, Card, Input, Modal, Popconfirm, Select, Space, Switch, Table, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
@@ -68,18 +68,49 @@ export function WorkflowDefinitionsPage() {
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState<StageRow[]>([]);
   const [groups, setGroups] = useState<UserGroupItem[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
   const [configured, setConfigured] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
+  const loadSeqRef = useRef(0);
+
+  const markDirty = () => {
+    dirtyRef.current = true;
+    setDirty(true);
+  };
+
+  const confirmSwitch = (apply: () => void) => {
+    if (!dirtyRef.current) {
+      apply();
+      return;
+    }
+    Modal.confirm({
+      title: "放弃未保存的修改？",
+      content: "切换配置或刷新将丢弃当前未保存的编辑。",
+      okText: "放弃修改",
+      cancelText: "继续编辑",
+      onOk: () => {
+        dirtyRef.current = false;
+        setDirty(false);
+        apply();
+      },
+    });
+  };
 
   const defProjectId = domain === "ai" ? 0 : projectId;
   const defTicketType = domain === "ai" ? "tool_approval" : "default";
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      const fromQuery = Number(searchParams.get("project") || 0);
-      if (fromQuery > 0) setProjectId(fromQuery);
-      else if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        const fromQuery = Number(searchParams.get("project") || 0);
+        if (fromQuery > 0) setProjectId(fromQuery);
+        else if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch(() => {
+        /* 项目列表加载失败不阻断配置页 */
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅首屏读 query
   }, []);
 
@@ -98,15 +129,31 @@ export function WorkflowDefinitionsPage() {
   }, []);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
+    setRows([]);
+    setConfigured(false);
+    setGroups([]);
     if (domain !== "ai" && !projectId) return;
     setLoading(true);
     try {
-      if (projectId) await loadGroups(projectId);
+      if (projectId) {
+        setGroupsLoading(true);
+        try {
+          await loadGroups(projectId);
+        } catch {
+          /* 用户组加载失败不阻断流程配置 */
+        } finally {
+          setGroupsLoading(false);
+        }
+      }
       const res = await getWorkflowDefinition(domain, defProjectId ?? 0, defTicketType);
+      if (seq !== loadSeqRef.current) return;
       setConfigured(Boolean(res.configured));
       setRows(toRows(res.stages ?? []));
+    } catch {
+      /* http 拦截器已 toast */
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [domain, projectId, defProjectId, defTicketType, loadGroups]);
 
@@ -133,6 +180,7 @@ export function WorkflowDefinitionsPage() {
       next.splice(nextIdx, 0, item);
       return renumber(next);
     });
+    markDirty();
   }
 
   function addRow() {
@@ -152,6 +200,7 @@ export function WorkflowDefinitionsPage() {
         },
       ]),
     );
+    markDirty();
   }
 
   const columns = useMemo<ColumnsType<StageRow>>(
@@ -167,6 +216,7 @@ export function WorkflowDefinitionsPage() {
             onChange={(e) => {
               const value = e.target.value;
               setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftName: value } : r)));
+              markDirty();
             }}
           />
         ),
@@ -180,6 +230,7 @@ export function WorkflowDefinitionsPage() {
             checked={row.draftEnabled}
             onChange={(checked) => {
               setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)));
+              markDirty();
             }}
           />
         ),
@@ -197,10 +248,12 @@ export function WorkflowDefinitionsPage() {
               style={{ width: 260 }}
               placeholder={row.draftEnabled ? "请选择用户组" : "未启用"}
               disabled={!row.draftEnabled || row.assignee_rule_type === "duty"}
+              loading={groupsLoading}
               value={row.draftUserGroupId}
               options={groupOptions}
               onChange={(v) => {
                 setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)));
+                markDirty();
               }}
             />
           ),
@@ -228,13 +281,12 @@ export function WorkflowDefinitionsPage() {
               title="删除该审批节点？"
               description="仅影响新建工单，在途工单步骤不变。"
               onConfirm={() => {
-                setRows((prev) => {
-                  if (prev.length <= 1) {
-                    message.warning("至少保留一个审批节点");
-                    return prev;
-                  }
-                  return renumber(prev.filter((r) => r.clientKey !== row.clientKey));
-                });
+                if (rows.length <= 1) {
+                  message.warning("至少保留一个审批节点");
+                  return;
+                }
+                setRows((prev) => renumber(prev.filter((r) => r.clientKey !== row.clientKey)));
+                markDirty();
               }}
             >
               <Button type="text" size="small" danger icon={<DeleteOutlined />} />
@@ -247,6 +299,7 @@ export function WorkflowDefinitionsPage() {
   );
 
   const save = async () => {
+    if (saving) return;
     if (domain !== "ai" && !projectId) return;
     for (const row of rows) {
       if (!row.draftName.trim()) {
@@ -284,7 +337,11 @@ export function WorkflowDefinitionsPage() {
       );
       setConfigured(Boolean(saved.configured));
       setRows(toRows(saved.stages ?? []));
+      dirtyRef.current = false;
+      setDirty(false);
       message.success("已保存");
+    } catch {
+      /* http 拦截器已 toast */
     } finally {
       setSaving(false);
     }
@@ -298,35 +355,45 @@ export function WorkflowDefinitionsPage() {
         subtitle="统一纳管各业务域审批节点与审批人；待办审批请到「我的待办」"
       />
       <ApprovalCenterNav />
-      <Card
-        extra={
+      <Card className="table-card">
+        <div className="toolbar">
           <Space wrap>
             <Select
               style={{ width: 200 }}
               value={domain}
               options={DOMAIN_OPTIONS.map((d) => ({ value: d.value, label: d.label }))}
-              onChange={(v) => setDomain(v)}
+              onChange={(v) => confirmSwitch(() => setDomain(v))}
             />
             {domain !== "ai" ? (
               <Select
                 style={{ width: 200 }}
                 value={projectId}
                 options={projects.map((p) => ({ value: p.id, label: p.name }))}
-                onChange={setProjectId}
+                onChange={(v) => confirmSwitch(() => setProjectId(v))}
               />
             ) : null}
-            <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+            <Button icon={<ReloadOutlined />} onClick={() => confirmSwitch(() => void load())} disabled={loading}>
               刷新
             </Button>
-            <Button icon={<PlusOutlined />} onClick={addRow}>
+            <Button icon={<PlusOutlined />} onClick={addRow} disabled={loading}>
               新增节点
             </Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void save()}>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              disabled={loading || saving}
+              onClick={() => void save()}
+            >
               保存
             </Button>
+            {dirty ? (
+              <Typography.Text type="warning" style={{ fontSize: 12 }}>
+                有未保存的修改
+              </Typography.Text>
+            ) : null}
           </Space>
-        }
-      >
+        </div>
         <Alert
           type="info"
           showIcon

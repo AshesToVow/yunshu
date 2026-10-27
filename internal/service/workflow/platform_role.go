@@ -35,7 +35,7 @@ func EnsureDefaultAIToolApprovalDefinition(ctx context.Context, wfRepo interface
 	if wfRepo == nil {
 		return nil
 	}
-	svc := NewService(wfRepo, nil, nil, nil)
+	svc := NewService(wfRepo, nil, nil, nil, nil)
 	key := DefinitionKey{
 		Domain: model.WorkflowDomainAI, ProjectID: 0, TicketType: model.WorkflowTicketTypeToolApproval,
 	}
@@ -69,7 +69,7 @@ func EnsureDefaultIncidentDefinition(ctx context.Context, wfRepo interfaces.Work
 	if wfRepo == nil {
 		return nil
 	}
-	svc := NewService(wfRepo, nil, nil, nil)
+	svc := NewService(wfRepo, nil, nil, nil, nil)
 	key := DefinitionKey{
 		Domain: model.WorkflowDomainIncident, ProjectID: 0, TicketType: model.WorkflowTicketTypeIncident,
 	}

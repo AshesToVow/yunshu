@@ -107,7 +107,7 @@ func (s *Service) enrichTicketMineStatus(ctx context.Context, items []TicketItem
 				case model.DbTicketStatusPendingExecution:
 					item.MineStatus = dbMineStatusPending
 					item.CurrentStageName = "待提交人执行"
-				case model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting:
+				case model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting, model.DbTicketStatusResultUnknown:
 					item.MineStatus = dbMineStatusDone
 				}
 			}

@@ -35618,16 +35618,18 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 ---
 
-#### API-PRJ-089 查询 instances/accounts/password
+#### API-PRJ-089 查看实例账号密码（审计留痕）
 
 | 项 | 内容 |
 |----|------|
 | 接口编号 | `API-PRJ-089` |
-| 接口名称 | 查询 instances/accounts/password |
-| 请求方式 | `GET` |
+| 接口名称 | 查看实例账号密码（审计留痕） |
+| 请求方式 | `POST` |
 | URL | `/api/v1/projects/{id}/dbmgmt/instances/{instanceId}/accounts/{accountId}/password` |
 | Gin 路径 | `/api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password` |
-| operationId | `get_api_v1_projects_id__dbmgmt_instances_instanceId__accounts_accountId__password` |
+| operationId | `post_api_v1_projects_id__dbmgmt_instances_instanceId__accounts_accountId__password` |
+
+> 密码属于敏感数据：使用 POST 避免被浏览器/代理缓存，响应头固定携带 `Cache-Control: no-store`；每次调用都会写入 `instance_account_password_reveal` 审计日志。
 
 **请求参数**
 
@@ -35678,7 +35680,7 @@ JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:
 
 **权限要求**
 
-JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password, GET)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：库表授权 / 有效权限（`db_access_grants` 等）；写操作：`OperationAudit` 审计
+JWT Bearer（`Authorization: Bearer <access_token>`）；Casbin：`Enforce(user:<id>, /api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password, POST)`；项目成员：`RequireProjectMemberAccess`（`:id` 项目）；资源 ACL：库表授权 / 有效权限（`db_access_grants` 等）；写操作：`OperationAudit` 审计
 
 ---
 

@@ -121,9 +121,10 @@ func (s *K8sWorkloadService) StatefulSetScale(ctx context.Context, req WorkloadS
 		}
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
-	copyObj := obj.DeepCopy()
-	copyObj.Spec.Replicas = &req.Replicas
-	if err := k.WithContext(ctx).Resource(&appsv1.StatefulSet{}).Namespace(req.Namespace).Update(copyObj).Error; err != nil {
+	// 只 patch replicas，避免读改写整对象在并发变更时触发 409 Conflict。
+	scalePatch := fmt.Sprintf(`{"spec":{"replicas":%d}}`, req.Replicas)
+	if err := k.WithContext(ctx).Resource(&appsv1.StatefulSet{}).Namespace(req.Namespace).Name(req.Name).
+		Patch(&appsv1.StatefulSet{}, types.MergePatchType, scalePatch).Error; err != nil {
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
 	recordK8sChange(ctx, cluster, "scale", "StatefulSet", req.Namespace, req.Name, map[string]any{

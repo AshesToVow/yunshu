@@ -10,9 +10,9 @@ import (
 
 // K8sClusterRepo is implemented by *K8sClusterRepository.
 type K8sClusterRepo interface {
-	Create(ctx context.Context, cluster *model.K8sCluster) (error)
-	Update(ctx context.Context, cluster *model.K8sCluster) (error)
-	Delete(ctx context.Context, id uint) (error)
+	Create(ctx context.Context, cluster *model.K8sCluster) error
+	Update(ctx context.Context, cluster *model.K8sCluster) error
+	Delete(ctx context.Context, id uint) error
 	GetByID(ctx context.Context, id uint) (*model.K8sCluster, error)
 	List(ctx context.Context, params K8sClusterListParams) ([]model.K8sCluster, int64, error)
 	ListAllBrief(ctx context.Context) ([]model.K8sCluster, error)
@@ -22,18 +22,18 @@ var _ K8sClusterRepo = (*K8sClusterRepository)(nil)
 
 // K8sClusterAccessRepo is implemented by *K8sClusterAccessRepository.
 type K8sClusterAccessRepo interface {
-	Upsert(ctx context.Context, it *model.K8sClusterAccessGrant) (error)
+	Upsert(ctx context.Context, it *model.K8sClusterAccessGrant) error
 	ListGrantsApplyingToCluster(ctx context.Context, clusterID uint) ([]model.K8sClusterAccessGrant, error)
 	ListByPrincipal(ctx context.Context, kind string, ref string) ([]model.K8sClusterAccessGrant, error)
 	ListByRoleCode(ctx context.Context, roleCode string) ([]model.K8sClusterAccessGrant, error)
 	ListForPack(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]model.K8sClusterAccessGrant, error)
-	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) (error)
+	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) error
 	GetByID(ctx context.Context, id uint) (*model.K8sClusterAccessGrant, error)
-	DeleteByID(ctx context.Context, id uint) (error)
-	EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) (int)
+	DeleteByID(ctx context.Context, id uint) error
+	EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) int
 	EffectiveCapabilities(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) []string
 	BuildEffectiveTierIndex(ctx context.Context, pack k8sauth.PrincipalPack) (EffectiveTierIndex, error)
-	HasAnyK8sGrant(ctx context.Context, pack k8sauth.PrincipalPack) (bool)
+	HasAnyK8sGrant(ctx context.Context, pack k8sauth.PrincipalPack) bool
 }
 
 var _ K8sClusterAccessRepo = (*K8sClusterAccessRepository)(nil)
@@ -45,9 +45,9 @@ type K8sNamespaceAllowRepo interface {
 	WhitelistUnionNamespaces(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]string, error)
 	DistinctNamespacesForPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) ([]string, error)
 	List(ctx context.Context, principalKind string, principalRef string, clusterID uint) ([]model.K8sNamespaceAllowRule, error)
-	Create(ctx context.Context, it *model.K8sNamespaceAllowRule) (error)
-	DeleteByID(ctx context.Context, id uint) (error)
-	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) (error)
+	Create(ctx context.Context, it *model.K8sNamespaceAllowRule) error
+	DeleteByID(ctx context.Context, id uint) error
+	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) error
 }
 
 var _ K8sNamespaceAllowRepo = (*K8sNamespaceAllowRepository)(nil)
@@ -57,9 +57,9 @@ type K8sNamespaceDenyRepo interface {
 	IsDenied(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint, namespace string) (bool, error)
 	DeniedNamespaceNames(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]string, error)
 	List(ctx context.Context, principalKind string, principalRef string, clusterID uint) ([]model.K8sNamespaceDenyRule, error)
-	Create(ctx context.Context, it *model.K8sNamespaceDenyRule) (error)
-	DeleteByID(ctx context.Context, id uint) (error)
-	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) (error)
+	Create(ctx context.Context, it *model.K8sNamespaceDenyRule) error
+	DeleteByID(ctx context.Context, id uint) error
+	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) error
 }
 
 var _ K8sNamespaceDenyRepo = (*K8sNamespaceDenyRepository)(nil)
@@ -68,6 +68,9 @@ var _ K8sNamespaceDenyRepo = (*K8sNamespaceDenyRepository)(nil)
 type K8sCrTemplateListFilter struct {
 	ProjectID uint
 	Kind      string
+	// VisibleOnly 为 true 时限定在全局模板（project_id=0）与 ProjectIDs 之内。
+	VisibleOnly bool
+	ProjectIDs  []uint
 }
 
 // K8sCrTemplateRepo is implemented by *K8sCrTemplateRepository.
@@ -82,14 +85,18 @@ type K8sCrTemplateRepo interface {
 var _ K8sCrTemplateRepo = (*K8sCrTemplateRepository)(nil)
 
 // K8sWorkloadSnapshotListParams filters workload snapshots with pagination.
+// ProjectScope restricts rows to ProjectIDs; an empty set matches nothing so
+// callers without any project membership cannot fall through to unfiltered reads.
 type K8sWorkloadSnapshotListParams struct {
-	ProjectID uint
-	ClusterID uint
-	Namespace string
-	Kind      string
-	Name      string
-	Page      int
-	PageSize  int
+	ProjectID    uint
+	ProjectScope bool
+	ProjectIDs   []uint
+	ClusterID    uint
+	Namespace    string
+	Kind         string
+	Name         string
+	Page         int
+	PageSize     int
 }
 
 // K8sWorkloadSnapshotRepo is implemented by *K8sWorkloadSnapshotRepository.
@@ -110,4 +117,3 @@ type HarborMergeRepo interface {
 }
 
 var _ HarborMergeRepo = (*HarborMergeRepository)(nil)
-

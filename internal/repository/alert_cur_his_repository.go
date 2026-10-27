@@ -46,6 +46,14 @@ func (r *AlertCurHisRepository) ResolveCurEvent(ctx context.Context, fingerprint
 			}
 			return err
 		}
+		// 以 id+updated_at 做乐观并发：若期间同指纹已被新 firing 覆盖，保留新行不归档。
+		del := tx.Where("id = ? AND updated_at = ?", cur.ID, cur.UpdatedAt).Delete(&model.AlertCurEvent{})
+		if del.Error != nil {
+			return del.Error
+		}
+		if del.RowsAffected == 0 {
+			return nil
+		}
 		his := model.AlertHisEvent{
 			Fingerprint:     cur.Fingerprint,
 			Alertname:       cur.Alertname,
@@ -67,7 +75,7 @@ func (r *AlertCurHisRepository) ResolveCurEvent(ctx context.Context, fingerprint
 		if err := tx.Create(&his).Error; err != nil {
 			return err
 		}
-		return tx.Where("fingerprint = ?", fp).Delete(&model.AlertCurEvent{}).Error
+		return nil
 	})
 }
 
@@ -75,6 +83,8 @@ func (r *AlertCurHisRepository) curListQuery(ctx context.Context, f AlertCurEven
 	tx := r.db.WithContext(ctx).Model(&model.AlertCurEvent{})
 	if f.ProjectID > 0 {
 		tx = tx.Where("project_id = ?", f.ProjectID)
+	} else if len(f.ProjectIDs) > 0 {
+		tx = tx.Where("project_id IN ?", f.ProjectIDs)
 	}
 	if f.DatasourceID > 0 {
 		tx = tx.Where("datasource_id = ?", f.DatasourceID)
@@ -83,9 +93,9 @@ func (r *AlertCurHisRepository) curListQuery(ctx context.Context, f AlertCurEven
 		tx = tx.Where("severity = ?", sev)
 	}
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
-		like := "%" + kw + "%"
+		like := likeContains(kw)
 		tx = tx.Where(
-			"alertname LIKE ? OR fingerprint LIKE ? OR summary LIKE ? OR cluster LIKE ?",
+			"alertname LIKE ? ESCAPE '!' OR fingerprint LIKE ? ESCAPE '!' OR summary LIKE ? ESCAPE '!' OR cluster LIKE ? ESCAPE '!'",
 			like, like, like, like,
 		)
 	}
@@ -107,6 +117,8 @@ func (r *AlertCurHisRepository) hisListQuery(ctx context.Context, f AlertHisEven
 	tx := r.db.WithContext(ctx).Model(&model.AlertHisEvent{})
 	if f.ProjectID > 0 {
 		tx = tx.Where("project_id = ?", f.ProjectID)
+	} else if len(f.ProjectIDs) > 0 {
+		tx = tx.Where("project_id IN ?", f.ProjectIDs)
 	}
 	if f.DatasourceID > 0 {
 		tx = tx.Where("datasource_id = ?", f.DatasourceID)
@@ -115,9 +127,9 @@ func (r *AlertCurHisRepository) hisListQuery(ctx context.Context, f AlertHisEven
 		tx = tx.Where("severity = ?", sev)
 	}
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
-		like := "%" + kw + "%"
+		like := likeContains(kw)
 		tx = tx.Where(
-			"alertname LIKE ? OR fingerprint LIKE ? OR summary LIKE ? OR cluster LIKE ?",
+			"alertname LIKE ? ESCAPE '!' OR fingerprint LIKE ? ESCAPE '!' OR summary LIKE ? ESCAPE '!' OR cluster LIKE ? ESCAPE '!'",
 			like, like, like, like,
 		)
 	}

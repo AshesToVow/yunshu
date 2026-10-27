@@ -88,6 +88,7 @@ export async function installHelmRelease(body: {
   chart_version?: string;
   values?: Record<string, unknown>;
   create_namespace?: boolean;
+  confirm?: boolean;
 }) {
   return getData<HelmReleaseItem>(http.post("/helm/releases/install", body));
 }
@@ -99,6 +100,7 @@ export async function upgradeHelmRelease(body: {
   chart_name?: string;
   chart_version?: string;
   values?: Record<string, unknown>;
+  confirm?: boolean;
 }) {
   return getData<HelmReleaseItem>(http.post("/helm/releases/upgrade", body));
 }
@@ -108,6 +110,7 @@ export async function rollbackHelmRelease(body: {
   namespace: string;
   release_name: string;
   revision: number;
+  confirm?: boolean;
 }) {
   return getData<HelmReleaseItem>(http.post("/helm/releases/rollback", body));
 }

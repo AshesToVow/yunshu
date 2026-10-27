@@ -12,9 +12,10 @@
 import { DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { Button, Form, Popconfirm, Space, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { stringifyPrettyJSON } from "../../../services/alert-mappers";
+import { extractApiErrorMessage } from "../../../services/http";
 import {
   createCloudExpiryRule,
   deleteCloudExpiryRule,
@@ -43,15 +44,24 @@ export function useAlertMonitorCloudExpiryState(params: {
   const [cloudExpiryProviderFilter, setCloudExpiryProviderFilter] = useState<string>("");
   const [cloudExpiryKeyword, setCloudExpiryKeyword] = useState<string>("");
 
+  const loadCloudExpirySeqRef = useRef(0);
+
   const loadCloudExpiryRules = useCallback(async (projectID?: number, provider?: string, keyword?: string) => {
-    const r = await listCloudExpiryRules({
-      project_id: projectID,
-      provider: String(provider || "").trim() || undefined,
-      keyword: String(keyword || "").trim() || undefined,
-      page: 1,
-      page_size: 200,
-    });
-    setCloudExpiryList(r.list ?? []);
+    const seq = ++loadCloudExpirySeqRef.current;
+    try {
+      const r = await listCloudExpiryRules({
+        project_id: projectID,
+        provider: String(provider || "").trim() || undefined,
+        keyword: String(keyword || "").trim() || undefined,
+        page: 1,
+        page_size: 200,
+      });
+      if (seq !== loadCloudExpirySeqRef.current) return;
+      setCloudExpiryList(r.list ?? []);
+    } catch (e: unknown) {
+      if (seq !== loadCloudExpirySeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载云资源到期规则失败"));
+    }
   }, []);
 
   function openCloudExpiryCreate() {

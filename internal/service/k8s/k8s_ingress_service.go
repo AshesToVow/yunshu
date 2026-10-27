@@ -177,28 +177,7 @@ func (s *K8sIngressService) Apply(ctx context.Context, req IngressApplyRequest) 
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	refs := extractIngressRefs(req.Manifest)
-	// Apply 本身以 manifest 内声明的 apiVersion 为准；此处仅为「就绪回读」解析集群实际版本。
-	ingGVK, gvkErr := s.resolveIngressGVK(k)
-	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 || gvkErr != nil {
-			return false
-		}
-		for _, r := range refs {
-			if strings.TrimSpace(r.Name) == "" {
-				continue
-			}
-			ns := strings.TrimSpace(r.Namespace)
-			if ns == "" {
-				ns = "default"
-			}
-			if _, e := s.dyn.GetByGVK(c, k, ingGVK, ns, r.Name); e != nil {
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
+	if err = s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.ingress", "api", err)
 	}
 	return nil
@@ -312,24 +291,7 @@ func (s *K8sIngressService) ApplyClass(ctx context.Context, req IngressClassAppl
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	refs := extractIngressClassRefs(req.Manifest)
-	// 同 Apply：仅用于就绪回读。
-	clsGVK, gvkErr := s.resolveIngressClassGVK(k)
-	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 || gvkErr != nil {
-			return false
-		}
-		for _, name := range refs {
-			if strings.TrimSpace(name) == "" {
-				continue
-			}
-			if _, e := s.dyn.GetByGVK(c, k, clsGVK, "", name); e != nil {
-				return false
-			}
-		}
-		return true
-	})
-	if err != nil {
+	if err = s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.ingress", "api", err)
 	}
 	return nil

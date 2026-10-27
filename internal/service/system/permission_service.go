@@ -9,6 +9,7 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 
@@ -99,6 +100,43 @@ func (s *PermissionService) Update(ctx context.Context, id uint, req PermissionU
 	}
 	response := NewPermissionItem(*permission)
 	return &response, nil
+}
+
+// UpdateByActor 仅内置超级管理员可改写 resource/action：变更会同步改写所有已授权角色的策略，
+// 普通权限管理员可借此把敏感接口挂到自己的角色下。K8s 范围校验开关同理。
+func (s *PermissionService) UpdateByActor(ctx context.Context, actor *auth.CurrentUser, id uint, req PermissionUpdateRequest) (*PermissionItem, error) {
+	if actor == nil {
+		return nil, constants.ErrUnauthorized
+	}
+	if !auth.IsSuperAdminRole(actor.RoleCodes) && (req.Resource != nil || req.Action != nil || req.K8sScopeEnabled != nil) {
+		current, err := s.permissionRepo.GetByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, constants.ErrPermissionNotFound
+			}
+			return nil, bizerrors.Pass(ctx, "permission", "UpdateByActor", err)
+		}
+		resourceChanged := req.Resource != nil && strings.TrimSpace(*req.Resource) != current.Resource
+		actionChanged := req.Action != nil && strings.TrimSpace(*req.Action) != current.Action
+		if resourceChanged || actionChanged {
+			return nil, constants.ErrForbiddenWithMsg("仅内置超级管理员可以修改权限资源与方法")
+		}
+		if req.K8sScopeEnabled != nil && *req.K8sScopeEnabled != current.K8sScopeEnabled {
+			return nil, constants.ErrForbiddenWithMsg("仅内置超级管理员可以调整 K8s 范围校验开关")
+		}
+	}
+	return s.Update(ctx, id, req)
+}
+
+// BatchSetK8sScopeByActor 批量开关 K8s 范围校验属于安全边界变更，仅内置超级管理员可执行。
+func (s *PermissionService) BatchSetK8sScopeByActor(ctx context.Context, actor *auth.CurrentUser, req PermissionBatchK8sScopeRequest) (*PermissionBatchK8sScopeResponse, error) {
+	if actor == nil {
+		return nil, constants.ErrUnauthorized
+	}
+	if !auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil, constants.ErrForbiddenWithMsg("仅内置超级管理员可以调整 K8s 范围校验开关")
+	}
+	return s.BatchSetK8sScope(ctx, req)
 }
 
 // Delete 删除相关的业务逻辑。

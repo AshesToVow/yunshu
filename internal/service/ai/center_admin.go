@@ -9,7 +9,7 @@ import (
 	"yunshu/internal/model"
 )
 
-func (s *Service) recordAudit(userID, sessionID uint, action, tool, risk string, ok bool, detail string) {
+func (s *Service) recordAudit(ctx context.Context, userID, sessionID uint, action, tool, risk string, ok bool, detail string) {
 	if s.repo == nil {
 		return
 	}
@@ -24,7 +24,7 @@ func (s *Service) recordAudit(userID, sessionID uint, action, tool, risk string,
 		DetailJSON: string(detailJSON),
 		CreatedAt:  time.Now(),
 	}
-	_ = s.repo.CreateAuditEvent(context.Background(), &ev)
+	_ = s.repo.CreateAuditEvent(ctx, &ev)
 }
 
 // --- Admin list helpers (MVP) ---

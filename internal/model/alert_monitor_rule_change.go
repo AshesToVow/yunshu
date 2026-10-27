@@ -8,6 +8,7 @@ import (
 
 const (
 	AlertRuleChangePending  = "pending"
+	AlertRuleChangeApplying = "applying"
 	AlertRuleChangeApproved = "approved"
 	AlertRuleChangeRejected = "rejected"
 )

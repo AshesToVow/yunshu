@@ -21,6 +21,12 @@ import (
 	"yunshu/internal/pkg/parseutil"
 )
 
+// maxAlertHTTPResponseBytes 单次回执读取上限，避免恶意/异常响应耗尽内存。
+const maxAlertHTTPResponseBytes = 1 << 20
+
+// alertDeliveryMaxAttempts 单通道投递尝试次数（含首次）：仅对网络错误/429/5xx 退避重试。
+const alertDeliveryMaxAttempts = 2
+
 func (s *AlertService) notifyGenericWebhook(ctx context.Context, channel *model.AlertChannel, source, title, severity, status string, payload map[string]any, settings map[string]any) (int, string, error) {
 	clamped := payload
 	if s.cfg.PlatformLimits.GenericMaxChars > 0 {
@@ -224,13 +230,51 @@ func (s *AlertService) executeAndLogHTTP(ctx context.Context, source, title, sev
 		}
 	}
 	timeout := maxInt(channel.TimeoutMS, s.cfg.DefaultTimeoutMS)
-	client := &http.Client{Timeout: time.Duration(timeout) * time.Millisecond}
-	resp, reqErr := client.Do(req)
+	client := &http.Client{
+		Timeout: time.Duration(timeout) * time.Millisecond,
+		CheckRedirect: func(next *http.Request, via []*http.Request) error {
+			if len(via) >= 3 {
+				return fmt.Errorf("webhook 重定向次数过多")
+			}
+			if err := assertSafeOutboundURL(next.URL.String()); err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+	var resp *http.Response
+	var reqErr error
+	for attempt := 1; attempt <= alertDeliveryMaxAttempts; attempt++ {
+		attemptReq := req
+		if attempt > 1 {
+			// 首次请求的 Body 已被消费：用原始字节重建，保证重试内容与签名一致。
+			attemptReq = req.Clone(ctx)
+			attemptReq.Body = io.NopCloser(bytes.NewReader(reqBytes))
+			attemptReq.ContentLength = int64(len(reqBytes))
+			attemptReq.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(reqBytes)), nil
+			}
+		}
+		resp, reqErr = client.Do(attemptReq)
+		if attempt >= alertDeliveryMaxAttempts || ctx.Err() != nil || !isRetryableAlertDelivery(resp, reqErr) {
+			break
+		}
+		if resp != nil && resp.Body != nil {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxAlertHTTPResponseBytes))
+			_ = resp.Body.Close()
+		}
+		slog.Default().With("component", "alert.delivery").Warn(
+			"alert delivery transient failure, retrying",
+			"channel_id", channel.ID, "channel", channel.Name, "attempt", attempt,
+			"status_code", alertDeliveryStatusCode(resp), "error", reqErr,
+		)
+		time.Sleep(500 * time.Millisecond)
+	}
 	code := 0
 	respBody := ""
 	if resp != nil {
 		code = resp.StatusCode
-		bs, _ := io.ReadAll(resp.Body)
+		bs, _ := io.ReadAll(io.LimitReader(resp.Body, maxAlertHTTPResponseBytes))
 		respBody = string(bs)
 		_ = resp.Body.Close()
 	}
@@ -300,6 +344,27 @@ func (s *AlertService) executeAndLogHTTP(ctx context.Context, source, title, sev
 		return code, respBody, bizerrors.InternalCtx(ctx, fmt.Errorf("%s", apiErr), "api: "+apiErr)
 	}
 	return code, respBody, nil
+}
+
+// isRetryableAlertDelivery 仅对网络错误、限流/超时与 5xx 重试；4xx（含签名/参数错误）重试无意义。
+func isRetryableAlertDelivery(resp *http.Response, err error) bool {
+	if err != nil {
+		return true
+	}
+	if resp == nil {
+		return false
+	}
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusRequestTimeout {
+		return true
+	}
+	return resp.StatusCode >= 500
+}
+
+func alertDeliveryStatusCode(resp *http.Response) int {
+	if resp == nil {
+		return 0
+	}
+	return resp.StatusCode
 }
 
 // payloadMetaValueMeaningful 判断入库 JSON 中某字段是否已有可用值（避免 webhook 体里占位空串阻断用 alertPayload 回填）。

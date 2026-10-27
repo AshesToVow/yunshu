@@ -12,10 +12,12 @@ import (
 	"log/slog"
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/outbound"
 
 	"gorm.io/gorm"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // getDirectConfigFromDict 从数据字典读取直连配置
@@ -223,6 +225,9 @@ func buildKubeconfigFromDirectConfig(config *DirectConfig) (string, error) {
 	if serverURL.Scheme == "" || serverURL.Host == "" {
 		return "", fmt.Errorf("无效的服务器地址: 需要完整 URL（如 https://10.0.0.1:6443）")
 	}
+	if err := outbound.ValidateClusterEndpointURL(serverRaw); err != nil {
+		return "", err
+	}
 
 	// 构建REST配置
 	restConfig := &rest.Config{
@@ -271,7 +276,10 @@ func buildKubeconfigFromDirectConfig(config *DirectConfig) (string, error) {
 	}
 
 	// 将REST配置转换为kubeconfig格式
-	kubeconfig := generateKubeconfigYAML(restConfig, serverURL.Hostname())
+	kubeconfig, err := generateKubeconfigYAML(restConfig, serverURL.Hostname())
+	if err != nil {
+		return "", fmt.Errorf("生成 kubeconfig 失败: %w", err)
+	}
 	return kubeconfig, nil
 }
 
@@ -317,55 +325,70 @@ func maskSecretEdge(s string, edge int) string {
 	return raw[:edge] + "..." + raw[len(raw)-edge:]
 }
 
-// generateKubeconfigYAML 生成kubeconfig YAML格式
-func generateKubeconfigYAML(config *rest.Config, clusterName string) string {
-	var caData, certData, keyData string
-	if len(config.CAData) > 0 {
-		caData = base64.StdEncoding.EncodeToString(config.CAData)
+// validateKubeconfigServerURLs 校验 kubeconfig 内所有 cluster.server，阻止把平台当作
+// 内网探测/云元数据访问代理（私网 API Server 仍允许）。
+func validateKubeconfigServerURLs(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fmt.Errorf("kubeconfig 为空")
 	}
-	if len(config.CertData) > 0 {
-		certData = base64.StdEncoding.EncodeToString(config.CertData)
+	cfg, err := clientcmd.Load([]byte(raw))
+	if err != nil {
+		return fmt.Errorf("kubeconfig 解析失败: %w", err)
 	}
-	if len(config.KeyData) > 0 {
-		keyData = base64.StdEncoding.EncodeToString(config.KeyData)
+	if len(cfg.Clusters) == 0 {
+		return fmt.Errorf("kubeconfig 未包含 clusters")
+	}
+	for name, cluster := range cfg.Clusters {
+		if cluster == nil || strings.TrimSpace(cluster.Server) == "" {
+			return fmt.Errorf("kubeconfig cluster %q 缺少 server", name)
+		}
+		if err := outbound.ValidateClusterEndpointURL(cluster.Server); err != nil {
+			return fmt.Errorf("kubeconfig cluster %q: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// generateKubeconfigYAML 生成 kubeconfig YAML：交给 client-go 序列化，
+// 避免服务地址/名称含特殊字符时手工拼接产生非法 YAML。
+func generateKubeconfigYAML(config *rest.Config, clusterName string) (string, error) {
+	name := strings.TrimSpace(clusterName)
+	if name == "" {
+		name = "cluster"
+	}
+	cluster := clientcmdapi.NewCluster()
+	cluster.Server = config.Host
+	if !config.TLSClientConfig.Insecure {
+		cluster.CertificateAuthorityData = config.CAData
+	}
+	cluster.InsecureSkipTLSVerify = config.TLSClientConfig.Insecure
+
+	user := clientcmdapi.NewAuthInfo()
+	switch {
+	case strings.TrimSpace(config.BearerToken) != "":
+		user.Token = config.BearerToken
+	case strings.TrimSpace(config.Username) != "":
+		user.Username = config.Username
+		user.Password = config.Password
+	case len(config.CertData) > 0:
+		user.ClientCertificateData = config.CertData
+		user.ClientKeyData = config.KeyData
 	}
 
-	// 构建YAML
-	yaml := fmt.Sprintf(`apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    server: %s
-`, config.Host)
+	userName := name + "-user"
+	contextName := name + "-context"
+	cfg := clientcmdapi.NewConfig()
+	cfg.APIVersion = "v1"
+	cfg.Kind = "Config"
+	cfg.Clusters[name] = cluster
+	cfg.AuthInfos[userName] = user
+	cfg.Contexts[contextName] = &clientcmdapi.Context{Cluster: name, AuthInfo: userName}
+	cfg.CurrentContext = contextName
 
-	if caData != "" && !config.TLSClientConfig.Insecure {
-		yaml += fmt.Sprintf("    certificate-authority-data: %s\n", caData)
+	raw, err := clientcmd.Write(*cfg)
+	if err != nil {
+		return "", err
 	}
-	if config.TLSClientConfig.Insecure {
-		yaml += "    insecure-skip-tls-verify: true\n"
-	}
-
-	yaml += fmt.Sprintf("  name: %s\n", clusterName)
-
-	// Contexts
-	yaml += fmt.Sprintf(`contexts:
-- context:
-    cluster: %s
-    user: %s-user
-  name: %s-context
-current-context: %s-context
-`, clusterName, clusterName, clusterName, clusterName)
-
-	// Users
-	yaml += fmt.Sprintf("users:\n- name: %s-user\n", clusterName)
-
-	if config.BearerToken != "" {
-		yaml += fmt.Sprintf("  user:\n    token: %s\n", config.BearerToken)
-	} else if config.Username != "" {
-		yaml += fmt.Sprintf("  user:\n    username: %s\n    password: %s\n", config.Username, config.Password)
-	} else if certData != "" {
-		yaml += fmt.Sprintf("  user:\n    client-certificate-data: %s\n    client-key-data: %s\n", certData, keyData)
-	}
-
-	return yaml
+	return string(raw), nil
 }

@@ -94,6 +94,8 @@ export type NodeDrainResult = {
   skipped: number;
   failed: number;
   pending: number;
+  remaining: number;
+  completed_pods: number;
   pods: NodeDrainPodItem[];
   message: string;
   completed_at?: string;
@@ -104,6 +106,7 @@ export type NodeDrainStatus = {
   unschedulable: boolean;
   remaining: number;
   daemonset_pods: number;
+  completed_pods: number;
   pods: NodeDrainPodItem[];
   drained: boolean;
   message: string;

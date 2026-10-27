@@ -26,22 +26,17 @@ func (s *AlertService) tickCloudExpiryRules(ctx context.Context) error {
 const cloudExpiryEvalLeaderKey = "alert:cloud-expiry:eval:leader"
 
 // acquireCloudExpiryLeader 尝试成为本轮定时评估的唯一执行者。无 Redis（单机）时恒为 true。
-// TTL 仅作为持锁副本崩溃时的兜底，正常路径由 release 在扫描结束后主动释放，不阻塞下一分钟的调度。
+// 租约在扫描期间自动续期，避免规则多/云 API 慢导致 TTL 过期后其它副本并行评估；
+// 正常路径由 release 主动释放，不阻塞下一分钟的调度。
 func (s *AlertService) acquireCloudExpiryLeader(ctx context.Context) (bool, func()) {
 	if s.redis == nil {
 		return true, func() {}
 	}
-	ttl := 5 * time.Minute
-	ok, err := s.redis.SetNX(ctx, cloudExpiryEvalLeaderKey, "1", ttl).Result()
-	if err != nil || !ok {
+	_, ok, release := s.acquireAlertLease(ctx, cloudExpiryEvalLeaderKey, 5*time.Minute)
+	if !ok {
 		return false, func() {}
 	}
-	return true, func() {
-		// 用独立 context 释放，避免调度 ctx 已取消时无法删除锁（否则要等 TTL 才过期）。
-		relCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		_ = s.redis.Del(relCtx, cloudExpiryEvalLeaderKey).Err()
-	}
+	return true, release
 }
 
 func (s *AlertService) tickCloudExpiryRulesWithMode(ctx context.Context, force bool) error {
@@ -219,20 +214,98 @@ func (s *AlertService) evaluateOneCloudExpiryRule(ctx context.Context, rule *mod
 				DaysLeft:     daysLeft,
 				ProjectID:    rule.ProjectID,
 			}
-			s.emitCloudExpiryAlert(ctx, fp, firing, labels, annotations, now, cloud)
+			s.emitCloudExpiryAlert(ctx, fp, firing, labels, annotations, now, cloud, manualEval)
 		}
 	}
 	alertLog().Info("Finished cloud expiry rule evaluation", "rule_id", rule.ID, "instances_checked", instScanned)
 }
 
-func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firing bool, labels, annotations map[string]string, now time.Time, cloud *CloudExpiryExtension) {
+func cloudExpiryActiveKey(fp string) string {
+	return "alert:cloud-expiry:active:" + fp
+}
+
+func cloudExpiryEmitThrottleKey(fp string) string {
+	return "alert:cloud-expiry:emit:" + fp
+}
+
+// cloudExpiryFiringActive 判断实例是否已处于 firing。优先读 Redis，保证评估副本切换后仍能补发 resolved。
+func (s *AlertService) cloudExpiryFiringActive(ctx context.Context, fp string) bool {
+	if s.redis != nil {
+		v, err := s.redis.Get(ctx, cloudExpiryActiveKey(fp)).Result()
+		if err == nil {
+			return v == "1"
+		}
+	}
 	s.monitorEvalMu.Lock()
-	active := s.cloudExpiryState[fp]
-	if firing {
-		// 不在此处短路「已 firing」：否则首次入站若未匹配订阅/通道失败，会永久不再重试。
-		// 持续 firing 时的外发频率由 ingest 层对 cloud_expiry + SkipGroupTiming 叠加 repeat_interval 控制。
+	defer s.monitorEvalMu.Unlock()
+	return s.cloudExpiryState[fp]
+}
+
+func (s *AlertService) setCloudExpiryFiringActive(ctx context.Context, fp string, active bool) {
+	s.monitorEvalMu.Lock()
+	if active {
 		s.cloudExpiryState[fp] = true
-		s.monitorEvalMu.Unlock()
+	} else {
+		delete(s.cloudExpiryState, fp)
+	}
+	s.monitorEvalMu.Unlock()
+	if s.redis == nil {
+		return
+	}
+	if active {
+		_ = s.redis.Set(ctx, cloudExpiryActiveKey(fp), "1", 30*24*time.Hour).Err()
+		return
+	}
+	_ = s.redis.Del(ctx, cloudExpiryActiveKey(fp)).Err()
+}
+
+// reserveCloudExpiryEmit 控制同一实例持续 firing 时的重复外发频率。
+// 云到期告警 SkipGroupTiming=true 会绕过分组 repeat_interval，若不在此处节流，每个评估周期都会重复推送；
+// respectThrottle=false 表示首次触发/手动评估，直接外发并重置节流窗口。
+func (s *AlertService) reserveCloudExpiryEmit(ctx context.Context, fp string, now time.Time, respectThrottle bool) bool {
+	interval := time.Duration(maxInt(1, s.cfg.RepeatIntervalSeconds)) * time.Second
+	if s.redis != nil {
+		key := cloudExpiryEmitThrottleKey(fp)
+		if respectThrottle {
+			return s.redis.SetNX(ctx, key, "1", interval).Val()
+		}
+		_ = s.redis.Set(ctx, key, "1", interval).Err()
+		return true
+	}
+	s.monitorEvalMu.Lock()
+	defer s.monitorEvalMu.Unlock()
+	if s.cloudExpiryLastEmit == nil {
+		s.cloudExpiryLastEmit = make(map[string]time.Time)
+	}
+	if last, ok := s.cloudExpiryLastEmit[fp]; respectThrottle && ok && now.Sub(last) < interval {
+		return false
+	}
+	s.cloudExpiryLastEmit[fp] = now
+	return true
+}
+
+func (s *AlertService) clearCloudExpiryEmitState(ctx context.Context, fp string) {
+	s.monitorEvalMu.Lock()
+	delete(s.cloudExpiryLastEmit, fp)
+	s.monitorEvalMu.Unlock()
+	if s.redis != nil {
+		_ = s.redis.Del(ctx, cloudExpiryEmitThrottleKey(fp)).Err()
+	}
+}
+
+func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firing bool, labels, annotations map[string]string, now time.Time, cloud *CloudExpiryExtension, force bool) {
+	active := s.cloudExpiryFiringActive(ctx, fp)
+	if firing {
+		s.setCloudExpiryFiringActive(ctx, fp, true)
+		if active && !force {
+			if !s.reserveCloudExpiryEmit(ctx, fp, now, true) {
+				alertLog().Info("Suppressed repeated cloud expiry firing alert",
+					"fingerprint", fp, "reason", "repeat_interval")
+				return
+			}
+		} else {
+			s.reserveCloudExpiryEmit(ctx, fp, now, false)
+		}
 		item := NewCanonicalAlert(
 			IngressSourceCloudExpiry,
 			"cloud-expiry",
@@ -255,11 +328,10 @@ func (s *AlertService) emitCloudExpiryAlert(ctx context.Context, fp string, firi
 		return
 	}
 	if !active {
-		s.monitorEvalMu.Unlock()
 		return
 	}
-	delete(s.cloudExpiryState, fp)
-	s.monitorEvalMu.Unlock()
+	s.setCloudExpiryFiringActive(ctx, fp, false)
+	s.clearCloudExpiryEmitState(ctx, fp)
 	item := NewCanonicalAlert(
 		IngressSourceCloudExpiry,
 		"cloud-expiry",

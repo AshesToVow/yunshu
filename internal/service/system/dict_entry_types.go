@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"yunshu/internal/interfaces"
+	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 )
 
@@ -66,9 +67,19 @@ type DictEntryOption struct {
 	Sensitive bool   `json:"sensitive"`
 }
 
+// DictEntryListItem 管理页列表项：敏感类型的 value 仅返回脱敏预览，避免列表/审计链路泄漏明文。
+type DictEntryListItem struct {
+	model.DictEntry
+	Sensitive bool `json:"sensitive"`
+	// Builtin 标记内置种子条目：类型/标签不可改、不可删除，仅允许调整值/状态/备注。
+	Builtin bool `json:"builtin"`
+}
+
 type DictEntryService struct {
 	repo     interfaces.DictEntryRepository
 	initOnce sync.Once
+	// writeMu 串行化字典写操作，避免“先查后插”在并发请求下产生重复条目。
+	writeMu sync.Mutex
 }
 
 const (

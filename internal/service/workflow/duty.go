@@ -21,12 +21,19 @@ func (s *Service) resolveDutyAssignee(ctx context.Context, st model.WorkflowStag
 		return nil, err
 	}
 	for _, b := range blocks {
-		for _, id := range parseUintSliceJSON(b.UserIDsJSON) {
+		userIDs, err := parseUintSliceJSON(b.UserIDsJSON)
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range userIDs {
 			if id > 0 {
 				return &id, nil
 			}
 		}
-		deptRoots := parseUintSliceJSON(b.DepartmentIDsJSON)
+		deptRoots, err := parseUintSliceJSON(b.DepartmentIDsJSON)
+		if err != nil {
+			return nil, err
+		}
 		if len(deptRoots) > 0 && s.userRepo != nil {
 			ids, err := s.userRepo.ListActiveIDsByDepartmentSubtree(ctx, deptRoots)
 			if err != nil {
@@ -41,14 +48,14 @@ func (s *Service) resolveDutyAssignee(ctx context.Context, st model.WorkflowStag
 	return nil, nil
 }
 
-func parseUintSliceJSON(raw string) []uint {
+func parseUintSliceJSON(raw string) ([]uint, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "[]" {
-		return nil
+		return nil, nil
 	}
 	var ids []uint
 	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
-		return nil
+		return nil, err
 	}
-	return ids
+	return ids, nil
 }

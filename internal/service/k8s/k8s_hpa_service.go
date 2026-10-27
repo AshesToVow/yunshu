@@ -6,13 +6,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/k8sutil"
-	bizerrors "yunshu/internal/pkg/errors"
 
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
+	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/k8sutil"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/yaml"
 
@@ -72,12 +72,11 @@ func (s *K8sHPAService) List(ctx context.Context, q HPAListQuery) ([]HPAItem, er
 	}
 	kw := strings.ToLower(strings.TrimSpace(q.Keyword))
 	out := make([]HPAItem, 0, len(listU))
-	for _, item := range listU {
-		var h autoscalingv2.HorizontalPodAutoscaler
-		if e := runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, &h); e != nil {
-			continue
-		}
-		if kw != "" && !strings.Contains(strings.ToLower(h.Name), kw) {
+	for i := range listU {
+		// 集群可能只提供 autoscaling/v1 或 v2beta*，统一按 unstructured 读取，避免转换到 v2 丢字段。
+		h := listU[i]
+		name := strings.ToLower(h.GetName())
+		if kw != "" && !strings.Contains(name, kw) {
 			continue
 		}
 		out = append(out, hpaToItem(&h))
@@ -102,14 +101,16 @@ func (s *K8sHPAService) Detail(ctx context.Context, q HPADetailQuery) (*HPADetai
 		}
 		return nil, bizerrors.Internalf(ctx, "k8s.hpa", "api", err, constants.ErrFmtd28ea35ac553)
 	}
-	var obj autoscalingv2.HorizontalPodAutoscaler
-	_ = runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, &obj)
-	copyObj := obj.DeepCopy()
-	// 回填集群实际版本，避免把 v2beta1/v1 的对象标成 autoscaling/v2 误导用户编辑。
-	copyObj.APIVersion = gvk.GroupVersion().String()
-	copyObj.Kind = gvk.Kind
-	copyObj.ManagedFields = nil
-	y, _ := yaml.Marshal(copyObj)
+	// 直接序列化集群返回的对象，保留 v1/v2beta* 各自的字段（如 targetCPUUtilizationPercentage），
+	// 避免经 v2 结构体转换后丢失字段、误导用户编辑。
+	obj := u.DeepCopy()
+	unstructured.RemoveNestedField(obj.Object, "metadata", "managedFields")
+	obj.SetAPIVersion(gvk.GroupVersion().String())
+	obj.SetKind(gvk.Kind)
+	y, err := yaml.Marshal(obj.Object)
+	if err != nil {
+		return nil, bizerrors.Internalf(ctx, "k8s.hpa", "marshal", err, constants.ErrFmtd28ea35ac553)
+	}
 	return &HPADetail{YAML: string(y)}, nil
 }
 
@@ -121,7 +122,7 @@ func (s *K8sHPAService) Apply(ctx context.Context, req HPAApplyRequest) error {
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, nil); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.hpa", "api", err)
 	}
 	return nil
@@ -145,74 +146,112 @@ func (s *K8sHPAService) Delete(ctx context.Context, req HPADeleteRequest) error 
 	return nil
 }
 
-func hpaToItem(h *autoscalingv2.HorizontalPodAutoscaler) HPAItem {
+func hpaToItem(h *unstructured.Unstructured) HPAItem {
 	min := "-"
-	if h.Spec.MinReplicas != nil {
-		min = strconv.Itoa(int(*h.Spec.MinReplicas))
+	if v, ok, _ := unstructured.NestedInt64(h.Object, "spec", "minReplicas"); ok {
+		min = strconv.FormatInt(v, 10)
 	}
-	max := strconv.Itoa(int(h.Spec.MaxReplicas))
+	max := "-"
+	if v, ok, _ := unstructured.NestedInt64(h.Object, "spec", "maxReplicas"); ok {
+		max = strconv.FormatInt(v, 10)
+	}
 	ref := ""
-	if h.Spec.ScaleTargetRef.Name != "" {
-		ref = strings.TrimSpace(h.Spec.ScaleTargetRef.Kind) + "/" + h.Spec.ScaleTargetRef.Name
+	refKind, _, _ := unstructured.NestedString(h.Object, "spec", "scaleTargetRef", "kind")
+	refName, _, _ := unstructured.NestedString(h.Object, "spec", "scaleTargetRef", "name")
+	if name := strings.TrimSpace(refName); name != "" {
+		ref = strings.TrimSpace(refKind) + "/" + name
 	}
-	metricsSummary := summarizeHPAMetrics(h.Spec.Metrics)
-	condText := summarizeHPAConditions(h.Status.Conditions)
+	created := h.GetCreationTimestamp().Time
 	return HPAItem{
-		Name:           h.Name,
-		Namespace:      h.Namespace,
+		Name:           h.GetName(),
+		Namespace:      h.GetNamespace(),
 		MinReplicas:    min,
 		MaxReplicas:    max,
 		ScaleTargetRef: ref,
-		MetricsSummary: metricsSummary,
-		ConditionsText: condText,
-		Labels:         h.Labels,
-		Age:            k8sutil.HumanAge(h.CreationTimestamp.Time),
-		CreationTime:   h.CreationTimestamp.Time.Format("2006-01-02 15:04:05"),
+		MetricsSummary: summarizeHPAMetrics(h.Object),
+		ConditionsText: summarizeHPAConditions(h.Object),
+		Labels:         h.GetLabels(),
+		Age:            k8sutil.HumanAge(created),
+		CreationTime:   created.Format("2006-01-02 15:04:05"),
 	}
 }
 
-func summarizeHPAMetrics(metrics []autoscalingv2.MetricSpec) string {
-	if len(metrics) == 0 {
+// summarizeHPAMetrics 兼容 autoscaling/v1（targetCPUUtilizationPercentage）与 v2*（metrics 列表）。
+func summarizeHPAMetrics(obj map[string]any) string {
+	metrics, ok, _ := unstructured.NestedSlice(obj, "spec", "metrics")
+	if !ok || len(metrics) == 0 {
+		if v, found, _ := unstructured.NestedInt64(obj, "spec", "targetCPUUtilizationPercentage"); found {
+			return "Resource/cpu(" + strconv.FormatInt(v, 10) + "%)"
+		}
 		return "-"
 	}
 	parts := make([]string, 0, len(metrics))
-	for _, m := range metrics {
-		switch m.Type {
-		case autoscalingv2.ResourceMetricSourceType:
-			if m.Resource != nil && m.Resource.Name != "" {
-				parts = append(parts, "Resource/"+string(m.Resource.Name))
-			}
-		case autoscalingv2.ContainerResourceMetricSourceType:
-			if m.ContainerResource != nil && m.ContainerResource.Name != "" {
-				parts = append(parts, "ContainerResource/"+string(m.ContainerResource.Name))
-			}
-		case autoscalingv2.PodsMetricSourceType:
-			if m.Pods != nil && m.Pods.Metric.Name != "" {
-				parts = append(parts, "Pods/"+m.Pods.Metric.Name)
-			}
-		case autoscalingv2.ObjectMetricSourceType:
-			if m.Object != nil && m.Object.Metric.Name != "" {
-				parts = append(parts, "Object/"+m.Object.Metric.Name)
-			}
-		case autoscalingv2.ExternalMetricSourceType:
-			if m.External != nil && m.External.Metric.Name != "" {
-				parts = append(parts, "External/"+m.External.Metric.Name)
-			}
-		default:
-			parts = append(parts, string(m.Type))
+	for _, raw := range metrics {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
 		}
+		mType, _ := m["type"].(string)
+		switch mType {
+		case "Resource":
+			parts = append(parts, metricNamePart("Resource", m, "resource"))
+		case "ContainerResource":
+			parts = append(parts, metricNamePart("ContainerResource", m, "containerResource"))
+		case "Pods":
+			parts = append(parts, metricNamePart("Pods", m, "pods"))
+		case "Object":
+			parts = append(parts, metricNamePart("Object", m, "object"))
+		case "External":
+			parts = append(parts, metricNamePart("External", m, "external"))
+		default:
+			if mType != "" {
+				parts = append(parts, mType)
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return "-"
 	}
 	return strings.Join(parts, ",")
 }
 
-func summarizeHPAConditions(conds []autoscalingv2.HorizontalPodAutoscalerCondition) string {
-	if len(conds) == 0 {
+func metricNamePart(prefix string, metric map[string]any, sourceKey string) string {
+	source, ok := metric[sourceKey].(map[string]any)
+	if !ok {
+		return prefix
+	}
+	name, _ := source["name"].(string) // resource / containerResource 直接带 name
+	if strings.TrimSpace(name) == "" {
+		if metricDef, ok := source["metric"].(map[string]any); ok {
+			name, _ = metricDef["name"].(string)
+		}
+	}
+	if strings.TrimSpace(name) == "" {
+		return prefix
+	}
+	return prefix + "/" + name
+}
+
+func summarizeHPAConditions(obj map[string]any) string {
+	conds, ok, _ := unstructured.NestedSlice(obj, "status", "conditions")
+	if !ok || len(conds) == 0 {
 		return "-"
 	}
 	parts := make([]string, 0, len(conds))
-	for _, c := range conds {
-		st := string(c.Status)
-		parts = append(parts, fmt.Sprintf("%s=%s", c.Type, st))
+	for _, raw := range conds {
+		c, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		typ, _ := c["type"].(string)
+		st, _ := c["status"].(string)
+		if typ == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s=%s", typ, st))
+	}
+	if len(parts) == 0 {
+		return "-"
 	}
 	return strings.Join(parts, "; ")
 }

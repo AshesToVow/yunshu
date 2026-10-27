@@ -16,7 +16,7 @@ import {
 } from "antd";
 import { Link } from "react-router-dom";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createInhibitionRule,
   deleteInhibitionRule,
@@ -91,9 +91,14 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
   const [keyword, setKeyword] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<AlertInhibitionRule | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const loadSeqRef = useRef(0);
   const [form] = Form.useForm<FormValues>();
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const res = await listInhibitionRules({
@@ -102,12 +107,14 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
         keyword: keyword || undefined,
         project_id: projectId && projectId > 0 ? projectId : undefined,
       });
+      if (seq !== loadSeqRef.current) return;
       setList(res.list || []);
       setTotal(res.total || 0);
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "操作失败"));
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载抑制规则失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [page, pageSize, keyword, projectId]);
 
@@ -139,11 +146,41 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
   };
 
   const submit = async () => {
-    const v = await form.validateFields();
+    if (submittingRef.current) return;
+    let v: FormValues;
+    try {
+      v = await form.validateFields();
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "抑制规则表单校验失败"));
+      return;
+    }
+    const jsonFields: Array<[keyof FormValues, string, "object" | "array"]> = [
+      ["source_match_labels_json", "源告警 labels 精确匹配", "object"],
+      ["source_match_regex_json", "源告警 labels 正则匹配", "object"],
+      ["target_match_labels_json", "目标告警 labels 精确匹配", "object"],
+      ["target_match_regex_json", "目标告警 labels 正则匹配", "object"],
+      ["equal_labels_json", "equal 标签", "array"],
+    ];
+    for (const [key, label, expected] of jsonFields) {
+      const text = String(v[key] ?? "").trim() || (expected === "array" ? "[]" : "{}");
+      try {
+        const parsed = JSON.parse(text);
+        if (expected === "array" ? !Array.isArray(parsed) : !parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          message.warning(`${label} 必须是 JSON ${expected === "array" ? "数组" : "对象"}`);
+          return;
+        }
+      } catch {
+        message.warning(`${label} 不是合法 JSON，请修正后再保存`);
+        return;
+      }
+    }
     const payload = formToPayload(v);
     if (projectId && projectId > 0) {
       payload.project_id = projectId;
     }
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
       if (editing) {
         await updateInhibitionRule(editing.id, payload);
@@ -156,7 +193,10 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
       await load();
       await refreshInhibitionCache().catch(() => undefined);
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "操作失败"));
+      message.error(extractApiErrorMessage(e, "保存抑制规则失败"));
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -215,9 +255,22 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)} />
           <Popconfirm
             title="确定删除该抑制规则？"
-            onConfirm={() => void deleteInhibitionRule(row.id).then(() => load())}
+            okButtonProps={{ loading: deletingId === row.id }}
+            onConfirm={async () => {
+              if (deletingId !== null) return;
+              setDeletingId(row.id);
+              try {
+                await deleteInhibitionRule(row.id);
+                message.success("已删除抑制规则");
+                await load();
+              } catch (e) {
+                message.error(extractApiErrorMessage(e, "删除抑制规则失败"));
+              } finally {
+                setDeletingId(null);
+              }
+            }}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+            <Button type="link" size="small" danger loading={deletingId === row.id} icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
@@ -261,26 +314,28 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
           </ul>
         }
       />
-      <Space wrap>
-        <Input.Search
-          allowClear
-          placeholder="搜索名称/描述"
-          style={{ width: 240 }}
-          onSearch={(v) => {
-            setKeyword(v);
-            setPage(1);
-          }}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          新建抑制规则
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-          刷新
-        </Button>
-        <Link to="/alert-monitor-platform/history?event_category=inhibition">
-          <Button>查看抑制留痕历史</Button>
-        </Link>
-      </Space>
+      <div className="toolbar">
+        <Space wrap>
+          <Input.Search
+            allowClear
+            placeholder="搜索名称/描述"
+            style={{ width: 240 }}
+            onSearch={(v) => {
+              setKeyword(v);
+              setPage(1);
+            }}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新建抑制规则
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+            刷新
+          </Button>
+          <Link to="/alert-monitor-platform/history?event_category=inhibition">
+            <Button>查看抑制留痕历史</Button>
+          </Link>
+        </Space>
+      </div>
       <Table
         rowKey="id"
         loading={loading}
@@ -302,12 +357,17 @@ export function AlertInhibitionPanel({ projectId }: AlertInhibitionPanelProps = 
         title={editing ? `编辑抑制规则 #${editing.id}` : "新建抑制规则"}
         width={560}
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          if (submitting) return;
+          setDrawerOpen(false);
+        }}
         destroyOnClose
         extra={
           <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => void submit()}>
+            <Button disabled={submitting} onClick={() => setDrawerOpen(false)}>
+              取消
+            </Button>
+            <Button type="primary" loading={submitting} disabled={submitting} onClick={() => void submit()}>
               保存
             </Button>
           </Space>

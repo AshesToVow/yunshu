@@ -1,4 +1,4 @@
-import { InputNumber, Modal, Select, Space, Typography } from "antd";
+import { Alert, InputNumber, Modal, Select, Space, Typography } from "antd";
 import { useEffect, useState } from "react";
 import type { K8sDeleteOptions } from "../../services/service-factory";
 import { pickK8sDeleteOpts } from "../../services/service-factory";
@@ -7,11 +7,20 @@ type K8sDeleteDialogProps = {
   open: boolean;
   resourceName: string;
   loading?: boolean;
+  /** 级联/不可恢复风险提示（Namespace、CRD 等集群级资源） */
+  warning?: string;
   onCancel: () => void;
   onConfirm: (opts?: K8sDeleteOptions) => void | Promise<void>;
 };
 
-export function K8sDeleteDialog({ open, resourceName, loading, onCancel, onConfirm }: K8sDeleteDialogProps) {
+export function K8sDeleteDialog({
+  open,
+  resourceName,
+  loading,
+  warning,
+  onCancel,
+  onConfirm,
+}: K8sDeleteDialogProps) {
   const [gracePeriod, setGracePeriod] = useState<number | undefined>();
   const [propagationPolicy, setPropagationPolicy] = useState<K8sDeleteOptions["propagation_policy"]>();
 
@@ -37,6 +46,7 @@ export function K8sDeleteDialog({ open, resourceName, loading, onCancel, onConfi
       }
     >
       <Space direction="vertical" style={{ width: "100%" }} size="middle">
+        {warning ? <Alert type="warning" showIcon message={warning} /> : null}
         <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
           可选配置 Kubernetes DeleteOptions。留空则使用集群默认删除行为。
         </Typography.Paragraph>

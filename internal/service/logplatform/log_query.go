@@ -4,10 +4,38 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	"yunshu/internal/config"
 	"yunshu/internal/pkg/constants"
 )
+
+// maxLogSearchRange 限制单次检索跨度，避免超大时间范围把 ES 拖入长时间扫描。
+const maxLogSearchRange = 31 * 24 * time.Hour
+
+// validateSearchTimeRange 校验检索时间范围：RFC3339、先后有序、跨度不超过 31 天。
+func validateSearchTimeRange(from, to string) error {
+	from = strings.TrimSpace(from)
+	to = strings.TrimSpace(to)
+	if from == "" || to == "" {
+		return nil
+	}
+	tf, err := time.Parse(time.RFC3339, from)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("时间范围 from 需为 RFC3339 格式")
+	}
+	tt, err := time.Parse(time.RFC3339, to)
+	if err != nil {
+		return constants.ErrBadRequestWithMsg("时间范围 to 需为 RFC3339 格式")
+	}
+	if tt.Before(tf) {
+		return constants.ErrBadRequestWithMsg("时间范围无效：to 早于 from")
+	}
+	if tt.Sub(tf) > maxLogSearchRange {
+		return constants.ErrBadRequestWithMsg("时间范围过大：单次查询跨度不超过 31 天，请缩小范围后重试")
+	}
+	return nil
+}
 
 type preparedSearch struct {
 	indices string
@@ -20,6 +48,9 @@ type preparedSearch struct {
 func (s *LogSearchService) prepareSearch(ctx context.Context, q LogSearchQuery) (*preparedSearch, error) {
 	if q.ProjectID == 0 {
 		return nil, constants.ErrProjectIDRequired
+	}
+	if err := validateSearchTimeRange(q.From, q.To); err != nil {
+		return nil, err
 	}
 	if s.es == nil {
 		return nil, constants.ErrBadRequestWithMsg("Elasticsearch 未配置")

@@ -267,8 +267,6 @@ func (s *K8sConfigService) Apply(ctx context.Context, req ConfigApplyRequest) er
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
 
-	cfgRefs := extractConfigRefs(req.Manifest)
-
 	// Kom SDK 的 apply 对 Secret 的 stringData 兼容性在部分场景可能不理想，
 	// 为了让用户直接粘贴 YAML 一定可用，这里把 stringData 转成 data（base64），再删除 stringData。
 	sanitized, err := sanitizeSecretStringDataForApply(req.Manifest)
@@ -276,13 +274,7 @@ func (s *K8sConfigService) Apply(ctx context.Context, req ConfigApplyRequest) er
 		return err
 	}
 
-	err = s.dyn.ApplyManifest(ctx, k, sanitized, func(c context.Context) bool {
-		if len(cfgRefs) == 0 {
-			return false
-		}
-		return configRefsAllExist(c, s.dyn, k, cfgRefs)
-	})
-	if err != nil {
+	if err = s.dyn.ApplyManifest(ctx, k, sanitized); err != nil {
 		return k8sFail(ctx, "k8s.config", "api", err)
 	}
 	return nil

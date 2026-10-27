@@ -27,7 +27,7 @@ func NewAnthropicClient(baseURL, apiKey, defaultModel string, timeoutSec int) *A
 		baseURL: NormalizeBaseURL(baseURL),
 		apiKey:  strings.TrimSpace(apiKey),
 		model:   strings.TrimSpace(defaultModel),
-		http:    &http.Client{Timeout: time.Duration(timeoutSec) * time.Second},
+		http:    &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: sharedHTTPTransport},
 	}
 }
 

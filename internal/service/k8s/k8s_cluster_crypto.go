@@ -2,7 +2,9 @@ package k8s
 
 import (
 	"crypto/cipher"
+	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	cryptox "yunshu/internal/pkg/crypto"
@@ -20,7 +22,7 @@ func sealClusterSecret(aead cipher.AEAD, plain string) (string, error) {
 	return cryptox.EncryptString(aead, plain)
 }
 
-// openClusterSecret 解密凭证；兼容历史明文（解密失败且内容像 kubeconfig/JSON 时原样返回）。
+// openClusterSecret 解密凭证；仅在确认是历史明文时原样返回，并提示重新保存以落库加密。
 func openClusterSecret(aead cipher.AEAD, stored string) (string, error) {
 	stored = strings.TrimSpace(stored)
 	if stored == "" {
@@ -28,6 +30,7 @@ func openClusterSecret(aead cipher.AEAD, stored string) (string, error) {
 	}
 	if aead == nil {
 		if looksLikePlainClusterSecret(stored) {
+			slog.Warn("集群凭证以明文存储（未配置 security.encryption_key）")
 			return stored, nil
 		}
 		return "", fmt.Errorf("未配置 security.encryption_key，无法解密集群凭证")
@@ -36,8 +39,9 @@ func openClusterSecret(aead cipher.AEAD, stored string) (string, error) {
 	if err == nil {
 		return pt, nil
 	}
-	// 存量明文：以 apiVersion / { 等启发式识别，避免误把损坏密文当明文用。
-	if looksLikePlainClusterSecret(stored) {
+	// 历史明文：以 apiVersion / { 等启发式识别，避免误把损坏密文当明文用。
+	if looksLikePlainClusterSecret(stored) && !looksLikeCiphertext(stored) {
+		slog.Warn("集群凭证为历史明文，已按明文读取；请重新编辑集群并保存以加密落库")
 		return stored, nil
 	}
 	return "", fmt.Errorf("集群凭证解密失败（可能 encryption_key 已变更），请重新编辑集群并保存 kubeconfig/token")
@@ -51,4 +55,14 @@ func looksLikePlainClusterSecret(s string) bool {
 		return true
 	}
 	return false
+}
+
+// looksLikeCiphertext 判断是否为 AES-GCM 密文形态（base64 且长度足够容纳 nonce+tag），
+// 用于在解密失败时区分「损坏密文」与「历史明文」，避免降级读取掩盖密钥变更。
+func looksLikeCiphertext(s string) bool {
+	if strings.ContainsAny(s, " \n\r\t:{}") {
+		return false
+	}
+	raw, err := base64.StdEncoding.DecodeString(s)
+	return err == nil && len(raw) >= 12+16
 }

@@ -3,10 +3,13 @@ package logplatform
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"yunshu/internal/pkg/constants"
+	"yunshu/internal/pkg/esclient"
 )
 
 // LogHistogramBucket 时间直方图桶。
@@ -84,21 +87,26 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 	out.Total = parseTotalHits(raw)
 	out.Histogram = parseDateHistogram(raw, "log_histogram")
 	out.LevelCounts = mergeTermsAggs(raw, "level_terms_0", "level_terms_1", "level_terms_2", "level_terms_3")
-	out.ServiceNameCounts = s.queryTermsFacet(ctx, prep, []string{
-		"service_name.keyword", "service_name", "fields.service_name.keyword", "fields.service_name",
-	}, 15)
-	out.HostCounts = s.queryTermsFacet(ctx, prep, []string{
-		"host.keyword", "host", "server_host.keyword", "server_host", "hostname.keyword", "hostname",
-	}, 15)
-	out.NamespaceCounts = s.queryTermsFacet(ctx, prep, []string{
-		"namespace.keyword", "namespace", "fields.namespace.keyword", "fields.namespace",
-	}, 15)
-	out.PodCounts = s.queryTermsFacet(ctx, prep, []string{
-		"podname.keyword", "podname", "pod.keyword", "pod", "fields.podname", "fields.pod",
-	}, 15)
-	out.ContainerCounts = s.queryTermsFacet(ctx, prep, []string{
-		"containername.keyword", "containername", "container.keyword", "container",
-	}, 15)
+	// 各维度聚合并发执行，缩短概览整体耗时；单维度失败不影响其它维度。
+	facets := []struct {
+		fields []string
+		dst    *map[string]int64
+	}{
+		{[]string{"service_name.keyword", "service_name", "fields.service_name.keyword", "fields.service_name"}, &out.ServiceNameCounts},
+		{[]string{"host.keyword", "host", "server_host.keyword", "server_host", "hostname.keyword", "hostname"}, &out.HostCounts},
+		{[]string{"namespace.keyword", "namespace", "fields.namespace.keyword", "fields.namespace"}, &out.NamespaceCounts},
+		{[]string{"podname.keyword", "podname", "pod.keyword", "pod", "fields.podname", "fields.pod"}, &out.PodCounts},
+		{[]string{"containername.keyword", "containername", "container.keyword", "container"}, &out.ContainerCounts},
+	}
+	var wg sync.WaitGroup
+	for _, f := range facets {
+		wg.Add(1)
+		go func(fields []string, dst *map[string]int64) {
+			defer wg.Done()
+			*dst = s.queryTermsFacet(ctx, cli, prep, fields, 15)
+		}(f.fields, f.dst)
+	}
+	wg.Wait()
 
 	// 采样 ERROR/WARN 日志提取签名（复用 SummarizeLogHits）；采样失败不影响概览主体。
 	sampleQ := q
@@ -108,9 +116,15 @@ func (s *LogSearchService) Overview(ctx context.Context, q LogSearchQuery) (*Log
 		sampleQ.Level = "ERROR"
 	}
 	sampleRes, err := s.Search(ctx, sampleQ)
+	if err != nil {
+		slog.Default().With("component", "logoverview").Debug("overview sample search failed", "error", err)
+	}
 	if err == nil && sampleRes != nil && sampleRes.Total == 0 && q.Level == "" {
 		sampleQ.Level = "WARN"
-		sampleRes, _ = s.Search(ctx, sampleQ)
+		sampleRes, err = s.Search(ctx, sampleQ)
+		if err != nil {
+			slog.Default().With("component", "logoverview").Debug("overview WARN sample search failed", "error", err)
+		}
 	}
 	if sampleRes != nil {
 		summary := SummarizeLogHits(sampleRes, 8)
@@ -292,12 +306,8 @@ func mergeTermsAggs(raw map[string]any, names ...string) map[string]int64 {
 	return out
 }
 
-func (s *LogSearchService) queryTermsFacet(ctx context.Context, prep *preparedSearch, fieldCandidates []string, size int) map[string]int64 {
-	if prep == nil || size <= 0 {
-		return map[string]int64{}
-	}
-	cli, _, err := s.es.Client(ctx)
-	if err != nil {
+func (s *LogSearchService) queryTermsFacet(ctx context.Context, cli *esclient.Client, prep *preparedSearch, fieldCandidates []string, size int) map[string]int64 {
+	if cli == nil || prep == nil || size <= 0 {
 		return map[string]int64{}
 	}
 	for _, field := range fieldCandidates {
@@ -319,6 +329,7 @@ func (s *LogSearchService) queryTermsFacet(ctx context.Context, prep *preparedSe
 		}
 		raw, err := cli.Search(ctx, prep.indices, body)
 		if err != nil {
+			slog.Default().With("component", "logoverview").Debug("terms facet query failed", "field", field, "error", err)
 			continue
 		}
 		if counts := parseTermsAggPreserveCase(raw, "facet"); len(counts) > 0 {

@@ -187,11 +187,15 @@ func normalizeK8sEventForwardRule(req K8sEventForwardRuleUpsertRequest) (*model.
 	if req.RuleReverse != nil {
 		reverse = *req.RuleReverse
 	}
+	webhookURL := strings.TrimSpace(req.WebhookURL)
+	if err := validateWebhookTarget(webhookURL); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("webhook_url 不可用：" + err.Error())
+	}
 	return &model.K8sEventForwardRule{
 		Name:           name,
 		Description:    strings.TrimSpace(req.Description),
 		ClusterIDs:     clusterIDs,
-		WebhookURL:     strings.TrimSpace(req.WebhookURL),
+		WebhookURL:     webhookURL,
 		Enabled:        enabled,
 		RuleNamespaces: ns,
 		RuleNames:      names,

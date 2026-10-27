@@ -33,12 +33,12 @@ const (
 )
 
 type AuthService struct {
-	userRepo       repositoryAuthReader
-	redis          *redis.Client
-	resolvePolicy  PasswordPolicyResolver
-	cfg            config.AuthConfig
-	mailer         mailer.Sender
-	appName        string
+	userRepo      repositoryAuthReader
+	redis         *redis.Client
+	resolvePolicy PasswordPolicyResolver
+	cfg           config.AuthConfig
+	mailer        mailer.Sender
+	appName       string
 }
 
 type repositoryAuthReader interface {
@@ -118,22 +118,42 @@ func (s *AuthService) SendEmailCode(ctx context.Context, req SendEmailCodeReques
 
 // SendEmailCodeWithIP behaves like SendEmailCode but also enforces a per-IP sending limit.
 func (s *AuthService) SendEmailCodeWithIP(ctx context.Context, req SendEmailCodeWithIPRequest) (*SendEmailCodeResponse, error) {
-	// enforce per-IP send limit (e.g., 20 sends per minute)
-	if s.redis != nil {
-		ipKey := store.EmailSendIPKey(req.ClientIP)
-		limit := int64(20)
-		if n, err := s.redis.Incr(ctx, ipKey).Result(); err == nil {
-			if n == 1 {
-				s.redis.Expire(ctx, ipKey, time.Minute)
-			}
-			if n > limit {
-				return nil, constants.ErrCaptchaIPRateLimited
-			}
-		}
+	if err := s.allowEmailSendIP(ctx, req.ClientIP); err != nil {
+		return nil, err
 	}
-
-	// Delegate to existing logic
 	return s.SendEmailCode(ctx, SendEmailCodeRequest{Email: req.Email, Scene: req.Scene})
+}
+
+// allowEmailSendIP 限制单个 IP 的邮件验证码发送频率，防止邮件轰炸与验证码枚举。
+func (s *AuthService) allowEmailSendIP(ctx context.Context, clientIP string) error {
+	if s.redis == nil {
+		return nil
+	}
+	ip := strings.TrimSpace(clientIP)
+	if ip == "" {
+		return nil
+	}
+	ipKey := store.EmailSendIPKey(ip)
+	const limit = int64(20)
+	n, err := s.redis.Incr(ctx, ipKey).Result()
+	if err != nil {
+		return nil
+	}
+	if n == 1 {
+		s.redis.Expire(ctx, ipKey, time.Minute)
+	}
+	if n > limit {
+		return constants.ErrCaptchaIPRateLimited
+	}
+	return nil
+}
+
+// SendLoginCodeByUsernameWithIP 在发送登录验证码前施加每 IP 频率限制。
+func (s *AuthService) SendLoginCodeByUsernameWithIP(ctx context.Context, req SendLoginCodeByUsernameRequest, clientIP string) (*SendEmailCodeResponse, error) {
+	if err := s.allowEmailSendIP(ctx, clientIP); err != nil {
+		return nil, err
+	}
+	return s.SendLoginCodeByUsername(ctx, req)
 }
 
 // SendLoginCodeByUsername 发送相关的业务逻辑。
@@ -177,24 +197,25 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 	}
 
 	// 密码校验前先检查是否处于失败锁定期，防止暴力破解。
-	if err = s.ensureLoginNotLocked(ctx, username); err != nil {
+	if err = s.ensureLoginNotLocked(ctx, user.ID); err != nil {
 		return nil, bizerrors.Reject(ctx, "auth", "Login", err, "reason", "locked", "username", username)
 	}
 
+	// 先校验图形验证码再比对密码：避免攻击者绕过验证码直接爆破密码。
+	if err = s.validatePasswordLoginCode(ctx, req.CaptchaKey, req.Code); err != nil {
+		s.invalidatePasswordLoginCaptcha(ctx, username, req.CaptchaKey)
+		return nil, bizerrors.Pass(ctx, "auth", "Login", err)
+	}
+
 	if err = password.Compare(user.Password, req.Password); err != nil {
-		s.recordLoginFailure(ctx, username)
+		s.recordLoginFailure(ctx, user.ID)
 		// 密码错误即作废验证码并解除刷新冷却，便于前端立刻换新图。
 		s.invalidatePasswordLoginCaptcha(ctx, username, req.CaptchaKey)
 		return nil, bizerrors.Reject(ctx, "auth", "Login", constants.ErrPasswordIncorrect, "reason", "bad_password", "username", username)
 	}
 
-	// Validate password login code
-	if err = s.validatePasswordLoginCode(ctx, req.CaptchaKey, req.Code); err != nil {
-		s.invalidatePasswordLoginCaptcha(ctx, username, req.CaptchaKey)
-		return nil, bizerrors.Pass(ctx, "auth", "Login", err)
-	}
 	s.clearPasswordLoginCode(ctx, req.CaptchaKey)
-	s.clearLoginFailures(ctx, username)
+	s.clearLoginFailures(ctx, user.ID)
 
 	return s.issueLoginResponse(ctx, user)
 }
@@ -213,10 +234,15 @@ func (s *AuthService) EmailLogin(ctx context.Context, req EmailLoginRequest) (*L
 	if user.Status != model.StatusEnabled {
 		return nil, constants.ErrAccountDisabled
 	}
+	if err = s.ensureLoginNotLocked(ctx, user.ID); err != nil {
+		return nil, bizerrors.Reject(ctx, "auth", "EmailLogin", err, "reason", "locked", "email", email)
+	}
 	if err = s.validateEmailCode(ctx, emailCodeSceneLogin, email, req.Code); err != nil {
+		s.recordLoginFailure(ctx, user.ID)
 		return nil, bizerrors.Pass(ctx, "auth", "EmailLogin", err)
 	}
 	s.clearEmailCode(ctx, emailCodeSceneLogin, email)
+	s.clearLoginFailures(ctx, user.ID)
 
 	return s.issueLoginResponse(ctx, user)
 }
@@ -406,11 +432,11 @@ func (s *AuthService) issueLoginResponse(ctx context.Context, user *model.User) 
 }
 
 type issuedSession struct {
-	AccessToken        string
-	RefreshToken       string
-	AccessExpiresAt    time.Time
-	RefreshExpiresAt   time.Time
-	AccessTokenID      string
+	AccessToken      string
+	RefreshToken     string
+	AccessExpiresAt  time.Time
+	RefreshExpiresAt time.Time
+	AccessTokenID    string
 }
 
 func (s *AuthService) issueSession(ctx context.Context, user *model.User, familyID string) (*issuedSession, error) {
@@ -786,13 +812,22 @@ func (s *AuthService) loginLockDuration() time.Duration {
 	return time.Duration(s.cfg.LoginLockSeconds) * time.Second
 }
 
+// loginLockSubject 以用户 ID 作为锁定维度，避免大小写/别名变体绕过失败计数。
+func loginLockSubject(userID uint) string {
+	if userID == 0 {
+		return ""
+	}
+	return "uid:" + strconv.FormatUint(uint64(userID), 10)
+}
+
 // ensureLoginNotLocked 在校验密码前检查该用户是否处于失败锁定期。
 // Redis 异常时 fail-closed（拒绝登录），避免拖垮 Redis 绕过暴力破解防护。
-func (s *AuthService) ensureLoginNotLocked(ctx context.Context, username string) error {
-	if s.redis == nil || s.loginLockThreshold() <= 0 || username == "" {
+func (s *AuthService) ensureLoginNotLocked(ctx context.Context, userID uint) error {
+	subject := loginLockSubject(userID)
+	if s.redis == nil || s.loginLockThreshold() <= 0 || subject == "" {
 		return nil
 	}
-	key := store.LoginFailLockKey(username)
+	key := store.LoginFailLockKey(subject)
 	exists, err := s.redis.Exists(ctx, key).Result()
 	if err != nil {
 		return constants.ErrBadRequestWithMsg("登录保护服务暂不可用，请稍后重试")
@@ -804,11 +839,12 @@ func (s *AuthService) ensureLoginNotLocked(ctx context.Context, username string)
 }
 
 // recordLoginFailure 累加连续失败次数，达阈值后写入锁定标记。
-func (s *AuthService) recordLoginFailure(ctx context.Context, username string) {
-	if s.redis == nil || s.loginLockThreshold() <= 0 || username == "" {
+func (s *AuthService) recordLoginFailure(ctx context.Context, userID uint) {
+	subject := loginLockSubject(userID)
+	if s.redis == nil || s.loginLockThreshold() <= 0 || subject == "" {
 		return
 	}
-	countKey := store.LoginFailCountKey(username)
+	countKey := store.LoginFailCountKey(subject)
 	n, err := s.redis.Incr(ctx, countKey).Result()
 	if err != nil {
 		return
@@ -818,16 +854,17 @@ func (s *AuthService) recordLoginFailure(ctx context.Context, username string) {
 		_ = s.redis.Expire(ctx, countKey, s.loginLockDuration()).Err()
 	}
 	if int(n) >= s.loginLockThreshold() {
-		_ = s.redis.Set(ctx, store.LoginFailLockKey(username), "1", s.loginLockDuration()).Err()
+		_ = s.redis.Set(ctx, store.LoginFailLockKey(subject), "1", s.loginLockDuration()).Err()
 	}
 }
 
 // clearLoginFailures 登录成功后清除失败计数与锁定标记。
-func (s *AuthService) clearLoginFailures(ctx context.Context, username string) {
-	if s.redis == nil || username == "" {
+func (s *AuthService) clearLoginFailures(ctx context.Context, userID uint) {
+	subject := loginLockSubject(userID)
+	if s.redis == nil || subject == "" {
 		return
 	}
-	_ = s.redis.Del(ctx, store.LoginFailCountKey(username), store.LoginFailLockKey(username)).Err()
+	_ = s.redis.Del(ctx, store.LoginFailCountKey(subject), store.LoginFailLockKey(subject)).Err()
 }
 
 func (s *AuthService) buildVerificationEmail(scene, code string, ttl time.Duration) (string, string) {

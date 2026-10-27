@@ -26,8 +26,11 @@ func (s *K8sPodService) Exec(ctx context.Context, req PodExecRequest) (string, e
 	if err != nil {
 		return "", err
 	}
-	cmd := strings.Fields(strings.TrimSpace(req.Command))
-	if len(cmd) == 0 {
+	cmd, err := splitCommandLine(strings.TrimSpace(req.Command))
+	if err != nil {
+		return "", err
+	}
+	if len(cmd) == 0 || strings.TrimSpace(cmd[0]) == "" {
 		return "", constants.ErrBadRequestWithMsg(constants.ErrMsgeddb4f63e4c7)
 	}
 
@@ -37,6 +40,60 @@ func (s *K8sPodService) Exec(ctx context.Context, req PodExecRequest) (string, e
 		return "", bizerrors.Internalf(ctx, "k8s.pod", "api", err, constants.ErrFmt1493bc1ea07a)
 	}
 	return string(out), nil
+}
+
+// splitCommandLine 按 shell 风格拆分命令：空白分隔，支持单/双引号与反斜杠转义，
+// 使 `sh -c "echo hello"` 得到 ["sh","-c","echo hello"]。不做变量展开与管道求值。
+func splitCommandLine(s string) ([]string, error) {
+	var (
+		args    []string
+		cur     strings.Builder
+		inToken bool
+		quote   rune
+		escaped bool
+	)
+	flush := func() {
+		if inToken {
+			args = append(args, cur.String())
+			cur.Reset()
+			inToken = false
+		}
+	}
+	for _, r := range s {
+		if escaped {
+			cur.WriteRune(r)
+			escaped = false
+			continue
+		}
+		switch {
+		case r == '\\' && quote != '\'':
+			escaped = true
+			inToken = true
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			} else {
+				cur.WriteRune(r)
+			}
+			inToken = true
+		case r == '\'' || r == '"':
+			quote = r
+			inToken = true
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			flush()
+		default:
+			cur.WriteRune(r)
+			inToken = true
+		}
+	}
+	if escaped {
+		return nil, constants.ErrBadRequestWithMsg("命令格式错误：转义符后缺少字符")
+	}
+	if quote != 0 {
+		return nil, constants.ErrBadRequestWithMsg("命令格式错误：引号未闭合")
+	}
+	flush()
+	return args, nil
 }
 
 func (s *K8sPodService) resolveExecContainer(ctx context.Context, k *kom.Kubectl, namespace, podName, container string) (string, error) {

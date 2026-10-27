@@ -126,7 +126,7 @@ type UserCreateRequest struct {
 	Password     string `json:"password" binding:"required,min=6,max=128"`
 	Nickname     string `json:"nickname" binding:"required,max=128"`
 	Phone        string `json:"phone" binding:"omitempty,max=20"`
-	Status       int    `json:"status"`
+	Status       int    `json:"status" binding:"oneof=0 1"`
 	DepartmentID *uint  `json:"department_id"`
 	RoleIDs      []uint `json:"role_ids"`
 }
@@ -136,7 +136,7 @@ type UserUpdateRequest struct {
 	Nickname     *string `json:"nickname" binding:"omitempty,max=128"`
 	Phone        *string `json:"phone" binding:"omitempty,max=20"`
 	Password     *string `json:"password" binding:"omitempty,min=6,max=128"`
-	Status       *int    `json:"status"`
+	Status       *int    `json:"status" binding:"omitempty,oneof=0 1"`
 	DepartmentID *uint   `json:"department_id"`
 }
 
@@ -263,20 +263,20 @@ type UserGroupBrief struct {
 }
 
 type UserDetailResponse struct {
-	ID                   uint             `json:"id"`
-	Username             string           `json:"username"`
-	Email                string           `json:"email"`
-	Phone                string           `json:"phone"`
-	Nickname             string           `json:"nickname"`
-	Status               int              `json:"status"`
-	DepartmentID         *uint            `json:"department_id,omitempty"`
-	DepartmentName       string           `json:"department_name"`
-	Roles                []RoleItem       `json:"roles"`
-	Groups               []UserGroupBrief `json:"groups"`
-	MustChangePassword   bool             `json:"must_change_password"`
-	PasswordChangedAt    *time.Time       `json:"password_changed_at,omitempty"`
-	CreatedAt            time.Time        `json:"created_at"`
-	UpdatedAt            time.Time        `json:"updated_at"`
+	ID                 uint             `json:"id"`
+	Username           string           `json:"username"`
+	Email              string           `json:"email"`
+	Phone              string           `json:"phone"`
+	Nickname           string           `json:"nickname"`
+	Status             int              `json:"status"`
+	DepartmentID       *uint            `json:"department_id,omitempty"`
+	DepartmentName     string           `json:"department_name"`
+	Roles              []RoleItem       `json:"roles"`
+	Groups             []UserGroupBrief `json:"groups"`
+	MustChangePassword bool             `json:"must_change_password"`
+	PasswordChangedAt  *time.Time       `json:"password_changed_at,omitempty"`
+	CreatedAt          time.Time        `json:"created_at"`
+	UpdatedAt          time.Time        `json:"updated_at"`
 }
 
 type PolicyItemResponse struct {
@@ -329,13 +329,13 @@ func NewUserDetailResponse(user model.User) UserDetailResponse {
 	}
 
 	return UserDetailResponse{
-		ID:                 user.ID,
-		Username:           user.Username,
-		Email:              email,
-		Phone:              strings.TrimSpace(user.Phone),
-		Nickname:           user.Nickname,
-		Status:             user.Status,
-		DepartmentID:       user.DepartmentID,
+		ID:           user.ID,
+		Username:     user.Username,
+		Email:        email,
+		Phone:        strings.TrimSpace(user.Phone),
+		Nickname:     user.Nickname,
+		Status:       user.Status,
+		DepartmentID: user.DepartmentID,
 		DepartmentName: func() string {
 			if user.Department != nil {
 				return user.Department.Name

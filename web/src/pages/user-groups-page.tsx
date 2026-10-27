@@ -14,7 +14,7 @@ import {
   Typography,
   message,
 } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatusTag } from "../components/status-tag";
 import {
   assignUserGroupMembers,
@@ -64,6 +64,10 @@ export function UserGroupsPage() {
   const [projectOptions, setProjectOptions] = useState<{ id: number; name: string }[]>([]);
   const [membersOpen, setMembersOpen] = useState(false);
   const [memberGroup, setMemberGroup] = useState<UserGroupItem | null>(null);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const membersReqSeq = useRef(0);
   const [users, setUsers] = useState<UserItem[]>([]);
   const [checkedUserIds, setCheckedUserIds] = useState<number[]>([]);
   useEffect(() => {
@@ -176,28 +180,46 @@ export function UserGroupsPage() {
     }
   }
 
+  async function loadMembers(g: UserGroupItem) {
+    const seq = ++membersReqSeq.current;
+    setMembersLoading(true);
+    setMembersLoaded(false);
+    setMembersError(null);
+    setCheckedUserIds([]);
+    try {
+      const d = await getUserGroup(g.id);
+      if (seq !== membersReqSeq.current) return;
+      setCheckedUserIds(d.members.map((m) => m.user_id));
+      setMembersLoaded(true);
+    } catch {
+      if (seq !== membersReqSeq.current) return;
+      setMembersError("加载组成员失败，保存已禁用，请重试");
+    } finally {
+      if (seq === membersReqSeq.current) setMembersLoading(false);
+    }
+  }
+
   function openMembers(g: UserGroupItem) {
     setMemberGroup(g);
-    setCheckedUserIds([]);
     setMembersOpen(true);
-    void (async () => {
-      try {
-        const d = await getUserGroup(g.id);
-        setCheckedUserIds(d.members.map((m) => m.user_id));
-      } catch {
-        setCheckedUserIds([]);
-      }
-    })();
+    void loadMembers(g);
+  }
+
+  function closeMembers() {
+    membersReqSeq.current += 1;
+    setMembersOpen(false);
+    setMemberGroup(null);
+    setMembersLoaded(false);
+    setMembersError(null);
   }
 
   async function saveMembers() {
-    if (!memberGroup) return;
+    if (!memberGroup || !membersLoaded) return;
     setSubmitting(true);
     try {
       await assignUserGroupMembers(memberGroup.id, { user_ids: checkedUserIds });
       message.success("成员已更新");
-      setMembersOpen(false);
-      setMemberGroup(null);
+      closeMembers();
       void load();
     } finally {
       setSubmitting(false);
@@ -250,6 +272,7 @@ export function UserGroupsPage() {
           rowKey="id"
           size="small"
           dataSource={list}
+          scroll={{ x: 900 }}
           pagination={{
             current: query.page,
             pageSize: query.page_size,
@@ -423,21 +446,33 @@ export function UserGroupsPage() {
         title={memberGroup ? `成员：${memberGroup.name}` : "成员"}
         width={560}
         open={membersOpen}
-        onClose={() => {
-          setMembersOpen(false);
-          setMemberGroup(null);
-        }}
+        onClose={closeMembers}
         destroyOnClose
         extra={
           <Space>
-            <Button onClick={() => setMembersOpen(false)}>取消</Button>
-            <Button type="primary" loading={submitting} onClick={() => void saveMembers()}>
+            <Button onClick={closeMembers}>取消</Button>
+            <Button
+              type="primary"
+              loading={submitting}
+              disabled={!membersLoaded || membersLoading}
+              onClick={() => void saveMembers()}
+            >
               保存
             </Button>
           </Space>
         }
       >
         <Typography.Paragraph type="secondary">选择属于该组的用户（全量覆盖）。</Typography.Paragraph>
+        {membersError ? (
+          <Typography.Paragraph type="danger">
+            {membersError}{" "}
+            {memberGroup ? (
+              <Button type="link" size="small" onClick={() => void loadMembers(memberGroup)}>
+                重试
+              </Button>
+            ) : null}
+          </Typography.Paragraph>
+        ) : null}
         {memberGroup?.scope_project_id ? (
           <Typography.Paragraph type="warning">
             该组已绑定项目作用域（ID {memberGroup.scope_project_id}），成员须均为该项目成员，否则保存会失败。
@@ -449,7 +484,9 @@ export function UserGroupsPage() {
           showSearch
           optionFilterProp="label"
           style={{ width: "100%" }}
-          placeholder="搜索并选择用户"
+          placeholder={membersLoading ? "正在加载组成员…" : "搜索并选择用户"}
+          loading={membersLoading}
+          disabled={!membersLoaded}
           value={checkedUserIds}
           onChange={(v) => setCheckedUserIds(v as number[])}
           options={users.map((u) => ({

@@ -163,12 +163,16 @@ func cloneInterfaceMap(in map[string]any) map[string]any {
 	return out
 }
 
+// groupSendLockTTL 覆盖一轮多渠道投递（含一次退避重试）的最长耗时；仅作为崩溃兜底。
+const groupSendLockTTL = 2 * time.Minute
+
 func (s *AlertService) tryLockGroupSend(ctx context.Context, groupKey string) bool {
 	gk := strings.TrimSpace(groupKey)
 	if s == nil || s.redis == nil || gk == "" {
 		return true
 	}
-	ok, err := s.redis.SetNX(ctx, groupSendLockKey(gk), "1", 30*time.Second).Result()
+	// 锁值用副本唯一 ID：过期后不会被其他副本的 Unlock 误删（见 unlockGroupSend）。
+	ok, err := s.redis.SetNX(ctx, groupSendLockKey(gk), s.webhookWorkerID, groupSendLockTTL).Result()
 	return err == nil && ok
 }
 
@@ -180,7 +184,8 @@ func (s *AlertService) unlockGroupSend(ctx context.Context, groupKey string) {
 	if gk == "" {
 		return
 	}
-	if err := s.redis.Del(ctx, groupSendLockKey(gk)).Err(); err != nil {
+	// 仅持有者可释放：若锁已过期并被其它副本抢占，这里不能删掉对方的锁。
+	if err := luaReleaseAlertWebhookLease.Run(ctx, s.redis, []string{groupSendLockKey(gk)}, s.webhookWorkerID).Err(); err != nil {
 		alertLog().Warn("unlock group send failed", "error", err, "group_key", gk)
 	}
 }

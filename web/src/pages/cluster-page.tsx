@@ -437,25 +437,38 @@ export function ClusterPage() {
 
   async function handleToggleStatus(record: ClusterItem) {
     const nextStatus: 0 | 1 = record.status === 1 ? 0 : 1;
-    setStatusUpdatingID(record.id);
-    try {
-      await setClusterStatus(record.id, nextStatus);
-      message.success(nextStatus === 1 ? "已启用集群" : "已停用集群");
-      await loadClusters();
-      if (nextStatus === 0) {
-        setStatusByID((prev) => {
-          if (!prev[record.id]) return prev;
-          const next = { ...prev };
-          delete next[record.id];
-          return next;
-        });
+    const run = async () => {
+      setStatusUpdatingID(record.id);
+      try {
+        await setClusterStatus(record.id, nextStatus);
+        message.success(nextStatus === 1 ? "已启用集群" : "已停用集群");
+        await loadClusters();
+        if (nextStatus === 0) {
+          setStatusByID((prev) => {
+            if (!prev[record.id]) return prev;
+            const next = { ...prev };
+            delete next[record.id];
+            return next;
+          });
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "操作失败";
+        message.error(msg || "操作失败");
+      } finally {
+        setStatusUpdatingID(null);
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : "操作失败";
-      message.error(msg || "操作失败");
-    } finally {
-      setStatusUpdatingID(null);
+    };
+    if (nextStatus === 0) {
+      Modal.confirm({
+        title: `确认停用集群 ${record.name}？`,
+        content: "停用后该集群的 K8s 管理、监控与授权将停止服务，请确认业务影响。",
+        okText: "停用",
+        okButtonProps: { danger: true },
+        onOk: run,
+      });
+      return;
     }
+    await run();
   }
 
   async function openAuthDrawer(record: ClusterItem) {

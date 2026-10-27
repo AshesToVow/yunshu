@@ -2,14 +2,15 @@ package dbmgmt
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
 	"yunshu/internal/config"
 	"yunshu/internal/interfaces"
-	"yunshu/internal/pkg/dbconn"
 	cryptox "yunshu/internal/pkg/crypto"
+	"yunshu/internal/pkg/dbconn"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/pkg/pagination"
 	workflowsvc "yunshu/internal/service/workflow"
@@ -69,7 +70,7 @@ func NewService(
 		resolveCfg = func(context.Context) config.DbmgmtConfig { return cfg }
 	}
 	if workflow == nil {
-		workflow = workflowsvc.NewService(nil, userGroupRepo, dutyRepo, userRepo)
+		workflow = workflowsvc.NewService(nil, userGroupRepo, dutyRepo, userRepo, memberRepo)
 	}
 	return &Service{
 		repo:          repo,
@@ -147,7 +148,22 @@ func (s *Service) RunBackgroundWorkers(ctx context.Context) {
 			s.runPeriodicPing(ctx)
 		case <-slaTicker.C:
 			s.syncApprovalReminders(ctx)
+			s.reconcileStaleExecutions(ctx)
 		}
+	}
+}
+
+// reconcileStaleExecutions 回收进程崩溃/请求中断后卡在 executing 的工单：
+// 标记为结果未知而不是失败，避免用户直接重试导致重复执行。
+func (s *Service) reconcileStaleExecutions(ctx context.Context) {
+	// 两小时远大于单条语句的正常执行时间，超过仍停在 executing 视为失联。
+	n, err := s.repo.FailStaleExecutingSqlTickets(ctx, time.Now().Add(-2*time.Hour))
+	if err != nil {
+		slog.Default().With("component", "dbmgmt").Warn("reconcile stale executing tickets failed", "error", err)
+		return
+	}
+	if n > 0 {
+		slog.Default().With("component", "dbmgmt").Warn("stale executing tickets marked result_unknown", "count", n)
 	}
 }
 

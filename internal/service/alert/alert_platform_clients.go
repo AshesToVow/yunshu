@@ -5,6 +5,7 @@ import (
 	"fmt"
 	neturl "net/url"
 	"strings"
+	"sync"
 	bizerrors "yunshu/internal/pkg/errors"
 
 	"yunshu/internal/pkg/parseutil"
@@ -31,15 +32,47 @@ func (s *AlertService) getDingTalkAccessToken(ctx context.Context, appKey, appSe
 	})
 }
 
+// alertMobileResolveConcurrency 手机号→用户 ID 查询并发度，避免逐个串行 HTTP 拉长通知时延。
+const alertMobileResolveConcurrency = 4
+
 func (s *AlertService) resolveDingTalkUserIDsByMobiles(ctx context.Context, accessToken string, mobiles []string) ([]string, error) {
-	out := make([]string, 0, len(mobiles))
-	for _, m := range mobiles {
-		uid, err := s.getDingTalkUserIDByMobile(ctx, accessToken, m)
-		if err == nil && strings.TrimSpace(uid) != "" {
-			out = append(out, strings.TrimSpace(uid))
+	out := resolveUserIDsByMobiles(ctx, mobiles, func(ctx context.Context, mobile string) (string, error) {
+		return s.getDingTalkUserIDByMobile(ctx, accessToken, mobile)
+	})
+	return out, nil
+}
+
+// resolveUserIDsByMobiles 并发查询并按入参顺序汇总，单个号码失败仅跳过。
+func resolveUserIDsByMobiles(ctx context.Context, mobiles []string, lookup func(context.Context, string) (string, error)) []string {
+	if len(mobiles) == 0 {
+		return nil
+	}
+	results := make([]string, len(mobiles))
+	sem := make(chan struct{}, alertMobileResolveConcurrency)
+	var wg sync.WaitGroup
+	for i, m := range mobiles {
+		wg.Add(1)
+		go func(i int, mobile string) {
+			defer wg.Done()
+			select {
+			case sem <- struct{}{}:
+				defer func() { <-sem }()
+			case <-ctx.Done():
+				return
+			}
+			if uid, err := lookup(ctx, mobile); err == nil {
+				results[i] = strings.TrimSpace(uid)
+			}
+		}(i, m)
+	}
+	wg.Wait()
+	out := make([]string, 0, len(results))
+	for _, v := range results {
+		if v != "" {
+			out = append(out, v)
 		}
 	}
-	return parseutil.UniqueStrings(out), nil
+	return parseutil.UniqueStrings(out)
 }
 
 func (s *AlertService) getDingTalkUserIDByMobile(ctx context.Context, accessToken, mobile string) (string, error) {
@@ -71,14 +104,10 @@ func (s *AlertService) resolveWeComUserIDsByMobiles(ctx context.Context, setting
 	if err != nil || token == "" {
 		return nil, bizerrors.Pass(ctx, "alert.platform", "resolveWeComUserIDsByMobiles", err)
 	}
-	out := make([]string, 0, len(mobiles))
-	for _, m := range mobiles {
-		uid, e := s.getWeComUserIDByMobile(ctx, token, m)
-		if e == nil && strings.TrimSpace(uid) != "" {
-			out = append(out, strings.TrimSpace(uid))
-		}
-	}
-	return parseutil.UniqueStrings(out), nil
+	out := resolveUserIDsByMobiles(ctx, mobiles, func(ctx context.Context, mobile string) (string, error) {
+		return s.getWeComUserIDByMobile(ctx, token, mobile)
+	})
+	return out, nil
 }
 
 func (s *AlertService) getWeComAccessToken(ctx context.Context, corpID, corpSecret string) (string, error) {

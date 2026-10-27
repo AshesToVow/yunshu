@@ -25,6 +25,11 @@ func actorUsername(u *auth.CurrentUser) string {
 	return u.Username
 }
 
+// isSuperAdmin nil 安全：未登录/无 actor 一律非超管，避免解引用 panic。
+func isSuperAdmin(u *auth.CurrentUser) bool {
+	return u != nil && auth.IsSuperAdminRole(u.RoleCodes)
+}
+
 func principalRefs(u *auth.CurrentUser) []struct{ kind, ref string } {
 	if u == nil {
 		return nil

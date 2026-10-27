@@ -188,6 +188,9 @@ func (s *ClusterLogService) CreateRule(ctx context.Context, projectID uint, req 
 	if len(excludes) == 0 {
 		excludes = append([]string{}, defaultExcludeNamespaces...)
 	}
+	if err := validateClusterRuleTargets(req.MatchNamespaces, req.MatchWorkloads, excludes); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("采集目标不合法: " + err.Error())
+	}
 	remark := ""
 	if req.Remark != nil {
 		remark = strings.TrimSpace(*req.Remark)
@@ -229,6 +232,11 @@ func (s *ClusterLogService) UpdateRule(ctx context.Context, projectID, ruleID ui
 	}
 	if name := strings.TrimSpace(req.Name); name != "" {
 		row.Name = name
+	}
+	if req.MatchNamespaces != nil || req.MatchWorkloads != nil || req.ExcludeNamespaces != nil {
+		if err := validateClusterRuleTargets(req.MatchNamespaces, req.MatchWorkloads, req.ExcludeNamespaces); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("采集目标不合法: " + err.Error())
+		}
 	}
 	if req.MatchNamespaces != nil {
 		row.MatchNamespaces = encodeJSONStrings(req.MatchNamespaces)
@@ -366,13 +374,20 @@ func (s *ClusterLogService) SavePipelines(ctx context.Context, projectID uint, r
 		if yml == "" {
 			return nil, constants.ErrBadRequestWithMsg("pipelines_yml 不能为空")
 		}
-		if !strings.Contains(yml, "pipelines:") {
-			return nil, constants.ErrBadRequestWithMsg("pipelines_yml 须包含 pipelines: 根节点")
+		if err := validateLoggiePipelinesStructure(yml); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
+		}
+		esCfg, kafkaCfg := s.resolveSinkConfigs(ctx)
+		if err := validateLoggiePipelinesSinks(yml, esCfg, kafkaCfg); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
 		}
 		agent.PipelinesCustom = true
 		agent.PipelinesYAML = req.PipelinesYAML
 	}
 	if ns := strings.TrimSpace(req.Namespace); ns != "" {
+		if err := validateK8sNamespace(ns); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("命名空间不合法: " + err.Error())
+		}
 		agent.Namespace = ns
 	}
 	if req.RateLimitQPS > 0 {
@@ -436,6 +451,9 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 	if ns == "" {
 		ns = defaultClusterLogNamespace
 	}
+	if err := validateK8sNamespace(ns); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("命名空间不合法: " + err.Error())
+	}
 	if rateLimitQPS < 0 {
 		return nil, constants.ErrBadRequestWithMsg("rate_limit_qps 无效")
 	}
@@ -458,6 +476,12 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 	pipelines := ""
 	if existing != nil && existing.PipelinesCustom && strings.TrimSpace(existing.PipelinesYAML) != "" {
 		pipelines = existing.PipelinesYAML
+		if err := validateLoggiePipelinesStructure(pipelines); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("自定义 pipelines.yml 已失效: " + err.Error())
+		}
+		if err := validateLoggiePipelinesSinks(pipelines, esCfg, kafkaCfg); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("自定义 pipelines.yml 已失效: " + err.Error())
+		}
 	} else {
 		pipelines = BuildClusterPipelinesYAML(projectID, clusterID, rules, esCfg, kafkaCfg, qps)
 	}
@@ -477,7 +501,7 @@ func (s *ClusterLogService) DeployOrSync(ctx context.Context, projectID, cluster
 	}
 	// 平台托管 yunshu-logging，跳过命名空间白名单（否则白名单策略会阻断下发）
 	applyCtx := k8sauth.WithSkipNamespacePolicy(ctx)
-	if err := s.dyn.ApplyManifest(applyCtx, k, manifest, nil); err != nil {
+	if err := s.dyn.ApplyManifest(applyCtx, k, manifest); err != nil {
 		_, _ = s.upsertAgentStatus(ctx, projectID, clusterID, ns, "failed", err.Error(), 0, 0, qps)
 		return nil, constants.ErrBadRequestWithMsg("下发失败: " + err.Error())
 	}

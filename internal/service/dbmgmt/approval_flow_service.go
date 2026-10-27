@@ -107,7 +107,7 @@ func (s *Service) UpsertApprovalFlow(ctx context.Context, projectID uint, req Ap
 }
 
 func (s *Service) userCanApproveStep(ctx context.Context, actor *auth.CurrentUser, groupID *uint) (bool, error) {
-	if actor != nil && auth.IsSuperAdminRole(actor.RoleCodes) {
+	if actor != nil && isSuperAdmin(actor) {
 		return true, nil
 	}
 	userID := actorUserID(actor)
@@ -127,7 +127,7 @@ func (s *Service) forbidSelfApprove(ctx context.Context, actor *auth.CurrentUser
 	if !cfg.ForbidSelfApprove {
 		return nil
 	}
-	if actor != nil && auth.IsSuperAdminRole(actor.RoleCodes) {
+	if actor != nil && isSuperAdmin(actor) {
 		return nil
 	}
 	if submitterUserID == 0 {
@@ -169,7 +169,7 @@ func isFinalAccessApprovalStep(steps []model.DbAccessRequestStep, cur *model.DbA
 	return true
 }
 
-func (s *Service) advanceAccessRequestAfterApproval(ctx context.Context, req *model.DbAccessRequest, step *model.DbAccessRequestStep) error {
+func (s *Service) advanceAccessRequestAfterApproval(ctx context.Context, req *model.DbAccessRequest, step *model.DbAccessRequestStep, expiresAt *time.Time) error {
 	steps, err := s.repo.ListAccessRequestSteps(ctx, req.ID)
 	if err != nil {
 		return err
@@ -186,9 +186,21 @@ func (s *Service) advanceAccessRequestAfterApproval(ctx context.Context, req *mo
 		next.ActivatedAt = &now
 		return s.repo.UpdateAccessRequestStep(ctx, next)
 	}
-	req.Status = model.DbAccessRequestStatusApproved
-	if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
+	fields := map[string]any{"status": model.DbAccessRequestStatusApproved, "updated_at": time.Now()}
+	if expiresAt != nil {
+		fields["expires_at"] = expiresAt
+	}
+	// 终态以 pending 为前置条件，避免与并发驳回/重复终审互相覆盖。
+	n, err := s.repo.UpdateAccessRequestFieldsIfStatus(ctx, req.ID, model.DbAccessRequestStatusPending, fields)
+	if err != nil {
 		return err
+	}
+	if n == 0 {
+		return constants.ErrBadRequestWithMsg("申请状态已变更，请刷新后重试")
+	}
+	req.Status = model.DbAccessRequestStatusApproved
+	if expiresAt != nil {
+		req.ExpiresAt = expiresAt
 	}
 	return s.grantFromAccessRequest(ctx, req)
 }
@@ -210,6 +222,16 @@ func (s *Service) advanceSqlTicketAfterApproval(ctx context.Context, ticket *mod
 		next.ActivatedAt = &now
 		return s.repo.UpdateSqlTicketStep(ctx, next)
 	}
+	// 终审落库同样以 pending_approval 为前置条件，避免与并发驳回互相覆盖。
+	n, err := s.repo.UpdateSqlTicketFieldsIfStatus(ctx, ticket.ID, model.DbTicketStatusPendingApproval, map[string]any{
+		"status": model.DbTicketStatusPendingExecution, "updated_at": time.Now(),
+	})
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return constants.ErrBadRequestWithMsg("工单状态已变更，请刷新后重试")
+	}
 	ticket.Status = model.DbTicketStatusPendingExecution
-	return s.repo.UpdateSqlTicket(ctx, ticket)
+	return nil
 }

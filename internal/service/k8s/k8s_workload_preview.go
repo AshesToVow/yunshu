@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	"yunshu/internal/repository"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"gorm.io/gorm"
 	"sigs.k8s.io/yaml"
 )
 
@@ -67,7 +69,7 @@ func (s *K8sWorkloadService) PreviewApply(ctx context.Context, req NamespacedApp
 	if strings.TrimSpace(req.Manifest) == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	if err := s.dyn.ensureManifestNamespacesAllowed(ctx, req.Manifest); err != nil {
+	if err := s.dyn.ensureManifestScopesAllowed(ctx, k, req.Manifest); err != nil {
 		return nil, err
 	}
 	refs := extractWorkloadRefsForApply(req.Manifest)
@@ -159,20 +161,7 @@ func (s *K8sWorkloadService) Apply(ctx context.Context, req NamespacedApplyReque
 		}
 	}
 
-	err = s.dyn.ApplyManifest(ctx, k, req.Manifest, func(c context.Context) bool {
-		if len(refs) == 0 {
-			return false
-		}
-		for _, r := range refs {
-			if strings.TrimSpace(r.Name) == "" {
-				continue
-			}
-			if !s.dyn.ExistsByKind(c, k, r.Kind, r.Namespace, r.Name) {
-				return false
-			}
-		}
-		return true
-	})
+	err = s.dyn.ApplyManifest(ctx, k, req.Manifest)
 	if err != nil {
 		return k8sFail(ctx, "k8s.workload", "api", err)
 	}
@@ -248,7 +237,11 @@ func (s *K8sWorkloadService) ListSnapshots(ctx context.Context, q SnapshotListQu
 	if q.ProjectID == 0 && q.ClusterID == 0 {
 		return nil, constants.ErrBadRequestWithMsg("project_id or cluster_id required")
 	}
-	return s.snapRepo.List(ctx, repository.K8sWorkloadSnapshotListParams{
+	actor, _ := auth.RequestUserFromContext(ctx)
+	if actor == nil || actor.ID == 0 {
+		return nil, constants.ErrUnauthorized
+	}
+	params := repository.K8sWorkloadSnapshotListParams{
 		ProjectID: q.ProjectID,
 		ClusterID: q.ClusterID,
 		Namespace: q.Namespace,
@@ -256,13 +249,57 @@ func (s *K8sWorkloadService) ListSnapshots(ctx context.Context, q SnapshotListQu
 		Name:      q.Name,
 		Page:      q.Page,
 		PageSize:  q.PageSize,
-	})
+	}
+	if !auth.IsSuperAdminRole(actor.RoleCodes) {
+		if s.memberRepo == nil {
+			return nil, constants.ErrInternal
+		}
+		if q.ProjectID > 0 {
+			if err := s.assertSnapshotProjectMember(ctx, q.ProjectID, actor.ID); err != nil {
+				return nil, err
+			}
+		} else {
+			ids, err := s.memberRepo.ListProjectIDsByUser(ctx, actor.ID)
+			if err != nil {
+				return nil, bizerrors.Pass(ctx, "k8s.workload", "ListSnapshots", err)
+			}
+			params.ProjectScope = true
+			params.ProjectIDs = ids
+		}
+	}
+	return s.snapRepo.List(ctx, params)
+}
+
+// assertSnapshotProjectMember 非超管访问快照须为项目成员；project_id=0 在历史数据中仅超管可见。
+func (s *K8sWorkloadService) assertSnapshotProjectMember(ctx context.Context, projectID uint, userID uint) error {
+	if projectID == 0 {
+		return constants.ErrForbiddenWithMsg("全局快照（project_id=0）仅超级管理员可操作")
+	}
+	if s.memberRepo == nil {
+		return constants.ErrInternal
+	}
+	if _, err := s.memberRepo.GetByProjectAndUser(ctx, projectID, userID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return constants.ErrForbiddenWithMsg("非项目成员，无权访问该项目下的工作负载快照")
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *K8sWorkloadService) RollbackSnapshot(ctx context.Context, req SnapshotRollbackRequest) error {
+	actor, _ := auth.RequestUserFromContext(ctx)
+	if actor == nil || actor.ID == 0 {
+		return constants.ErrUnauthorized
+	}
 	snap, err := s.snapRepo.GetByID(ctx, req.SnapshotID)
 	if err != nil || snap == nil {
 		return constants.ErrNotFound
+	}
+	if !auth.IsSuperAdminRole(actor.RoleCodes) {
+		if err := s.assertSnapshotProjectMember(ctx, snap.ProjectID, actor.ID); err != nil {
+			return err
+		}
 	}
 	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
@@ -274,7 +311,7 @@ func (s *K8sWorkloadService) RollbackSnapshot(ctx context.Context, req SnapshotR
 	if err := assertK8sWritable(ctx, cluster, "rollback", snap.Namespace); err != nil {
 		return err
 	}
-	if err := s.dyn.ApplyManifest(ctx, k, snap.YAML, nil); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, snap.YAML); err != nil {
 		return k8sFail(ctx, "k8s.workload", "rollback", err)
 	}
 	recordK8sChange(ctx, cluster, "rollback", snap.Kind, snap.Namespace, snap.Name, map[string]any{

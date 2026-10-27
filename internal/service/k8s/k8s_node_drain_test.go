@@ -37,3 +37,27 @@ func TestClassifyDrainPodBareNeedsForce(t *testing.T) {
 		t.Fatal("bare pod should not skip with force")
 	}
 }
+
+func TestClassifyDrainPodSkipsCompletedAndMirrorAnyNamespace(t *testing.T) {
+	mirror := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "etcd-mirror",
+			Namespace:   "custom-system",
+			Annotations: map[string]string{"kubernetes.io/config.mirror": "abc"},
+		},
+	}
+	if _, skip := classifyDrainPod(mirror, true, true, true); !skip {
+		t.Fatal("mirror pod must be skipped regardless of namespace")
+	}
+	completed := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "job-done", Namespace: "default"},
+		Status:     corev1.PodStatus{Phase: corev1.PodSucceeded},
+	}
+	item, skip := classifyDrainPod(completed, true, true, true)
+	if !skip || item.Reason != "Pod 已结束" {
+		t.Fatalf("completed pod should be skipped, got skip=%v reason=%q", skip, item.Reason)
+	}
+	if drainPodOutstanding(completed, true, true, true) {
+		t.Fatal("completed pod must not count as outstanding")
+	}
+}

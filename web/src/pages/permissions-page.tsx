@@ -23,7 +23,7 @@ import {
   Typography,
   message,
 } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { StatusTag } from "../components/status-tag";
 import {
@@ -109,6 +109,7 @@ export function PermissionsPage() {
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState<PermissionQuery>(defaultQuery);
   const [loading, setLoading] = useState(false);
+  const listSeqRef = useRef(0);
   const [submitting, setSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm<PermissionPayload>();
@@ -132,13 +133,15 @@ export function PermissionsPage() {
   }, []);
 
   async function loadPermissions(nextQuery = query) {
+    const seq = ++listSeqRef.current;
     setLoading(true);
     try {
       const result = await getPermissions(nextQuery);
+      if (seq !== listSeqRef.current) return;
       setList(result.list);
       setTotal(result.total);
     } finally {
-      setLoading(false);
+      if (seq === listSeqRef.current) setLoading(false);
     }
   }
 
@@ -433,6 +436,7 @@ export function PermissionsPage() {
           rowKey="id"
           loading={loading}
           dataSource={list}
+          scroll={{ x: 900 }}
           pagination={{
             current: query.page,
             pageSize: query.page_size,

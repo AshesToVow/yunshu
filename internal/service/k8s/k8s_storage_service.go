@@ -249,7 +249,7 @@ func (s *K8sStorageService) Apply(ctx context.Context, req StorageApplyRequest) 
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, nil); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.storage", "api", err)
 	}
 	return nil
@@ -257,13 +257,18 @@ func (s *K8sStorageService) Apply(ctx context.Context, req StorageApplyRequest) 
 
 // Delete 删除相关的业务逻辑。
 func (s *K8sStorageService) Delete(ctx context.Context, kind string, req StorageDeleteRequest) error {
-	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
+	cluster, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
 		return err
 	}
 	gvk, ns, err := resolveStorageGVKAndNS(kind, strings.TrimSpace(req.Namespace))
 	if err != nil {
 		return err
+	}
+	if ns == "" {
+		if err := RequireDestructiveConfirm(ctx, cluster); err != nil {
+			return err
+		}
 	}
 	if err := s.dyn.DeleteByGVK(ctx, k, gvk, ns, strings.TrimSpace(req.Name), req.K8sDeleteOptions); err != nil {
 		if apierrors.IsNotFound(err) {

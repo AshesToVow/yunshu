@@ -13,7 +13,7 @@ import {
   Typography,
   message,
 } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   batchDeleteOperationLogs,
   deleteOperationLog,
@@ -21,9 +21,32 @@ import {
   exportOperationLogs,
 } from "../services/operation-logs";
 import type { OperationLogItem, OperationLogQuery } from "../services/operation-logs";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 const defaultQuery: OperationLogQuery = { page: 1, page_size: 10 };
+const MAX_BODY_LENGTH = 20000;
+
+function maskPhoneNumbers(text: string): string {
+  return text.replace(/(^|[^\d])(1[3-9]\d)(\d{4})(\d{4})(?!\d)/g, "$1$2****$4");
+}
+
+/** 请求/响应体展示前的轻量脱敏：保留原格式，仅替换敏感值、掩码手机号并截断超长内容。 */
+function maskSensitiveBody(input: string): string {
+  let text = String(input ?? "");
+  const truncated = text.length > MAX_BODY_LENGTH;
+  if (truncated) text = text.slice(0, MAX_BODY_LENGTH);
+  text = text.replace(
+    /("(?:[^"\\]|\\.)*(?:password|passwd|pwd|token|secret|authorization|api[_-]?key|access[_-]?key)(?:[^"\\]|\\.)*"\s*:\s*)("(?:\\.|[^"\\])*"|\[[^\]]*\]|\{[^}]*\}|[^,}\s]+)/gi,
+    "$1\"***\"",
+  );
+  text = text.replace(
+    /([?&](?:password|passwd|pwd|token|secret|authorization|api[_-]?key|access[_-]?key)=)([^&\s]+)/gi,
+    "$1***",
+  );
+  text = maskPhoneNumbers(text);
+  return truncated ? `${text}\n\n…（内容过长，已截断展示）` : text;
+}
 
 function methodColor(method: string) {
   switch (method) {
@@ -55,19 +78,29 @@ export function OperationLogsPage() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [filters, setFilters] = useState({ method: "", path: "", status_code: undefined as number | undefined });
   const [bodyModal, setBodyModal] = useState<{ title: string; content: string } | null>(null);
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number>();
+  const [exporting, setExporting] = useState(false);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     void loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   async function loadList() {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const result = await getOperationLogs(query);
+      if (seq !== loadSeqRef.current) return;
       setList(result.list || []);
       setTotal(result.total || 0);
+    } catch (e: unknown) {
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载操作日志失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }
 
@@ -85,13 +118,23 @@ export function OperationLogsPage() {
       message.warning("请先选择要删除的记录");
       return;
     }
-    await batchDeleteOperationLogs(selectedRowKeys);
-    message.success("已删除");
-    setSelectedRowKeys([]);
-    void loadList();
+    if (batchDeleting) return;
+    setBatchDeleting(true);
+    try {
+      await batchDeleteOperationLogs(selectedRowKeys);
+      message.success("已删除");
+      setSelectedRowKeys([]);
+      await loadList();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "批量删除失败"));
+    } finally {
+      setBatchDeleting(false);
+    }
   }
 
   async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
     try {
       const res = await exportOperationLogs({
         method: filters.method,
@@ -106,14 +149,24 @@ export function OperationLogsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      message.error("导出失败");
+      message.error(extractApiErrorMessage(err, "导出失败"));
+    } finally {
+      setExporting(false);
     }
   }
 
   async function handleDelete(id: number) {
-    await deleteOperationLog(id);
-    message.success("已删除");
-    void loadList();
+    if (deletingId != null) return;
+    setDeletingId(id);
+    try {
+      await deleteOperationLog(id);
+      message.success("已删除");
+      await loadList();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除失败"));
+    } finally {
+      setDeletingId(undefined);
+    }
   }
 
   function operatorText(row: OperationLogItem) {
@@ -163,9 +216,22 @@ export function OperationLogsPage() {
             </Button>
           </Space>
           <div className="toolbar__actions">
-            <Button onClick={() => void handleExport()}>导出</Button>
-            <Popconfirm title="确定删除选中的日志？" onConfirm={() => void handleBatchDelete()}>
-              <Button danger icon={<DeleteOutlined />} disabled={selectedRowKeys.length === 0}>
+            <Button loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
+              导出
+            </Button>
+            <Popconfirm
+              title="确定删除选中的日志？"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ loading: batchDeleting }}
+              onConfirm={() => handleBatchDelete()}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={selectedRowKeys.length === 0 || batchDeleting}
+                loading={batchDeleting}
+              >
                 批量删除
               </Button>
             </Popconfirm>
@@ -228,7 +294,9 @@ export function OperationLogsPage() {
                     type="link"
                     size="small"
                     icon={<EyeOutlined />}
-                    onClick={() => setBodyModal({ title: "请求体", content: r.request_body })}
+                    onClick={() =>
+                      setBodyModal({ title: "请求体", content: maskSensitiveBody(r.request_body || "") })
+                    }
                   >
                     查看
                   </Button>
@@ -245,7 +313,9 @@ export function OperationLogsPage() {
                     type="link"
                     size="small"
                     icon={<EyeOutlined />}
-                    onClick={() => setBodyModal({ title: "响应体", content: r.response_body })}
+                    onClick={() =>
+                      setBodyModal({ title: "响应体", content: maskSensitiveBody(r.response_body || "") })
+                    }
                   >
                     查看
                   </Button>
@@ -266,8 +336,21 @@ export function OperationLogsPage() {
               fixed: "right",
               className: "yunshu-table-actions-cell",
               render: (_: unknown, record: OperationLogItem) => (
-                <Popconfirm title="确定删除？" onConfirm={() => void handleDelete(record.id)}>
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                <Popconfirm
+                  title="确定删除？"
+                  okText="删除"
+                  cancelText="取消"
+                  okButtonProps={{ loading: deletingId === record.id }}
+                  onConfirm={() => handleDelete(record.id)}
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    loading={deletingId === record.id}
+                    disabled={deletingId != null}
+                  >
                     删除
                   </Button>
                 </Popconfirm>
@@ -279,9 +362,14 @@ export function OperationLogsPage() {
 
       <Modal title={bodyModal?.title} open={!!bodyModal} onCancel={() => setBodyModal(null)} footer={null} width={700}>
         {bodyModal && (
-          <pre style={{ maxHeight: 400, overflow: "auto", background: "#f5f5f5", padding: 12, borderRadius: 4 }}>
-            {bodyModal.content}
-          </pre>
+          <>
+            <Typography.Text type="secondary" style={{ display: "block", marginBottom: 8 }}>
+              敏感字段已脱敏展示，超长内容已截断。
+            </Typography.Text>
+            <pre style={{ maxHeight: 400, overflow: "auto", background: "#f5f5f5", padding: 12, borderRadius: 4 }}>
+              {bodyModal.content}
+            </pre>
+          </>
         )}
       </Modal>
     </div>

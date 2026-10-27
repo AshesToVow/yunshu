@@ -74,6 +74,7 @@ func NewManager(
 	}
 
 	client := NewWebhookClient(alertCfg.WebhookToken, 0)
+	client.SetInternalURL(rt.AlertWebhookURL)
 	mgr := &Manager{
 		repo:          repo,
 		runtime:       runtime,

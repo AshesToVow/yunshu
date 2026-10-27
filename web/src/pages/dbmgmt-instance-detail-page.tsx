@@ -1,7 +1,7 @@
 import {
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
-  EyeOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -20,9 +20,10 @@ import {
   Table,
   Tabs,
   Tag,
+  Typography,
   message,
 } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { DbmgmtSectionTitle, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
@@ -37,6 +38,7 @@ import {
   type DbInstance,
   type DbInstanceMySQLUser,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 import { envLabel as dbEnvLabel, instanceRoleLabel } from "../utils/dbmgmt-labels";
@@ -70,32 +72,47 @@ export function DbmgmtInstanceDetailPage() {
   const [maskRules, setMaskRules] = useState<DbColumnMaskRule[]>([]);
   const [maskLoading, setMaskLoading] = useState(false);
   const [maskOpen, setMaskOpen] = useState(false);
+  const [maskSubmitting, setMaskSubmitting] = useState(false);
+  const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<DbInstanceMySQLUser>();
+  const [passwordValue, setPasswordValue] = useState("");
+  const [revealingId, setRevealingId] = useState<number | null>(null);
   const [maskForm] = Form.useForm();
+  const loadSeqRef = useRef(0);
+  const usersSeqRef = useRef(0);
+  const maskSeqRef = useRef(0);
   const tab = searchParams.get("tab") ?? "info";
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (projectFromUrl) {
-        setProjectId(projectFromUrl);
-      } else if (res.list?.length) {
-        setProjectId(res.list[0].id);
-      }
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (projectFromUrl) {
+          setProjectId(projectFromUrl);
+        } else if (res.list?.length) {
+          setProjectId(res.list[0].id);
+        }
+      })
+      .catch(() => undefined);
   }, [projectFromUrl]);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     if (!projectId || !instanceId) return;
     setLoading(true);
     try {
       const inst = await getDbInstance(projectId, instanceId);
+      if (seq !== loadSeqRef.current) return;
       setInstance(inst);
       const dbs = await listDbDatabases(projectId, instanceId);
+      if (seq !== loadSeqRef.current) return;
       setDatabases(dbs ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载实例失败");
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载实例失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [projectId, instanceId]);
 
@@ -104,27 +121,34 @@ export function DbmgmtInstanceDetailPage() {
   }, [load]);
 
   const loadUsers = useCallback(async () => {
+    const seq = ++usersSeqRef.current;
     if (!projectId || !instanceId || instance?.driver !== "mysql") return;
     setUsersLoading(true);
     try {
       const list = await listInstanceMySQLUsers(projectId, instanceId);
+      if (seq !== usersSeqRef.current) return;
       setUsers(list ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载用户失败");
+      if (seq !== usersSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载用户失败"));
     } finally {
-      setUsersLoading(false);
+      if (seq === usersSeqRef.current) setUsersLoading(false);
     }
   }, [projectId, instanceId, instance?.driver]);
 
   const loadMaskRules = useCallback(async () => {
+    const seq = ++maskSeqRef.current;
     if (!projectId || !instanceId) return;
     setMaskLoading(true);
     try {
-      setMaskRules(await listDbColumnMaskRules(projectId, instanceId));
+      const rules = await listDbColumnMaskRules(projectId, instanceId);
+      if (seq !== maskSeqRef.current) return;
+      setMaskRules(rules ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载脱敏规则失败");
+      if (seq !== maskSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载脱敏规则失败"));
     } finally {
-      setMaskLoading(false);
+      if (seq === maskSeqRef.current) setMaskLoading(false);
     }
   }, [projectId, instanceId]);
 
@@ -133,18 +157,86 @@ export function DbmgmtInstanceDetailPage() {
     if (tab === "mask") void loadMaskRules();
   }, [tab, loadUsers, loadMaskRules]);
 
+  const closePassword = () => {
+    setPasswordOpen(false);
+    setPasswordUser(undefined);
+    setPasswordValue("");
+  };
+
   const revealPassword = async (row: DbInstanceMySQLUser) => {
-    if (!projectId || !instanceId || !row.id) return;
+    if (!projectId || !instanceId || !row.id || revealingId !== null) return;
+    setRevealingId(row.id);
     try {
       const res = await getInstanceAccountPassword(projectId, instanceId, row.id);
-      Modal.info({ title: `${row.username}@${row.host} 密码`, content: res.password, width: 480 });
+      setPasswordUser(row);
+      setPasswordValue(res.password ?? "");
+      setPasswordOpen(true);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "查看密码失败");
+      message.error(extractApiErrorMessage(e, "查看密码失败"));
+    } finally {
+      setRevealingId(null);
+    }
+  };
+
+  const copyPassword = async () => {
+    if (!passwordValue) return;
+    try {
+      await navigator.clipboard.writeText(passwordValue);
+      message.success("密码已复制");
+    } catch {
+      message.error("复制失败，请手动选择复制");
+    }
+  };
+
+  const submitMaskRule = async () => {
+    if (!projectId || !instanceId || maskSubmitting) return;
+    let values: { schema_name?: string; table_name: string; column_name: string; mask_type: string; pattern?: string };
+    try {
+      values = await maskForm.validateFields();
+    } catch {
+      return;
+    }
+    setMaskSubmitting(true);
+    try {
+      await upsertDbColumnMaskRule(projectId, instanceId, values);
+      message.success("已保存");
+      setMaskOpen(false);
+      await loadMaskRules();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "保存脱敏规则失败"));
+    } finally {
+      setMaskSubmitting(false);
+    }
+  };
+
+  const removeMaskRule = async (ruleId: number) => {
+    if (!projectId || !instanceId || deletingRuleId !== null) return;
+    setDeletingRuleId(ruleId);
+    try {
+      await deleteDbColumnMaskRule(projectId, instanceId, ruleId);
+      message.success("已删除");
+      await loadMaskRules();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除脱敏规则失败"));
+    } finally {
+      setDeletingRuleId(null);
     }
   };
 
   const onProjectChange = (id: number) => {
     setProjectId(id);
+    setInstance(undefined);
+    setDatabases([]);
+    setUsers([]);
+    setMaskRules([]);
+    setDbKeyword("");
+    setUserKeyword("");
+    loadSeqRef.current += 1;
+    usersSeqRef.current += 1;
+    maskSeqRef.current += 1;
+    setLoading(false);
+    setUsersLoading(false);
+    setMaskLoading(false);
     const next = new URLSearchParams(searchParams);
     next.set("project", String(id));
     if (tab) next.set("tab", tab);
@@ -252,34 +344,40 @@ export function DbmgmtInstanceDetailPage() {
 
   const dbTab = (
     <div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Button type="primary" icon={<PlusOutlined />} disabled>
-          创建数据库
-        </Button>
-        <Input
-          placeholder="请输入名称进行搜索"
-          value={dbKeyword}
-          onChange={(e) => setDbKeyword(e.target.value)}
-          style={{ width: 200 }}
-        />
-        <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
-        <Button type="primary" icon={<SearchOutlined />}>
-          查询
-        </Button>
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => {
-            setDbKeyword("");
-            void load();
-          }}
-        >
-          刷新重置
-        </Button>
-      </Space>
+      <div className="toolbar">
+        <Space wrap>
+          <Button type="primary" icon={<PlusOutlined />} disabled>
+            创建数据库
+          </Button>
+          <Input
+            placeholder="请输入名称进行搜索"
+            value={dbKeyword}
+            onChange={(e) => setDbKeyword(e.target.value)}
+            style={{ width: 200 }}
+          />
+          <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
+          <Button type="primary" icon={<SearchOutlined />}>
+            查询
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            loading={loading}
+            disabled={loading}
+            onClick={() => {
+              setDbKeyword("");
+              void load();
+            }}
+          >
+            刷新重置
+          </Button>
+        </Space>
+      </div>
       <Table
         rowKey="name"
+        loading={loading}
         dataSource={filteredDbs.map((d, i) => ({ ...d, id: i + 1 }))}
         pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
+        scroll={{ x: 1200 }}
         columns={[
           { title: "ID", dataIndex: "id", width: 60 },
           { title: "数据库", dataIndex: "name" },
@@ -292,7 +390,8 @@ export function DbmgmtInstanceDetailPage() {
           {
             title: "操作",
             width: 140,
-            render: (_, r) => (
+            fixed: "right",
+            render: () => (
               <Space>
                 <Button size="small" type="primary" icon={<EditOutlined />} disabled />
                 <Button size="small" danger icon={<DeleteOutlined />} disabled />
@@ -309,35 +408,40 @@ export function DbmgmtInstanceDetailPage() {
       <Alert type="info" showIcon message="仅 MySQL 实例支持用户管理" />
     ) : (
       <div>
-        <Space style={{ marginBottom: 16 }} wrap>
-          <Button type="primary" icon={<PlusOutlined />} disabled>
-            创建用户
-          </Button>
-          <Input
-            placeholder="请输入用户名称进行搜索"
-            value={userKeyword}
-            onChange={(e) => setUserKeyword(e.target.value)}
-            style={{ width: 220 }}
-          />
-          <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
-          <Button type="primary" icon={<SearchOutlined />}>
-            搜索
-          </Button>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              setUserKeyword("");
-              void loadUsers();
-            }}
-          >
-            刷新重置
-          </Button>
-        </Space>
+        <div className="toolbar">
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} disabled>
+              创建用户
+            </Button>
+            <Input
+              placeholder="请输入用户名称进行搜索"
+              value={userKeyword}
+              onChange={(e) => setUserKeyword(e.target.value)}
+              style={{ width: 220 }}
+            />
+            <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
+            <Button type="primary" icon={<SearchOutlined />}>
+              搜索
+            </Button>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={usersLoading}
+              disabled={usersLoading}
+              onClick={() => {
+                setUserKeyword("");
+                void loadUsers();
+              }}
+            >
+              刷新重置
+            </Button>
+          </Space>
+        </div>
         <Table
           rowKey={(r) => `${r.username}@${r.host}`}
           loading={usersLoading}
           dataSource={filteredUsers.map((u, i) => ({ ...u, rowId: i + 1 }))}
           pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
+          scroll={{ x: 1000 }}
           columns={[
             { title: "ID", dataIndex: "rowId", width: 60 },
             {
@@ -359,7 +463,13 @@ export function DbmgmtInstanceDetailPage() {
               width: 90,
               render: (_, r) =>
                 r.has_password && r.id ? (
-                  <Button type="link" size="small" onClick={() => void revealPassword(r)}>
+                  <Button
+                    type="link"
+                    size="small"
+                    loading={revealingId === r.id}
+                    disabled={revealingId !== null}
+                    onClick={() => void revealPassword(r)}
+                  >
                     查看
                   </Button>
                 ) : (
@@ -370,6 +480,7 @@ export function DbmgmtInstanceDetailPage() {
             {
               title: "操作",
               width: 140,
+              fixed: "right",
               render: () => (
                 <Space>
                   <Button size="small" type="primary" icon={<EditOutlined />} disabled />
@@ -384,25 +495,33 @@ export function DbmgmtInstanceDetailPage() {
 
   const maskTab = (
     <div>
-      <Space style={{ marginBottom: 16 }}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            maskForm.resetFields();
-            maskForm.setFieldsValue({ mask_type: "partial", pattern: "3,4" });
-            setMaskOpen(true);
-          }}
-        >
-          新增脱敏规则
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => void loadMaskRules()} />
-      </Space>
+      <div className="toolbar">
+        <Space>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              maskForm.resetFields();
+              maskForm.setFieldsValue({ mask_type: "partial", pattern: "3,4" });
+              setMaskOpen(true);
+            }}
+          >
+            新增脱敏规则
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            loading={maskLoading}
+            disabled={maskLoading}
+            onClick={() => void loadMaskRules()}
+          />
+        </Space>
+      </div>
       <Table
         rowKey="id"
         loading={maskLoading}
         dataSource={maskRules}
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 800 }}
         columns={[
           { title: "库/Schema", dataIndex: "schema_name", width: 120 },
           { title: "表", dataIndex: "table_name", width: 140 },
@@ -412,17 +531,21 @@ export function DbmgmtInstanceDetailPage() {
           {
             title: "操作",
             width: 80,
+            fixed: "right",
             render: (_: unknown, r: DbColumnMaskRule) => (
               <Popconfirm
                 title="删除该规则？"
-                onConfirm={() =>
-                  void deleteDbColumnMaskRule(projectId!, instanceId, r.id).then(() => {
-                    message.success("已删除");
-                    void loadMaskRules();
-                  })
-                }
+                onConfirm={() => void removeMaskRule(r.id)}
+                disabled={deletingRuleId !== null}
               >
-                <Button type="link" danger size="small" icon={<DeleteOutlined />} />
+                <Button
+                  type="link"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  loading={deletingRuleId === r.id}
+                  disabled={deletingRuleId !== null}
+                />
               </Popconfirm>
             ),
           },
@@ -431,15 +554,13 @@ export function DbmgmtInstanceDetailPage() {
       <Modal
         title="列级脱敏规则"
         open={maskOpen}
-        onCancel={() => setMaskOpen(false)}
-        onOk={() =>
-          void maskForm.validateFields().then(async (v) => {
-            await upsertDbColumnMaskRule(projectId!, instanceId, v);
-            message.success("已保存");
-            setMaskOpen(false);
-            await loadMaskRules();
-          })
-        }
+        onCancel={() => {
+          if (!maskSubmitting) setMaskOpen(false);
+        }}
+        onOk={() => void submitMaskRule()}
+        confirmLoading={maskSubmitting}
+        cancelButtonProps={{ disabled: maskSubmitting }}
+        maskClosable={!maskSubmitting}
       >
         <Form form={maskForm} layout="vertical">
           <Form.Item label="Schema（库名）" name="schema_name">
@@ -470,6 +591,7 @@ export function DbmgmtInstanceDetailPage() {
 
   return (
     <Card
+      className="table-card"
       loading={loading}
       title={instance ? `实例详情 · ${formatInstanceLabel(instance)}` : "实例详情"}
       extra={
@@ -483,7 +605,7 @@ export function DbmgmtInstanceDetailPage() {
           <Link to="/dbmgmt/instances">
             <Button>返回列表</Button>
           </Link>
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} />
+          <Button icon={<ReloadOutlined />} loading={loading} disabled={loading} onClick={() => void load()} />
         </Space>
       }
     >
@@ -504,6 +626,26 @@ export function DbmgmtInstanceDetailPage() {
           ]}
         />
       ) : null}
+      <Modal
+        title={passwordUser ? `${passwordUser.username}@${passwordUser.host} 密码` : "账号密码"}
+        open={passwordOpen}
+        onCancel={closePassword}
+        footer={
+          <Button type="primary" onClick={closePassword}>
+            关闭
+          </Button>
+        }
+        destroyOnClose
+        width={480}
+      >
+        <Space direction="vertical" style={{ width: "100%" }} size="middle">
+          <Input.Password readOnly value={passwordValue} />
+          <Button icon={<CopyOutlined />} onClick={() => void copyPassword()} block>
+            复制密码
+          </Button>
+          <Typography.Text type="secondary">密码查看已记录审计日志</Typography.Text>
+        </Space>
+      </Modal>
     </Card>
   );
 }

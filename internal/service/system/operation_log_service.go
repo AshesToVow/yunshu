@@ -3,9 +3,12 @@ package system
 import (
 	"context"
 	"io"
+	"strings"
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/exportutil"
 	"yunshu/internal/pkg/pagination"
@@ -36,16 +39,37 @@ func (s *OperationLogService) Record(ctx context.Context, entry model.OperationL
 	return s.repo.Create(ctx, &entry)
 }
 
-// List 查询列表相关的业务逻辑。
-func (s *OperationLogService) List(ctx context.Context, query OperationLogListQuery) (*pagination.Result[model.OperationLog], error) {
-	page, pageSize := pagination.Normalize(query.Page, query.PageSize)
-	list, total, err := s.repo.List(ctx, repository.OperationLogListParams{
+// operationLogListParams 普通管理员只能查看自己的操作日志，仅内置超级管理员可看全量。
+func operationLogListParams(actor *auth.CurrentUser, query OperationLogListQuery, page, pageSize int) (repository.OperationLogListParams, error) {
+	if actor == nil {
+		return repository.OperationLogListParams{}, constants.ErrUnauthorized
+	}
+	params := repository.OperationLogListParams{
 		Method:     query.Method,
 		Path:       query.Path,
 		StatusCode: query.StatusCode,
 		Page:       page,
 		PageSize:   pageSize,
-	})
+	}
+	if auth.IsSuperAdminRole(actor.RoleCodes) {
+		return params, nil
+	}
+	username := strings.TrimSpace(actor.Username)
+	if username == "" {
+		return repository.OperationLogListParams{}, constants.ErrUnauthorized
+	}
+	params.UsernameExact = username
+	return params, nil
+}
+
+// List 查询列表相关的业务逻辑。
+func (s *OperationLogService) List(ctx context.Context, actor *auth.CurrentUser, query OperationLogListQuery) (*pagination.Result[model.OperationLog], error) {
+	page, pageSize := pagination.Normalize(query.Page, query.PageSize)
+	params, err := operationLogListParams(actor, query, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	list, total, err := s.repo.List(ctx, params)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "operation-log", "List", err)
 	}
@@ -57,25 +81,29 @@ func (s *OperationLogService) List(ctx context.Context, query OperationLogListQu
 	}, nil
 }
 
-// Delete 删除相关的业务逻辑。
-func (s *OperationLogService) Delete(ctx context.Context, id uint) error {
+// Delete 删除相关的业务逻辑（仅内置超级管理员）。
+func (s *OperationLogService) Delete(ctx context.Context, actor *auth.CurrentUser, id uint) error {
+	if err := requireSuperAdminForLogMutation(actor, "删除操作日志"); err != nil {
+		return err
+	}
 	return s.repo.DeleteByID(ctx, id)
 }
 
-// DeleteBatch 删除相关的业务逻辑。
-func (s *OperationLogService) DeleteBatch(ctx context.Context, ids []uint) error {
+// DeleteBatch 删除相关的业务逻辑（仅内置超级管理员）。
+func (s *OperationLogService) DeleteBatch(ctx context.Context, actor *auth.CurrentUser, ids []uint) error {
+	if err := requireSuperAdminForLogMutation(actor, "删除操作日志"); err != nil {
+		return err
+	}
 	return s.repo.DeleteByIDs(ctx, ids)
 }
 
 // Export writes operation logs matching query to writer as Excel.
-func (s *OperationLogService) Export(ctx context.Context, query OperationLogListQuery, w io.Writer) error {
-	list, total, err := s.repo.List(ctx, repository.OperationLogListParams{
-		Method:     query.Method,
-		Path:       query.Path,
-		StatusCode: query.StatusCode,
-		Page:       1,
-		PageSize:   exportutil.MaxExcelExportRows + 1,
-	})
+func (s *OperationLogService) Export(ctx context.Context, actor *auth.CurrentUser, query OperationLogListQuery, w io.Writer) error {
+	params, err := operationLogListParams(actor, query, 1, exportutil.MaxExcelExportRows+1)
+	if err != nil {
+		return err
+	}
+	list, total, err := s.repo.List(ctx, params)
 	if err != nil {
 		return bizerrors.Pass(ctx, "operation-log", "Export", err)
 	}

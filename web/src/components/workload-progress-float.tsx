@@ -26,10 +26,10 @@ const emptyState: PanelState = {
 async function pollTask(task: WorkloadProgressTask): Promise<PanelState> {
   if (task.kind === "NodeDrain") {
     const st = await getNodeDrainStatus(task.clusterId, task.name);
-    const totalHint = Math.max(st.remaining + 1, 1);
-    const doneCount = st.drained ? totalHint : Math.max(0, totalHint - st.remaining - 1);
+    const total = Math.max(st.completed_pods + st.remaining, 1);
+    const percent = st.drained ? 100 : Math.min(95, Math.round((st.completed_pods / total) * 100));
     return {
-      percent: st.drained ? 100 : Math.min(95, Math.round((doneCount / totalHint) * 100)),
+      percent,
       status: st.drained ? "success" : "active",
       detail: st.message,
       events: [],

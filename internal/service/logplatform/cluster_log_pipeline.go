@@ -239,15 +239,24 @@ func clusterRulePaths(rule model.ClusterLogRule) []string {
 	}
 	excludeSet := map[string]struct{}{}
 	for _, e := range excludes {
+		if validateK8sNamespace(e) != nil {
+			continue
+		}
 		excludeSet[e] = struct{}{}
 	}
 
 	var paths []string
 	appendPath := func(ns, workload string) {
 		if ns != "" {
+			if validateK8sNamespace(ns) != nil {
+				return
+			}
 			if _, skip := excludeSet[ns]; skip {
 				return
 			}
+		}
+		if workload != "" && validateK8sWorkloadName(workload) != nil {
+			return
 		}
 		switch {
 		case ns != "" && workload != "":
@@ -296,7 +305,7 @@ func clusterRuleExcludeFiles(rule model.ClusterLogRule) []string {
 	out := make([]string, 0, len(excludes))
 	for _, e := range excludes {
 		e = strings.TrimSpace(e)
-		if e == "" {
+		if e == "" || validateK8sNamespace(e) != nil {
 			continue
 		}
 		// /var/log/pods/{ns}_{pod}_{uid}/...

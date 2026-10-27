@@ -19,7 +19,8 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import type { MenuProps } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
@@ -110,6 +111,12 @@ export function WorkflowInboxPage() {
   const [previewRow, setPreviewRow] = useState<PendingTicketItem | null>(null);
   const [previewDetail, setPreviewDetail] = useState<WorkflowTicketDetail | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+
+  const loadSeqRef = useRef(0);
+  const previewSeqRef = useRef(0);
+  const actingRef = useRef(false);
+  const highlightScrolledRef = useRef(false);
 
   const highlightTicketId = Number(searchParams.get("ticket") || searchParams.get("highlight") || 0) || undefined;
 
@@ -121,9 +128,14 @@ export function WorkflowInboxPage() {
 
   useEffect(() => {
     const d = searchParams.get("domain");
-    if (d !== null) setDomains(d);
+    if (d !== null && d !== domains) setDomains(d);
     const p = Number(searchParams.get("project") || 0);
-    if (p > 0) setProjectId(p);
+    const nextProject = p > 0 ? p : undefined;
+    if (nextProject !== undefined && nextProject !== projectId) {
+      setProjectId(nextProject);
+      setPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const projectNameMap = useMemo(() => {
@@ -133,6 +145,7 @@ export function WorkflowInboxPage() {
   }, [projects]);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const res = await listPendingWorkflowTickets({
@@ -142,10 +155,17 @@ export function WorkflowInboxPage() {
         domains: domains || undefined,
         project_id: projectId,
       });
+      if (seq !== loadSeqRef.current) return;
+      const nextTotal = res.total ?? 0;
       setRows(res.list ?? []);
-      setTotal(res.total ?? 0);
+      setTotal(nextTotal);
+      if (nextTotal > 0 && page > Math.ceil(nextTotal / pageSize)) {
+        setPage(1);
+      }
+    } catch {
+      /* http 拦截器已 toast */
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [domains, mineScope, page, pageSize, projectId]);
 
@@ -154,23 +174,28 @@ export function WorkflowInboxPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!highlightTicketId || rows.length === 0) return;
-    const el = document.getElementById(`wf-row-${highlightTicketId}`);
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!highlightTicketId || rows.length === 0 || highlightScrolledRef.current) return;
+    const el = document.querySelector(`[id^="wf-row-${highlightTicketId}-"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    highlightScrolledRef.current = true;
   }, [highlightTicketId, rows]);
 
   const openPreview = async (row: PendingTicketItem) => {
+    const seq = ++previewSeqRef.current;
     setPreviewRow(row);
     setPreviewOpen(true);
     setPreviewDetail(null);
+    setPreviewError(false);
     setPreviewLoading(true);
     try {
       const detail = await getWorkflowTicket(row.workflow_ticket_id);
+      if (seq !== previewSeqRef.current) return;
       setPreviewDetail(detail);
     } catch {
-      /* toast */
+      if (seq === previewSeqRef.current) setPreviewError(true);
     } finally {
-      setPreviewLoading(false);
+      if (seq === previewSeqRef.current) setPreviewLoading(false);
     }
   };
 
@@ -182,9 +207,10 @@ export function WorkflowInboxPage() {
   };
 
   const submitReview = async () => {
-    if (!reviewTarget) return;
+    if (!reviewTarget || actingRef.current) return;
     const values = await reviewForm.validateFields();
     const comment = values.comment ?? "";
+    actingRef.current = true;
     setSubmitting(true);
     try {
       await submitDomainReview(reviewTarget, reviewApprove, comment);
@@ -195,6 +221,7 @@ export function WorkflowInboxPage() {
     } catch {
       /* http 拦截器已 toast */
     } finally {
+      actingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -280,14 +307,14 @@ export function WorkflowInboxPage() {
                 onClick: () => openReview(row, false),
               }
             : null,
-        ].filter(Boolean);
+        ].filter(Boolean) as NonNullable<MenuProps["items"]>[number][];
         return (
           <Space size={0} className="yunshu-table-actions">
             <Button type="link" size="small" onClick={() => void openPreview(row)}>
               预览
             </Button>
             {more.length ? (
-              <Dropdown menu={{ items: more as never }} trigger={["click"]}>
+              <Dropdown menu={{ items: more }} trigger={["click"]}>
                 <Button type="link" size="small">
                   更多 <DownOutlined />
                 </Button>
@@ -312,44 +339,46 @@ export function WorkflowInboxPage() {
         meta={[`待办 ${total}`]}
       />
       <ApprovalCenterNav />
-      <Card>
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Select
-            allowClear
-            placeholder="全部项目"
-            style={{ width: 200 }}
-            value={projectId}
-            onChange={(v) => {
-              setProjectId(v);
-              setPage(1);
-            }}
-            options={projects.map((p) => ({ label: p.name, value: p.id }))}
-          />
-          <Select
-            style={{ width: 140 }}
-            value={domains}
-            onChange={(v) => {
-              setDomains(v);
-              setPage(1);
-            }}
-            options={[...WORKFLOW_DOMAIN_OPTIONS]}
-          />
-          <Segmented
-            value={mineScope}
-            onChange={(v) => {
-              setMineScope(v as MineScope);
-              setPage(1);
-            }}
-            options={[
-              { label: "待我处理", value: "pending" },
-              { label: "我已处理", value: "done" },
-              { label: "全部相关", value: "all" },
-            ]}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            刷新
-          </Button>
-        </Space>
+      <Card className="table-card">
+        <div className="toolbar">
+          <Space wrap>
+            <Select
+              allowClear
+              placeholder="全部项目"
+              style={{ width: 200 }}
+              value={projectId}
+              onChange={(v) => {
+                setProjectId(v);
+                setPage(1);
+              }}
+              options={projects.map((p) => ({ label: p.name, value: p.id }))}
+            />
+            <Select
+              style={{ width: 140 }}
+              value={domains}
+              onChange={(v) => {
+                setDomains(v);
+                setPage(1);
+              }}
+              options={[...WORKFLOW_DOMAIN_OPTIONS]}
+            />
+            <Segmented
+              value={mineScope}
+              onChange={(v) => {
+                setMineScope(v as MineScope);
+                setPage(1);
+              }}
+              options={[
+                { label: "待我处理", value: "pending" },
+                { label: "我已处理", value: "done" },
+                { label: "全部相关", value: "all" },
+              ]}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={loading}>
+              刷新
+            </Button>
+          </Space>
+        </div>
 
         <Table
           rowKey={(r) => `${r.workflow_ticket_id}-${r.step_id}`}
@@ -359,7 +388,7 @@ export function WorkflowInboxPage() {
           scroll={{ x: 1180 }}
           locale={{ emptyText: <Empty description={mineScope === "pending" ? "暂无待处理事项" : "暂无相关工单"} /> }}
           onRow={(row) => ({
-            id: `wf-row-${row.workflow_ticket_id}`,
+            id: `wf-row-${row.workflow_ticket_id}-${row.step_id}`,
             style:
               highlightTicketId && (row.workflow_ticket_id === highlightTicketId || row.ref_id === highlightTicketId)
                 ? { background: "rgba(22, 119, 255, 0.08)" }
@@ -383,7 +412,7 @@ export function WorkflowInboxPage() {
         width={520}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        destroyOnClose
+        destroyOnHidden
         extra={
           <Space>
             {previewLink ? (
@@ -432,7 +461,15 @@ export function WorkflowInboxPage() {
         <Typography.Title level={5} style={{ marginTop: 0 }}>
           审批进度
         </Typography.Title>
-        {previewLoading ? (
+        {previewError ? (
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <Typography.Text type="secondary">步骤信息加载失败</Typography.Text>
+            <br />
+            <Button size="small" style={{ marginTop: 8 }} onClick={() => previewRow && void openPreview(previewRow)}>
+              重试
+            </Button>
+          </div>
+        ) : previewLoading ? (
           <Typography.Text type="secondary">加载中…</Typography.Text>
         ) : previewDetail?.steps?.length ? (
           <Steps
@@ -480,7 +517,7 @@ export function WorkflowInboxPage() {
         confirmLoading={submitting}
         onCancel={() => setReviewOpen(false)}
         onOk={() => void submitReview()}
-        destroyOnClose
+        destroyOnHidden
         okText={reviewApprove ? "确认通过" : "确认驳回"}
         okButtonProps={reviewApprove ? undefined : { danger: true }}
       >

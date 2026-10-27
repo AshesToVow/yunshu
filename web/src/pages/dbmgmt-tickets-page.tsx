@@ -1,9 +1,10 @@
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
-import { Button, Card, Input, Select, Space, Table, Tag } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Card, Input, Select, Space, Table, Tag, message } from "antd";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { auditModeLabel, ticketTypeLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import { listDbTickets, type DbTicket } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 import { ticketStatusLabel } from "../utils/dbmgmt-labels";
@@ -17,6 +18,7 @@ function ticketTypeColor(t?: string) {
 function statusTagColor(s?: string) {
   if (s === "success") return "green";
   if (s === "executing") return "orange";
+  if (s === "result_unknown") return "volcano";
   if (s === "failed" || s === "rejected") return "red";
   if (s === "pending_execution") return "blue";
   return "default";
@@ -38,77 +40,101 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载项目列表失败")));
   }, []);
 
   const load = useCallback(async () => {
     if (!projectId) return;
-    const res = await listDbTickets(projectId, {
-      page,
-      page_size: 10,
-      ...(ticketType ? { ticket_type: ticketType } : {}),
-    });
-    setRows(res.list ?? []);
-    setTotal(res.total ?? 0);
-  }, [projectId, page, ticketType]);
+    const seq = ++loadSeqRef.current;
+    setLoading(true);
+    try {
+      const res = await listDbTickets(projectId, {
+        page,
+        page_size: 10,
+        ...(ticketType ? { ticket_type: ticketType } : {}),
+        ...(searchText.trim() ? { keyword: searchText.trim() } : {}),
+      });
+      if (seq !== loadSeqRef.current) return; // 已有更新的请求，丢弃过期响应
+      setRows(res.list ?? []);
+      setTotal(res.total ?? 0);
+    } catch (e) {
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载工单失败"));
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
+    }
+  }, [projectId, page, ticketType, searchText]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const filteredRows = useMemo(() => {
-    const kw = searchText.trim().toLowerCase();
-    if (!kw) return rows;
-    return rows.filter((r) => (r.reason || r.sql_excerpt || "").toLowerCase().includes(kw));
-  }, [rows, searchText]);
+  const search = () => {
+    setPage(1);
+    setSearchText(keyword);
+  };
 
+  // 只重置状态，由 load 的依赖变化触发重新加载，避免旧闭包重复请求
   const reset = () => {
     setTicketType("");
     setKeyword("");
     setSearchText("");
     setPage(1);
-    void load();
   };
 
   return (
-    <Card title={variant === "history" ? "历史工单" : "SQL 工单"}>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Button icon={<ReloadOutlined />} onClick={reset}>
-          重置
-        </Button>
-        <Select
-          style={{ width: 180 }}
-          placeholder="选择工单类型搜索"
-          value={ticketType || undefined}
-          allowClear
-          options={TICKET_TYPE_OPTIONS}
-          onChange={(v) => setTicketType(v ?? "")}
-        />
-        <Input
-          placeholder="请输入任务名称进行搜索"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          onPressEnter={() => setSearchText(keyword)}
-          style={{ width: 240 }}
-        />
-        <Button type="primary" icon={<SearchOutlined />} onClick={() => setSearchText(keyword)}>
-          搜索
-        </Button>
-        <Select
-          style={{ width: 160 }}
-          value={projectId}
-          options={projects.map((p) => ({ value: p.id, label: p.name }))}
-          onChange={setProjectId}
-        />
-      </Space>
+    <Card className="table-card" title={variant === "history" ? "历史工单" : "SQL 工单"}>
+      <div className="toolbar">
+        <Space wrap>
+          <Button icon={<ReloadOutlined />} onClick={reset}>
+            重置
+          </Button>
+          <Select
+            style={{ width: 180 }}
+            placeholder="选择工单类型搜索"
+            value={ticketType || undefined}
+            allowClear
+            options={TICKET_TYPE_OPTIONS}
+            onChange={(v) => {
+              setTicketType(v ?? "");
+              setPage(1);
+            }}
+          />
+          <Input
+            placeholder="请输入任务名称进行搜索"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onPressEnter={search}
+            style={{ width: 240 }}
+          />
+          <Button type="primary" icon={<SearchOutlined />} onClick={search}>
+            搜索
+          </Button>
+          <Select
+            style={{ width: 160 }}
+            value={projectId}
+            options={projects.map((p) => ({ value: p.id, label: p.name }))}
+            onChange={(v) => {
+              setProjectId(v);
+              setPage(1);
+            }}
+          />
+        </Space>
+      </div>
       <Table
         rowKey="id"
-        dataSource={filteredRows}
+        loading={loading}
+        dataSource={rows}
+        scroll={{ x: 1200 }}
         pagination={{
           current: page,
           pageSize: 10,
@@ -141,7 +167,9 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
             title: "完成时间",
             width: 170,
             render: (_, r) =>
-              r.status === "success" || r.status === "failed" ? formatDateTime(r.updated_at ?? r.created_at) : "—",
+              r.status === "success" || r.status === "failed" || r.status === "result_unknown"
+                ? formatDateTime(r.updated_at ?? r.created_at)
+                : "—",
           },
           {
             title: "任务状态",
@@ -152,6 +180,7 @@ export function DbmgmtTicketsPage({ variant = "list" }: { variant?: "list" | "hi
           {
             title: "操作",
             width: 260,
+            fixed: "right",
             render: (_, r) => (
               <Space>
                 <Button

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -30,6 +31,16 @@ func respondSessionStoreError(c *gin.Context, _ *logx.Logger, err error) {
 	default:
 		logx.With(c.Request.Context(), "component", "http.auth").Error("session validation failed", "error", err)
 	}
+}
+
+// mustChangePassword 统一 HTTP 与 WebSocket 的强制改密判定，避免 WS 通道绕过密码过期。
+func mustChangePassword(ctx context.Context, db *gorm.DB, user *model.User) bool {
+	if user == nil {
+		return true
+	}
+	cfg := dictconfig.ResolvePasswordPolicy(ctx, db)
+	expired := password.IsExpired(user.PasswordChangedAt, user.CreatedAt, cfg.ExpiryDays, time.Now())
+	return user.MustChangePassword || expired
 }
 
 func passwordChangeAllowed(method, fullPath string) bool {
@@ -94,9 +105,7 @@ func Auth(secret string, redisClient *redis.Client, userRepo interfaces.UserRepo
 				groupCodes = append(groupCodes, code)
 			}
 		}
-		cfg := dictconfig.ResolvePasswordPolicy(c.Request.Context(), db)
-		expired := password.IsExpired(user.PasswordChangedAt, user.CreatedAt, cfg.ExpiryDays, time.Now())
-		mustChange := user.MustChangePassword || expired
+		mustChange := mustChangePassword(c.Request.Context(), db, user)
 		currentUser := &auth.CurrentUser{
 			ID:                 user.ID,
 			Username:           user.Username,

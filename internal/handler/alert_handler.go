@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 	"yunshu/internal/pkg/auth"
@@ -13,6 +14,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// alertIngressMaxBodyBytes 入站 Webhook 请求体上限，防止大包打满内存。
+const alertIngressMaxBodyBytes = 4 << 20
 
 type AlertHandler struct {
 	svc *service.AlertService
@@ -272,6 +276,7 @@ func (h *AlertHandler) ReceiveAlertmanagerWebhook(c *gin.Context) {
 		response.Error(c, constants.ErrAlertWebhookTokenInvalid)
 		return
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, alertIngressMaxBodyBytes)
 	var payload service.AlertManagerPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		response.Error(c, constants.ErrBadRequestWithMsg(bindErrorMessage(err)))
@@ -309,11 +314,12 @@ func (h *AlertHandler) ReceiveK8sEventIngress(c *gin.Context) {
 			token = authHeader
 		}
 	}
-	if !h.svc.ValidateK8sEventIngressToken(token, c.ClientIP()) {
+	if !h.svc.ValidateK8sEventIngressToken(token, ingressPeerIP(c)) {
 		response.Error(c, constants.ErrAlertWebhookTokenInvalid)
 		return
 	}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, alertIngressMaxBodyBytes)
 	var payload service.AlertManagerPayload
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		response.Error(c, constants.ErrBadRequestWithMsg(bindErrorMessage(err)))
@@ -325,6 +331,18 @@ func (h *AlertHandler) ReceiveK8sEventIngress(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{"message": "accepted"})
+}
+
+// ingressPeerIP 返回 TCP 对端地址，不信任 X-Forwarded-For（该值可被客户端伪造）。
+func ingressPeerIP(c *gin.Context) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	remote := strings.TrimSpace(c.Request.RemoteAddr)
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		return host
+	}
+	return remote
 }
 
 func (h *AlertHandler) ExportHisEventsCSV(c *gin.Context) {

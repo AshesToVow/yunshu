@@ -1,7 +1,8 @@
 import { ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Select, Space, Table, Typography } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Button, Card, Modal, Select, Space, Table, Typography, message } from "antd";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listDbAuditLogs, listDbInstances, type DbAuditLogItem } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 
@@ -50,12 +51,19 @@ function formatAuditDetail(row: DbAuditLogItem) {
   if (d.statement_count) parts.push(`${String(d.statement_count)} 条语句`);
   if (d.name) parts.push(`名称: ${String(d.name)}`);
   if (d.sql_file_ref) parts.push(`文件: ${String(d.sql_file_ref)}`);
-  if (d.sql) {
-    const sql = String(d.sql);
-    parts.push(sql.length > 120 ? `${sql.slice(0, 120)}...` : sql);
-  }
   return parts.length ? parts.join(" · ") : "-";
 }
+
+function auditSqlText(row: DbAuditLogItem): string | undefined {
+  const detail = row.detail_json;
+  if (!detail || typeof detail !== "object") return undefined;
+  const sql = (detail as Record<string, unknown>).sql;
+  if (typeof sql !== "string") return undefined;
+  const text = sql.trim();
+  return text || undefined;
+}
+
+type AuditSqlView = { sql: string; meta: string };
 
 export function DbmgmtAuditPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -67,26 +75,47 @@ export function DbmgmtAuditPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>();
+  const [sqlView, setSqlView] = useState<AuditSqlView | null>(null);
   const [instances, setInstances] = useState<
     { id: number; name: string; host: string; port: number; driver?: string }[]
   >([]);
+  const loadSeqRef = useRef(0);
+  const instancesSeqRef = useRef(0);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch(() => {
+        /* 项目列表加载失败不阻断页面 */
+      });
   }, []);
 
   useEffect(() => {
+    const seq = ++instancesSeqRef.current;
+    setInstances([]);
     if (!projectId) return;
-    void listDbInstances(projectId, { page: 1, page_size: 500 }).then((res) => {
-      setInstances(res.list ?? []);
-    });
+    void listDbInstances(projectId, { page: 1, page_size: 500 })
+      .then((res) => {
+        if (seq === instancesSeqRef.current) setInstances(res.list ?? []);
+      })
+      .catch((e) => {
+        if (seq !== instancesSeqRef.current) return;
+        setInstances([]);
+        message.error(extractApiErrorMessage(e, "加载实例列表失败"));
+      });
   }, [projectId]);
 
   const load = useCallback(async () => {
-    if (!projectId) return;
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setRows([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setErrorMsg(undefined);
     try {
@@ -94,18 +123,34 @@ export function DbmgmtAuditPage() {
       if (instanceId) params.instance_id = instanceId;
       if (actionFilter) params.action = actionFilter;
       const res = await listDbAuditLogs(projectId, params);
+      if (seq !== loadSeqRef.current) return;
       setRows(res.list ?? []);
       setTotal(res.total ?? 0);
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "加载失败");
+      if (seq !== loadSeqRef.current) return;
+      setErrorMsg(extractApiErrorMessage(e, "加载失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [projectId, instanceId, actionFilter, page]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  const copySql = async () => {
+    if (!sqlView) return;
+    if (!navigator.clipboard) {
+      message.error("当前浏览器不支持自动复制，请手动选择文本复制");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(sqlView.sql);
+      message.success("SQL 已复制");
+    } catch {
+      message.error("复制失败，请手动选择文本复制");
+    }
+  };
 
   const instanceOptions = useMemo(
     () => [
@@ -116,18 +161,22 @@ export function DbmgmtAuditPage() {
   );
 
   return (
-    <Card
-      title="审计日志"
-      extra={
+    <Card className="table-card" title="审计日志">
+      <div className="toolbar">
         <Space wrap>
           <Select
             style={{ width: 200 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
             onChange={(v) => {
+              loadSeqRef.current += 1;
+              instancesSeqRef.current += 1;
               setProjectId(v);
               setInstanceId(undefined);
               setPage(1);
+              setInstances([]);
+              setRows([]);
+              setTotal(0);
             }}
           />
           <Select
@@ -150,10 +199,13 @@ export function DbmgmtAuditPage() {
               setPage(1);
             }}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} />
         </Space>
-      }
-    >
+        <div className="toolbar__actions">
+          <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+            刷新
+          </Button>
+        </div>
+      </div>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
         记录 SQL 查询/执行、工单、授权、权限申请等操作。查询语句的完整执行历史另见「SQL 查询」页的查询历史。
       </Typography.Paragraph>
@@ -162,20 +214,79 @@ export function DbmgmtAuditPage() {
         rowKey="id"
         loading={loading}
         dataSource={rows}
+        scroll={{ x: 1140 }}
         pagination={{ current: page, pageSize: 20, total, onChange: (p) => setPage(p) }}
         columns={[
           { title: "时间", dataIndex: "created_at", width: 170, render: (v?: string) => formatDateTime(v) },
           { title: "操作人", dataIndex: "actor_name", width: 120 },
-          { title: "操作", dataIndex: "action", width: 140, render: (v: string) => auditActionLabel(v) },
+          { title: "操作类型", dataIndex: "action", width: 140, render: (v: string) => auditActionLabel(v) },
           {
             title: "实例",
             width: 180,
             render: (_, row) =>
               row.instance_label || row.instance_name || (row.instance_id ? `#${row.instance_id}` : "—"),
           },
-          { title: "详情", render: (_, row) => formatAuditDetail(row) },
+          {
+            title: "详情",
+            width: 420,
+            render: (_, row) => {
+              const summary = formatAuditDetail(row);
+              return (
+                <Typography.Text ellipsis={{ tooltip: summary }} style={{ maxWidth: "100%" }}>
+                  {summary}
+                </Typography.Text>
+              );
+            },
+          },
+          {
+            title: "操作",
+            key: "actions",
+            width: 110,
+            fixed: "right",
+            render: (_, row) => {
+              const sql = auditSqlText(row);
+              if (!sql) return "—";
+              return (
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() =>
+                    setSqlView({
+                      sql,
+                      meta: `${auditActionLabel(row.action)} · ${row.actor_name} · ${formatDateTime(row.created_at)}`,
+                    })
+                  }
+                >
+                  查看 SQL
+                </Button>
+              );
+            },
+          },
         ]}
       />
+      <Modal
+        title="SQL 详情"
+        open={Boolean(sqlView)}
+        width={860}
+        onCancel={() => setSqlView(null)}
+        footer={[
+          <Button key="copy" onClick={() => void copySql()}>
+            复制 SQL
+          </Button>,
+          <Button key="close" type="primary" onClick={() => setSqlView(null)}>
+            关闭
+          </Button>,
+        ]}
+      >
+        {sqlView ? (
+          <>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
+              {sqlView.meta}
+            </Typography.Paragraph>
+            <pre className="code-block-panel">{sqlView.sql}</pre>
+          </>
+        ) : null}
+      </Modal>
     </Card>
   );
 }

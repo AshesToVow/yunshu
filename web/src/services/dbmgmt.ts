@@ -545,7 +545,7 @@ export async function getInstanceMySQLUserPrivileges(
 
 export async function getInstanceAccountPassword(projectId: number, instanceId: number, accountId: number) {
   return getData<{ password: string }>(
-    http.get(`${base(projectId)}/instances/${instanceId}/accounts/${accountId}/password`),
+    http.post(`${base(projectId)}/instances/${instanceId}/accounts/${accountId}/password`),
   );
 }
 

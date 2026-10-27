@@ -37,3 +37,12 @@ export function getAntdIconSelectOptions(): { value: string; label: ReactNode }[
   });
   return cachedOptions;
 }
+
+/** 按名称渲染 Antd 图标；未知名称降级为纯文本。 */
+export function renderAntdIcon(name?: string | null): ReactNode {
+  if (!name) return null;
+  const trimmed = name.trim();
+  const icons = IconComponents as unknown as Record<string, ComponentType<object>>;
+  const Cmp = icons[trimmed];
+  return Cmp ? createElement(Cmp) : createElement("span", null, trimmed);
+}

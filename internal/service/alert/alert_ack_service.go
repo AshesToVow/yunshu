@@ -41,21 +41,55 @@ func (s *AlertService) AcknowledgeAlert(ctx context.Context, userID uint, userNa
 	if fp == "" {
 		return nil, constants.ErrBadRequestWithMsg("fingerprint required")
 	}
+	projectID, found, err := s.resolveEventProjectID(ctx, fp)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert.ack", "AcknowledgeAlert", err)
+	}
+	if !found {
+		return nil, constants.ErrNotFoundWithMsg("告警不存在或已归档")
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, projectID); err != nil {
+		return nil, err
+	}
 	ttl, err := parseAckTTLMinutes(s.loadAckTTLAllowed(ctx), req.TTLMinutes)
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now().UTC()
 	row := &model.AlertAck{
 		Fingerprint: fp,
+		ProjectID:   projectID,
 		UserID:      userID,
 		UserName:    strings.TrimSpace(userName),
-		ExpiresAt:   time.Now().UTC().Add(time.Duration(ttl) * time.Minute),
+		ExpiresAt:   now.Add(time.Duration(ttl) * time.Minute),
 	}
-	if err := s.ackRepo.Create(ctx, row); err != nil {
+	if err := s.ackRepo.ReplaceActive(ctx, row, now); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert.ack", "AcknowledgeAlert", err)
 	}
 	s.clearEscalationState(ctx, fp)
 	return row, nil
+}
+
+// resolveEventProjectID 由指纹反查当前/历史告警所属项目；不存在时 found=false。
+func (s *AlertService) resolveEventProjectID(ctx context.Context, fingerprint string) (uint, bool, error) {
+	if s == nil || s.curHisRepo == nil {
+		return 0, false, nil
+	}
+	cur, err := s.curHisRepo.GetCurByFingerprint(ctx, fingerprint)
+	if err == nil && cur != nil {
+		return cur.ProjectID, true, nil
+	}
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return 0, false, err
+	}
+	his, err := s.curHisRepo.GetLatestHisByFingerprint(ctx, fingerprint)
+	if err == nil && his != nil {
+		return his.ProjectID, true, nil
+	}
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return 0, false, err
+	}
+	return 0, false, nil
 }
 
 func (s *AlertService) loadAckTTLAllowed(ctx context.Context) []int {
@@ -119,8 +153,18 @@ func (s *AlertService) ClearAlertAck(ctx context.Context, fingerprint string) er
 	if fp == "" {
 		return constants.ErrBadRequestWithMsg("fingerprint required")
 	}
+	projectID, found, err := s.resolveEventProjectID(ctx, fp)
+	if err != nil {
+		return bizerrors.Pass(ctx, "alert.ack", "ClearAlertAck", err)
+	}
+	if !found {
+		return nil
+	}
+	if err := assertAlertProjectWrite(ctx, s.memberRepo, projectID); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
-	err := s.ackRepo.ExpireActive(ctx, fp, now)
+	err = s.ackRepo.ExpireActive(ctx, fp, now)
 	return bizerrors.Pass(ctx, "alert.ack", "ClearAlertAck", err)
 }
 
@@ -135,6 +179,15 @@ func (s *AlertService) GetActiveAck(ctx context.Context, fingerprint string) (*A
 	out := &AlertAckActiveInfo{Fingerprint: fp}
 	if s == nil || s.ackRepo == nil || fp == "" {
 		return out, nil
+	}
+	projectID, found, err := s.resolveEventProjectID(ctx, fp)
+	if err != nil {
+		return out, bizerrors.Pass(ctx, "alert.ack", "GetActiveAck", err)
+	}
+	if found {
+		if err := assertAlertProjectVisible(ctx, s.memberRepo, projectID); err != nil {
+			return out, err
+		}
 	}
 	row, err := s.ackRepo.GetActive(ctx, fp, time.Now().UTC())
 	if err == gorm.ErrRecordNotFound {

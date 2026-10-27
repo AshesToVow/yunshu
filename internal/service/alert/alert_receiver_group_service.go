@@ -52,14 +52,14 @@ type AlertReceiverGroupUpsertRequest struct {
 	Name        string `json:"name" binding:"required,max=128"`
 	Description string `json:"description"`
 
-	ChannelIDsJSON      string  `json:"channel_ids_json"`
-	EmailRecipientsJSON string  `json:"email_recipients_json"`
-	ActiveTimeStart     *string `json:"active_time_start"`
-	ActiveTimeEnd       *string `json:"active_time_end"`
-	WeekdaysJSON           string `json:"weekdays_json"`
-	EscalationLevel        int    `json:"escalation_level"`
-	EscalationDelaySeconds int    `json:"escalation_delay_seconds"`
-	Enabled                *bool  `json:"enabled"`
+	ChannelIDsJSON         string  `json:"channel_ids_json"`
+	EmailRecipientsJSON    string  `json:"email_recipients_json"`
+	ActiveTimeStart        *string `json:"active_time_start"`
+	ActiveTimeEnd          *string `json:"active_time_end"`
+	WeekdaysJSON           string  `json:"weekdays_json"`
+	EscalationLevel        int     `json:"escalation_level"`
+	EscalationDelaySeconds int     `json:"escalation_delay_seconds"`
+	Enabled                *bool   `json:"enabled"`
 }
 
 func (s *AlertReceiverGroupService) Create(ctx context.Context, req AlertReceiverGroupUpsertRequest) (*model.AlertReceiverGroup, error) {

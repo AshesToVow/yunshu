@@ -23,7 +23,9 @@ type DeploymentRolloutCondition struct {
 type DeploymentRolloutStatus struct {
 	Namespace           string                       `json:"namespace"`
 	Name                string                       `json:"name"`
+	Generation          int64                        `json:"generation"`
 	ObservedGeneration  int64                        `json:"observed_generation"`
+	Synced              bool                         `json:"synced"`
 	Replicas            int32                        `json:"replicas"`
 	UpdatedReplicas     int32                        `json:"updated_replicas"`
 	ReadyReplicas       int32                        `json:"ready_replicas"`
@@ -57,7 +59,9 @@ func (s *K8sWorkloadService) DeploymentRolloutStatus(ctx context.Context, q Depl
 	out := &DeploymentRolloutStatus{
 		Namespace:           dep.Namespace,
 		Name:                dep.Name,
+		Generation:          dep.Generation,
 		ObservedGeneration:  st.ObservedGeneration,
+		Synced:              st.ObservedGeneration >= dep.Generation,
 		Replicas:            derefInt32(spec.Replicas),
 		UpdatedReplicas:     st.UpdatedReplicas,
 		ReadyReplicas:       st.ReadyReplicas,
@@ -85,19 +89,26 @@ func (s *K8sWorkloadService) DeploymentRolloutStatus(ctx context.Context, q Depl
 		if c.Type == appsv1.DeploymentProgressing && c.Status == "True" {
 			out.Progressing = true
 		}
-		if c.Type == appsv1.DeploymentAvailable && c.Status == "True" {
-			out.Complete = st.UpdatedReplicas >= derefInt32(spec.Replicas) &&
-				st.ReadyReplicas >= derefInt32(spec.Replicas) &&
-				st.UnavailableReplicas == 0
-		}
 	}
+	desired := derefInt32(spec.Replicas)
 	if out.StrategyType == "" {
 		out.StrategyType = string(appsv1.RollingUpdateDeploymentStrategyType)
 	}
-	if strings.EqualFold(out.StrategyType, "Recreate") {
-		out.Complete = st.ReadyReplicas >= derefInt32(spec.Replicas) && st.UpdatedReplicas >= derefInt32(spec.Replicas)
-	}
+	// 必须等控制器观察到最新 spec（observedGeneration >= metadata.generation），
+	// 否则刚改完镜像时旧副本仍全 Ready 会被误判为发布完成。
+	out.Complete = deploymentRolloutComplete(out.StrategyType, out.Synced,
+		st.Replicas, st.UpdatedReplicas, st.ReadyReplicas, st.AvailableReplicas, st.UnavailableReplicas, desired)
 	return out, nil
+}
+
+func deploymentRolloutComplete(strategyType string, synced bool, replicas, updated, ready, available, unavailable, desired int32) bool {
+	if !synced || replicas != updated {
+		return false
+	}
+	if strings.EqualFold(strategyType, "Recreate") {
+		return ready >= desired && available >= desired
+	}
+	return updated >= desired && ready >= desired && available >= desired && unavailable == 0
 }
 
 func derefInt32(p *int32) int32 {

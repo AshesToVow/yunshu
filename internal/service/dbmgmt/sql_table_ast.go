@@ -111,5 +111,16 @@ func extractTableRefsAST(sqlText, defaultDB string) ([]queryTableRef, bool) {
 	default:
 		return nil, false
 	}
+	// 上面的 switch 只覆盖 FROM/JOIN 等顶层表表达式，WHERE/SELECT 列表/SET 中的
+	// 子查询仍可能引用其它库表；整棵 AST 再遍历一次把所有 TableName 收齐（add 已去重）。
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch tn := node.(type) {
+		case sqlparser.TableName:
+			add(tn.Qualifier.String(), tn.Name.String())
+		case *sqlparser.TableName:
+			add(tn.Qualifier.String(), tn.Name.String())
+		}
+		return true, nil
+	}, stmt)
 	return refs, true
 }

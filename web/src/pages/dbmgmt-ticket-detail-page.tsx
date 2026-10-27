@@ -1,5 +1,19 @@
 import { CheckOutlined, CloseOutlined, DownloadOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Input, Modal, Select, Space, Table, Tabs, Tag, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  message,
+} from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -26,6 +40,7 @@ import {
   type DbTicketStep,
 } from "../services/dbmgmt";
 import { getProjects, type ProjectItem } from "../services/projects";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 import { envLabel, ticketStatusLabel } from "../utils/dbmgmt-labels";
 
@@ -39,6 +54,12 @@ type ReviewRow = {
   affected_rows?: number;
   execute_time?: string;
   backup_time?: string;
+};
+
+/** 工单接口预留的错误字段（有则展示，避免未类型化导致遗漏） */
+type DbTicketWithErrors = DbTicket & {
+  execute_error?: string;
+  provision_error?: string;
 };
 
 function parseReviewJSON(raw?: string): ReviewRow[] {
@@ -65,6 +86,14 @@ function syntaxLabel(v?: number) {
   if (v === 1) return "DDL";
   if (v === 2) return "DML";
   return "其他";
+}
+
+function ticketStatusTagColor(s?: string) {
+  if (s === "success") return "green";
+  if (s === "failed") return "red";
+  if (s === "executing") return "orange";
+  if (s === "result_unknown") return "volcano";
+  return "blue";
 }
 
 function buildTaskLogs(ticket: DbTicket, steps: DbTicketStep[]) {
@@ -120,7 +149,7 @@ export function DbmgmtTicketDetailPage() {
   const tab = searchParams.get("tab") ?? "info";
   const projectFromUrl = Number(searchParams.get("project")) || undefined;
   const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [projectId, setProjectId] = useState<number>();
+  const [projectId, setProjectId] = useState<number | undefined>(() => projectFromUrl);
   const [ticket, setTicket] = useState<DbTicket>();
   const [steps, setSteps] = useState<DbTicketStep[]>([]);
   const [instances, setInstances] = useState<DbInstance[]>([]);
@@ -131,20 +160,36 @@ export function DbmgmtTicketDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [oscJobs, setOscJobs] = useState<DbOscJob[]>([]);
   const rejectCommentRef = useRef("");
+  const loadSeqRef = useRef(0);
+  const oscSeqRef = useRef(0);
+  const actionInFlightRef = useRef(false);
+  const rollbackInFlightRef = useRef(false);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (projectFromUrl) {
-        setProjectId(projectFromUrl);
-      } else if (res.list?.length) {
-        setProjectId(res.list[0].id);
-      }
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        // URL 已带 project 时不要被项目列表首项覆盖
+        setProjectId((prev) => prev ?? res.list?.[0]?.id);
+      })
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载项目列表失败")));
+  }, []);
+
+  useEffect(() => {
+    if (projectFromUrl) setProjectId(projectFromUrl);
   }, [projectFromUrl]);
+
+  useEffect(() => {
+    // 切换项目/工单先清空旧详情，避免展示上一项目的数据
+    setTicket(undefined);
+    setSteps([]);
+    setRollbackRows([]);
+    setOscJobs([]);
+  }, [projectId, ticketId]);
 
   const load = useCallback(async () => {
     if (!projectId || !ticketId) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const [t, st, inst] = await Promise.all([
@@ -152,29 +197,31 @@ export function DbmgmtTicketDetailPage() {
         listDbTicketSteps(projectId, ticketId).catch(() => []),
         listDbInstances(projectId, { page: 1, page_size: 200 }),
       ]);
+      if (seq !== loadSeqRef.current) return; // 已有更新的请求，丢弃过期响应
       setTicket(t);
       setSteps(st ?? []);
       setInstances(inst.list ?? []);
-      if (t.project_id && t.project_id !== projectId) {
+      if (!projectFromUrl && t.project_id && t.project_id !== projectId) {
         setProjectId(t.project_id);
       }
       if (t.is_backup && (t.status === "success" || t.status === "failed")) {
         try {
           const rb = await getDbTicketRollback(projectId, ticketId);
-          setRollbackRows(rb ?? []);
+          if (seq === loadSeqRef.current) setRollbackRows(rb ?? []);
         } catch {
-          setRollbackRows([]);
+          if (seq === loadSeqRef.current) setRollbackRows([]);
         }
-      } else {
+      } else if (seq === loadSeqRef.current) {
         setRollbackRows([]);
       }
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       setTicket(undefined);
-      message.error(e instanceof Error ? e.message : "加载工单失败");
+      message.error(extractApiErrorMessage(e, "加载工单失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [projectId, ticketId]);
+  }, [projectId, ticketId, projectFromUrl]);
 
   useEffect(() => {
     void load();
@@ -182,17 +229,22 @@ export function DbmgmtTicketDetailPage() {
 
   useEffect(() => {
     const showOsc = ticket?.status === "executing" || ticket?.status === "success" || ticket?.status === "failed";
+    const seq = ++oscSeqRef.current;
     if (!projectId || !ticketId || !showOsc) {
       setOscJobs([]);
       return;
     }
     void listDbTicketOscJobs(projectId, ticketId)
-      .then((jobs) => setOscJobs(jobs ?? []))
-      .catch(() => setOscJobs([]));
+      .then((jobs) => {
+        if (seq === oscSeqRef.current) setOscJobs(jobs ?? []);
+      })
+      .catch(() => {
+        if (seq === oscSeqRef.current) setOscJobs([]);
+      });
   }, [projectId, ticketId, ticket?.status]);
 
   const handleApprove = () => {
-    if (!projectId || !ticketId) return;
+    if (!projectId || !ticketId || actionInFlightRef.current) return;
     const commentRef = { current: "" };
     Modal.confirm({
       title: "审批通过",
@@ -207,15 +259,18 @@ export function DbmgmtTicketDetailPage() {
       ),
       okText: "确认通过",
       onOk: async () => {
+        if (!projectId || !ticketId || actionInFlightRef.current) return;
+        actionInFlightRef.current = true;
         setActionLoading(true);
         try {
           await approveDbTicket(projectId, ticketId, commentRef.current || undefined);
           message.success("已审批通过");
-          void load();
+          await load();
         } catch (e) {
-          message.error(e instanceof Error ? e.message : "审批失败");
+          message.error(extractApiErrorMessage(e, "审批失败"));
           throw e;
         } finally {
+          actionInFlightRef.current = false;
           setActionLoading(false);
         }
       },
@@ -223,7 +278,7 @@ export function DbmgmtTicketDetailPage() {
   };
 
   const handleReject = () => {
-    if (!projectId || !ticketId) return;
+    if (!projectId || !ticketId || actionInFlightRef.current) return;
     rejectCommentRef.current = "";
     Modal.confirm({
       title: "驳回工单",
@@ -239,15 +294,18 @@ export function DbmgmtTicketDetailPage() {
       okText: "确认驳回",
       okButtonProps: { danger: true },
       onOk: async () => {
+        if (!projectId || !ticketId || actionInFlightRef.current) return;
+        actionInFlightRef.current = true;
         setActionLoading(true);
         try {
           await rejectDbTicket(projectId, ticketId, rejectCommentRef.current || undefined);
           message.success("已驳回");
-          void load();
+          await load();
         } catch (e) {
-          message.error(e instanceof Error ? e.message : "驳回失败");
+          message.error(extractApiErrorMessage(e, "驳回失败"));
           throw e;
         } finally {
+          actionInFlightRef.current = false;
           setActionLoading(false);
         }
       },
@@ -255,21 +313,24 @@ export function DbmgmtTicketDetailPage() {
   };
 
   const handleExecute = async () => {
-    if (!projectId || !ticketId) return;
+    if (!projectId || !ticketId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setActionLoading(true);
     try {
       await executeDbTicket(projectId, ticketId);
       message.success("已开始执行");
-      void load();
+      await load();
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "执行失败");
+      message.error(extractApiErrorMessage(e, "执行失败"));
     } finally {
+      actionInFlightRef.current = false;
       setActionLoading(false);
     }
   };
 
   const handleSubmitRollback = async () => {
-    if (!projectId || !ticketId) return;
+    if (!projectId || !ticketId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setActionLoading(true);
     try {
       const res = await submitDbRollbackTicket(projectId, ticketId);
@@ -277,11 +338,12 @@ export function DbmgmtTicketDetailPage() {
       if (res.ticket_id) {
         navigate(`/dbmgmt/workflow/tickets/${res.ticket_id}?project=${projectId}`);
       } else {
-        void load();
+        await load();
       }
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "提交回滚失败");
+      message.error(extractApiErrorMessage(e, "提交回滚失败"));
     } finally {
+      actionInFlightRef.current = false;
       setActionLoading(false);
     }
   };
@@ -294,16 +356,18 @@ export function DbmgmtTicketDetailPage() {
   };
 
   const loadRollback = async () => {
-    if (!projectId || !ticketId) return [];
+    if (!projectId || !ticketId || rollbackInFlightRef.current) return [];
+    rollbackInFlightRef.current = true;
     setRollbackLoading(true);
     try {
       const rb = await getDbTicketRollback(projectId, ticketId);
       setRollbackRows(rb ?? []);
       return rb ?? [];
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载回滚 SQL 失败");
+      message.error(extractApiErrorMessage(e, "加载回滚 SQL 失败"));
       return [];
     } finally {
+      rollbackInFlightRef.current = false;
       setRollbackLoading(false);
     }
   };
@@ -372,6 +436,7 @@ export function DbmgmtTicketDetailPage() {
   };
 
   const downloadRollback = async () => {
+    if (rollbackInFlightRef.current) return;
     let rows = rollbackRows;
     if (!rows.length) {
       rows = await loadRollback();
@@ -391,7 +456,8 @@ export function DbmgmtTicketDetailPage() {
   };
 
   const handleOscControl = async (sqlsha1: string, command: "kill" | "pause" | "resume") => {
-    if (!projectId || !ticketId) return;
+    if (!projectId || !ticketId || actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
     setActionLoading(true);
     try {
       await controlDbTicketOsc(projectId, ticketId, sqlsha1, command);
@@ -399,17 +465,44 @@ export function DbmgmtTicketDetailPage() {
       const jobs = await listDbTicketOscJobs(projectId, ticketId);
       setOscJobs(jobs ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "OSC 操作失败");
+      message.error(extractApiErrorMessage(e, "OSC 操作失败"));
     } finally {
+      actionInFlightRef.current = false;
       setActionLoading(false);
     }
   };
 
   const instance = instances.find((i) => i.id === ticket?.instance_id);
   const projectName = projects.find((p) => p.id === (ticket?.project_id ?? projectId))?.name ?? "—";
+  const ticketWithErrors = ticket as DbTicketWithErrors | undefined;
+  const executeErrorText =
+    ticketWithErrors?.execute_error ||
+    executeRows
+      .map((r) => r.error_message)
+      .filter(Boolean)
+      .join("\n");
+  const provisionErrorText = ticketWithErrors?.provision_error;
 
   const infoTab = ticket ? (
     <div>
+      {executeErrorText ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="执行错误"
+          description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{executeErrorText}</pre>}
+        />
+      ) : null}
+      {provisionErrorText ? (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="自动建库/授权失败"
+          description={<pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>{provisionErrorText}</pre>}
+        />
+      ) : null}
       <DbmgmtSectionTitle>基本信息</DbmgmtSectionTitle>
       <Descriptions bordered column={3} size="small" style={{ marginBottom: 24 }}>
         <Descriptions.Item label="工单ID">{ticket.id}</Descriptions.Item>
@@ -439,7 +532,7 @@ export function DbmgmtTicketDetailPage() {
             : "—"}
         </Descriptions.Item>
         <Descriptions.Item label="当前状态">
-          <Tag color="blue">{ticketStatusLabel(ticket.status)}</Tag>
+          <Tag color={ticketStatusTagColor(ticket.status)}>{ticketStatusLabel(ticket.status)}</Tag>
         </Descriptions.Item>
         <Descriptions.Item label="资源组">{projectName}</Descriptions.Item>
       </Descriptions>
@@ -451,6 +544,7 @@ export function DbmgmtTicketDetailPage() {
         dataSource={steps}
         locale={{ emptyText: "暂无审批节点" }}
         pagination={false}
+        scroll={{ x: 760 }}
         style={{ marginBottom: 24 }}
         columns={[
           { title: "节点", dataIndex: "stage_name", width: 140 },
@@ -509,6 +603,7 @@ export function DbmgmtTicketDetailPage() {
         dataSource={reviewRows.length ? reviewRows : []}
         locale={{ emptyText: "暂无审核明细（可能未走 goInception 或尚未审核）" }}
         pagination={false}
+        scroll={{ x: 760 }}
         columns={[
           { title: "序号", dataIndex: "order_id", width: 60, render: (v, _, i) => v ?? i + 1 },
           { title: "阶段", dataIndex: "stage", width: 100 },
@@ -536,6 +631,7 @@ export function DbmgmtTicketDetailPage() {
               ]
         }
         pagination={false}
+        scroll={{ x: 1000 }}
         columns={[
           { title: "ID", dataIndex: "order_id", width: 60, render: (v, _, i) => v ?? i + 1 },
           { title: "SQL内容", dataIndex: "sql", ellipsis: true },
@@ -564,6 +660,7 @@ export function DbmgmtTicketDetailPage() {
             rowKey="sqlsha1"
             dataSource={oscJobs}
             pagination={false}
+            scroll={{ x: 800 }}
             columns={[
               { title: "序号", dataIndex: "order_id", width: 60 },
               { title: "阶段", dataIndex: "stage", width: 120 },
@@ -572,11 +669,13 @@ export function DbmgmtTicketDetailPage() {
               {
                 title: "操作",
                 width: 200,
+                fixed: "right",
                 render: (_, row) => (
                   <Space size={4}>
                     <Button
                       size="small"
                       loading={actionLoading}
+                      disabled={actionLoading}
                       onClick={() => void handleOscControl(row.sqlsha1, "pause")}
                     >
                       暂停
@@ -584,6 +683,7 @@ export function DbmgmtTicketDetailPage() {
                     <Button
                       size="small"
                       loading={actionLoading}
+                      disabled={actionLoading}
                       onClick={() => void handleOscControl(row.sqlsha1, "resume")}
                     >
                       恢复
@@ -592,6 +692,7 @@ export function DbmgmtTicketDetailPage() {
                       size="small"
                       danger
                       loading={actionLoading}
+                      disabled={actionLoading}
                       onClick={() => void handleOscControl(row.sqlsha1, "kill")}
                     >
                       终止
@@ -627,12 +728,17 @@ export function DbmgmtTicketDetailPage() {
               type="primary"
               style={{ background: "#52c41a", borderColor: "#52c41a" }}
               loading={rollbackLoading}
+              disabled={rollbackLoading}
               onClick={() => void openRollbackView()}
             >
               查看回滚
             </Button>
             {canSubmitRollback ? (
-              <Button loading={actionLoading} onClick={() => void handleSubmitRollback()}>
+              <Button
+                loading={actionLoading}
+                disabled={actionLoading || rollbackLoading}
+                onClick={() => void handleSubmitRollback()}
+              >
                 提交回滚工单
               </Button>
             ) : null}
@@ -640,6 +746,8 @@ export function DbmgmtTicketDetailPage() {
               type="link"
               icon={<DownloadOutlined />}
               style={{ color: "#52c41a", padding: 0 }}
+              loading={rollbackLoading}
+              disabled={rollbackLoading}
               onClick={() => void downloadRollback()}
             >
               回滚信息下载
@@ -659,6 +767,7 @@ export function DbmgmtTicketDetailPage() {
       <Table
         rowKey={(_, i) => String(i)}
         dataSource={taskLogs}
+        scroll={{ x: 700 }}
         pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
         columns={[
           { title: "操作", dataIndex: "op", width: 120 },
@@ -672,38 +781,62 @@ export function DbmgmtTicketDetailPage() {
 
   return (
     <Card
+      className="table-card"
       loading={loading}
       title="工单任务详情"
       extra={
         <Space wrap>
           {canApprove ? (
             <>
-              <Button type="primary" icon={<CheckOutlined />} loading={actionLoading} onClick={handleApprove}>
+              <Button
+                type="primary"
+                icon={<CheckOutlined />}
+                loading={actionLoading}
+                disabled={actionLoading}
+                onClick={handleApprove}
+              >
                 审批通过
               </Button>
-              <Button danger icon={<CloseOutlined />} loading={actionLoading} onClick={handleReject}>
+              <Button
+                danger
+                icon={<CloseOutlined />}
+                loading={actionLoading}
+                disabled={actionLoading}
+                onClick={handleReject}
+              >
                 驳回
               </Button>
             </>
           ) : null}
           {canExecute ? (
-            <Button
-              type="primary"
-              icon={<PlayCircleOutlined />}
-              loading={actionLoading}
-              onClick={() => void handleExecute()}
+            <Popconfirm
+              title="确认执行该工单？"
+              description="执行会立即作用于目标数据库，请确认 SQL 与实例无误。"
+              okText="确认执行"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => void handleExecute()}
+              disabled={actionLoading}
             >
-              执行工单
-            </Button>
+              <Button
+                type="primary"
+                icon={<PlayCircleOutlined />}
+                loading={actionLoading}
+                disabled={actionLoading}
+              >
+                执行工单
+              </Button>
+            </Popconfirm>
           ) : null}
           <Select
             style={{ width: 180 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
             onChange={onProjectChange}
+            disabled={actionLoading}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} />
+          <Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={loading || actionLoading} />
           <Button
+            disabled={actionLoading}
             onClick={() =>
               navigate(projectId ? `/dbmgmt/workflow/history?project=${projectId}` : "/dbmgmt/workflow/history")
             }
@@ -713,6 +846,15 @@ export function DbmgmtTicketDetailPage() {
         </Space>
       }
     >
+      {ticket?.status === "result_unknown" ? (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="执行结果未知，可能已生效"
+          description="执行过程中断或超时，无法确认 SQL 是否已作用于数据库。请先核实数据，再决定是否重试；该状态不提供直接执行入口。"
+        />
+      ) : null}
       {ticket ? (
         <Tabs
           activeKey={tab}
@@ -743,6 +885,7 @@ export function DbmgmtTicketDetailPage() {
           rowKey={(_, i) => String(i)}
           dataSource={rollbackRows}
           pagination={false}
+          scroll={{ x: 700 }}
           columns={[
             { title: "原 SQL", dataIndex: "original_sql", ellipsis: true },
             {
@@ -755,7 +898,13 @@ export function DbmgmtTicketDetailPage() {
           ]}
         />
         <div style={{ marginTop: 12, textAlign: "right" }}>
-          <Button type="primary" icon={<DownloadOutlined />} onClick={() => void downloadRollback()}>
+          <Button
+            type="primary"
+            icon={<DownloadOutlined />}
+            loading={rollbackLoading}
+            disabled={rollbackLoading}
+            onClick={() => void downloadRollback()}
+          >
             下载回滚 SQL
           </Button>
         </div>

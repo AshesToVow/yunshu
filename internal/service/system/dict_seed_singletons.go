@@ -75,6 +75,7 @@ func dictSingletonTypes() map[string]struct{} {
 		"cicd_harbor_project_group":             {},
 		"cicd_harbor_username":                  {},
 		"cicd_harbor_password":                  {},
+		"cicd_harbor_tls_verify":                {},
 		"cicd_default_wait_mins":                {},
 		"cicd_default_artifact_retain_count":    {},
 		"cicd_run_sync_interval_seconds":        {},

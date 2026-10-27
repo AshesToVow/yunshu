@@ -1,7 +1,7 @@
 import { LinkOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Card, Empty, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApprovalCenterNav } from "../components/approval-center-nav";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
@@ -32,18 +32,28 @@ export function WorkflowTicketsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => setProjects(res.list ?? []));
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => setProjects(res.list ?? []))
+      .catch(() => {
+        /* 项目列表加载失败不阻断工单列表 */
+      });
   }, []);
 
   useEffect(() => {
     const d = searchParams.get("domain");
-    if (d !== null) setDomain(d);
+    if (d !== null && d !== domain) setDomain(d);
     const p = Number(searchParams.get("project") || 0);
-    if (p > 0) setProjectId(p);
+    const nextProject = p > 0 ? p : undefined;
+    if (nextProject !== undefined && nextProject !== projectId) {
+      setProjectId(nextProject);
+      setPage(1);
+    }
     const st = searchParams.get("status");
-    if (st !== null) setStatus(st);
+    if (st !== null && st !== status) setStatus(st);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const projectNameMap = useMemo(() => {
@@ -53,6 +63,7 @@ export function WorkflowTicketsPage() {
   }, [projects]);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const res = await listWorkflowTickets({
@@ -62,10 +73,17 @@ export function WorkflowTicketsPage() {
         project_id: projectId,
         status: status || undefined,
       });
+      if (seq !== loadSeqRef.current) return;
+      const nextTotal = res.total ?? 0;
       setRows(res.list ?? []);
-      setTotal(res.total ?? 0);
+      setTotal(nextTotal);
+      if (nextTotal > 0 && page > Math.ceil(nextTotal / pageSize)) {
+        setPage(1);
+      }
+    } catch {
+      /* http 拦截器已 toast */
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [domain, page, pageSize, projectId, status]);
 
@@ -109,6 +127,8 @@ export function WorkflowTicketsPage() {
       title: "操作",
       key: "actions",
       width: 100,
+      fixed: "right",
+      className: "yunshu-table-actions-cell",
       render: (_, row) => (
         <Link to={workflowBusinessDeepLink(row)}>
           <Button type="link" size="small" icon={<LinkOutlined />}>
@@ -128,49 +148,51 @@ export function WorkflowTicketsPage() {
         meta={[`共 ${total}`]}
       />
       <ApprovalCenterNav />
-      <Card>
-        <Space wrap style={{ marginBottom: 16 }}>
-          <Select
-            allowClear
-            placeholder="全部项目"
-            style={{ width: 200 }}
-            value={projectId}
-            onChange={(v) => {
-              setProjectId(v);
-              setPage(1);
-            }}
-            options={projects.map((p) => ({ label: p.name, value: p.id }))}
-          />
-          <Select
-            style={{ width: 140 }}
-            value={domain}
-            onChange={(v) => {
-              setDomain(v);
-              setPage(1);
-            }}
-            options={[...WORKFLOW_DOMAIN_OPTIONS]}
-          />
-          <Select
-            allowClear
-            placeholder="全部状态"
-            style={{ width: 140 }}
-            value={status || undefined}
-            onChange={(v) => {
-              setStatus(v ?? "");
-              setPage(1);
-            }}
-            options={[
-              { label: "待审批", value: "pending" },
-              { label: "已通过", value: "approved" },
-              { label: "已驳回", value: "rejected" },
-              { label: "已关闭", value: "closed" },
-              { label: "已取消", value: "cancelled" },
-            ]}
-          />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
-            刷新
-          </Button>
-        </Space>
+      <Card className="table-card">
+        <div className="toolbar">
+          <Space wrap>
+            <Select
+              allowClear
+              placeholder="全部项目"
+              style={{ width: 200 }}
+              value={projectId}
+              onChange={(v) => {
+                setProjectId(v);
+                setPage(1);
+              }}
+              options={projects.map((p) => ({ label: p.name, value: p.id }))}
+            />
+            <Select
+              style={{ width: 140 }}
+              value={domain}
+              onChange={(v) => {
+                setDomain(v);
+                setPage(1);
+              }}
+              options={[...WORKFLOW_DOMAIN_OPTIONS]}
+            />
+            <Select
+              allowClear
+              placeholder="全部状态"
+              style={{ width: 140 }}
+              value={status || undefined}
+              onChange={(v) => {
+                setStatus(v ?? "");
+                setPage(1);
+              }}
+              options={[
+                { label: "待审批", value: "pending" },
+                { label: "已通过", value: "approved" },
+                { label: "已驳回", value: "rejected" },
+                { label: "已关闭", value: "closed" },
+                { label: "已取消", value: "cancelled" },
+              ]}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={loading}>
+              刷新
+            </Button>
+          </Space>
+        </div>
         <Table
           rowKey="id"
           loading={loading}

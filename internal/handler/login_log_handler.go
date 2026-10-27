@@ -3,8 +3,12 @@ package handler
 import (
 	"bytes"
 	"context"
+
+	"yunshu/internal/model"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/exportutil"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -33,7 +37,14 @@ func NewLoginLogHandler(svc *service.LoginLogService) *LoginLogHandler {
 // @Success 200 {object} response.Body "success"
 // @Router /api/v1/login-logs [get]
 func (h *LoginLogHandler) List(c *gin.Context) {
-	ServeQuery(c, h.svc.List)
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeQuery(c, func(ctx context.Context, query service.LoginLogListQuery) (*pagination.Result[model.LoginLog], error) {
+		return h.svc.List(ctx, actor, query)
+	})
 }
 
 type idsRequest struct {
@@ -50,8 +61,13 @@ type idsRequest struct {
 // @Success 200 {object} response.Body{data=MessageData}
 // @Router /api/v1/login-logs/delete [post]
 func (h *LoginLogHandler) BatchDelete(c *gin.Context) {
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	ServeJSONOK(c, gin.H{"message": "deleted"}, func(ctx context.Context, req idsRequest) error {
-		return h.svc.DeleteBatch(ctx, req.IDs)
+		return h.svc.DeleteBatch(ctx, actor, req.IDs)
 	})
 }
 
@@ -64,12 +80,17 @@ func (h *LoginLogHandler) BatchDelete(c *gin.Context) {
 // @Success 200 {object} response.Body{data=MessageData}
 // @Router /api/v1/login-logs/{id} [delete]
 func (h *LoginLogHandler) Delete(c *gin.Context) {
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	id, err := parseUintParam(c, "id")
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
+	if err := h.svc.Delete(auth.RequestContext(c), actor, id); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -86,13 +107,18 @@ func (h *LoginLogHandler) Delete(c *gin.Context) {
 // @Param source query string false "password or email"
 // @Router /api/v1/login-logs/export [get]
 func (h *LoginLogHandler) Export(c *gin.Context) {
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	var q service.LoginLogListQuery
 	if err := c.ShouldBindQuery(&q); err != nil {
 		response.Error(c, constants.ErrBadRequestWithMsg(err.Error()))
 		return
 	}
 	var buf bytes.Buffer
-	if err := h.svc.Export(c.Request.Context(), q, &buf); err != nil {
+	if err := h.svc.Export(auth.RequestContext(c), actor, q, &buf); err != nil {
 		response.Error(c, err)
 		return
 	}

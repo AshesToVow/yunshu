@@ -141,6 +141,9 @@ export type AIChatStreamEvent = {
   error?: string;
 };
 
+/** 流式请求兜底超时（毫秒），比非流式（120s）更宽松。 */
+const STREAM_TIMEOUT_MS = 300000;
+
 /** SSE 进度流（工具/RAG/回复），Cookie 会话鉴权。 */
 export async function chatAIStream(
   payload: {
@@ -157,49 +160,69 @@ export async function chatAIStream(
   onEvent: (ev: AIChatStreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch("/api/v1/ai/chat/stream", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  if (!res.ok) {
-    let msg = `流式对话失败 (${res.status})`;
-    try {
-      const body = (await res.json()) as { message?: string; msg?: string };
-      msg = body.message || body.msg || msg;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(msg);
+  // 内部 controller 兜底超时，同时转发外部 signal（如「取消」按钮）的中止
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, STREAM_TIMEOUT_MS);
+  const onExternalAbort = () => controller.abort();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener("abort", onExternalAbort);
   }
-  if (!res.body) {
-    throw new Error("浏览器不支持流式响应");
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const chunks = buf.split("\n\n");
-    buf = chunks.pop() || "";
-    for (const chunk of chunks) {
-      const line = chunk
-        .split("\n")
-        .map((l) => l.trim())
-        .find((l) => l.startsWith("data:"));
-      if (!line) continue;
-      const raw = line.replace(/^data:\s*/, "");
-      if (!raw || raw === "[DONE]") continue;
+  try {
+    const res = await fetch("/api/v1/ai/chat/stream", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let msg = `流式对话失败 (${res.status})`;
       try {
-        onEvent(JSON.parse(raw) as AIChatStreamEvent);
+        const body = (await res.json()) as { message?: string; msg?: string };
+        msg = body.message || body.msg || msg;
       } catch {
-        /* ignore malformed */
+        /* ignore */
+      }
+      throw new Error(msg);
+    }
+    if (!res.body) {
+      throw new Error("浏览器不支持流式响应");
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split("\n\n");
+      buf = chunks.pop() || "";
+      for (const chunk of chunks) {
+        const line = chunk
+          .split("\n")
+          .map((l) => l.trim())
+          .find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        const raw = line.replace(/^data:\s*/, "");
+        if (!raw || raw === "[DONE]") continue;
+        try {
+          onEvent(JSON.parse(raw) as AIChatStreamEvent);
+        } catch {
+          /* ignore malformed */
+        }
       }
     }
+  } catch (e) {
+    if (timedOut) throw new Error("AI 对话超时（5 分钟），请稍后重试");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", onExternalAbort);
   }
 }
 

@@ -2,9 +2,54 @@ package logplatform
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+var k8sNamespacePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+var k8sWorkloadPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$`)
+
+// validateK8sNamespace 校验命名空间符合 DNS-1123 label；该值会直接写入清单 YAML。
+func validateK8sNamespace(ns string) error {
+	if len(ns) == 0 || len(ns) > 63 {
+		return fmt.Errorf("命名空间长度必须为 1-63 个字符")
+	}
+	if !k8sNamespacePattern.MatchString(ns) {
+		return fmt.Errorf("命名空间只能包含小写字母、数字和 -，且须以字母或数字开头结尾")
+	}
+	return nil
+}
+
+// validateK8sWorkloadName 校验 workload 名；该值会拼入日志采集 glob，禁止通配符与路径分隔符。
+func validateK8sWorkloadName(name string) error {
+	if len(name) == 0 || len(name) > 253 {
+		return fmt.Errorf("workload 名称长度必须为 1-253 个字符")
+	}
+	if strings.Contains(name, "..") || !k8sWorkloadPattern.MatchString(name) {
+		return fmt.Errorf("workload 名称只能包含小写字母、数字、- 和 .，且须以字母或数字开头结尾")
+	}
+	return nil
+}
+
+func validateClusterRuleTargets(namespaces, workloads, excludes []string) error {
+	for _, ns := range namespaces {
+		if err := validateK8sNamespace(strings.TrimSpace(ns)); err != nil {
+			return err
+		}
+	}
+	for _, w := range workloads {
+		if err := validateK8sWorkloadName(strings.TrimSpace(w)); err != nil {
+			return err
+		}
+	}
+	for _, e := range excludes {
+		if err := validateK8sNamespace(strings.TrimSpace(e)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 // ClusterLogManifestInput DaemonSet 清单渲染入参。
 type ClusterLogManifestInput struct {
@@ -19,7 +64,7 @@ type ClusterLogManifestInput struct {
 // RenderClusterLogManifest 生成 Namespace + SA + ConfigMap + DaemonSet YAML（按项目隔离资源名）。
 func RenderClusterLogManifest(in ClusterLogManifestInput) string {
 	ns := strings.TrimSpace(in.Namespace)
-	if ns == "" {
+	if ns == "" || validateK8sNamespace(ns) != nil {
 		ns = defaultClusterLogNamespace
 	}
 	image := strings.TrimSpace(in.Image)

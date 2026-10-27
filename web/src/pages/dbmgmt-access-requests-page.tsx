@@ -2,7 +2,7 @@ import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   GrantValidityCalendarPicker,
@@ -19,6 +19,7 @@ import {
   type DbAccessRequest,
   type DbInstance,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 import { accessRequestStatusLabel } from "../utils/dbmgmt-labels";
@@ -79,29 +80,51 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
   const [tables, setTables] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const loadSeqRef = useRef(0);
+  const databasesSeqRef = useRef(0);
+  const tablesSeqRef = useRef(0);
+  const submittingRef = useRef(false);
   const [form] = Form.useForm();
   const instanceId = Form.useWatch("instance_id", form);
   const databaseName = Form.useWatch("database_name", form);
   const scopeType = Form.useWatch("scope_type", form) ?? "database";
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch(() => {
+        /* 项目列表加载失败不阻断页面 */
+      });
   }, []);
 
   const load = useCallback(async () => {
-    if (!projectId) return;
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setRows([]);
+      setInstances([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const [reqs, inst] = await Promise.all([
         listDbAccessRequests(projectId, { page: 1, page_size: 100 }),
         listDbInstances(projectId, { page: 1, page_size: 200 }),
       ]);
+      if (seq !== loadSeqRef.current) return;
       setRows((reqs.list ?? []).filter((r) => matchesPreset(r, preset)));
       setInstances(inst.list ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载申请列表失败");
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载申请列表失败"));
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [projectId, preset]);
 
@@ -110,31 +133,43 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
   }, [load]);
 
   useEffect(() => {
+    const seq = ++databasesSeqRef.current;
     if (!projectId || !instanceId) {
       setDatabases([]);
       return;
     }
     void listDbDatabases(projectId, instanceId)
-      .then((res) => setDatabases((res ?? []).map((d) => d.name)))
-      .catch(() => setDatabases([]));
+      .then((res) => {
+        if (seq === databasesSeqRef.current) setDatabases((res ?? []).map((d) => d.name));
+      })
+      .catch(() => {
+        if (seq === databasesSeqRef.current) setDatabases([]);
+      });
   }, [projectId, instanceId]);
 
   useEffect(() => {
+    const seq = ++tablesSeqRef.current;
     if (!projectId || !instanceId || !databaseName || scopeType !== "table") {
       setTables([]);
       return;
     }
     void listDbTables(projectId, instanceId, databaseName)
-      .then((res) => setTables((res ?? []).map((t) => t.name)))
-      .catch(() => setTables([]));
+      .then((res) => {
+        if (seq === tablesSeqRef.current) setTables((res ?? []).map((t) => t.name));
+      })
+      .catch(() => {
+        if (seq === tablesSeqRef.current) setTables([]);
+      });
   }, [projectId, instanceId, databaseName, scopeType]);
 
   const columns: ColumnsType<DbAccessRequest> = [
     { title: "ID", dataIndex: "id", width: 70 },
-    { title: "实例", dataIndex: "instance_name" },
-    { title: "库", dataIndex: "database_name" },
+    { title: "实例", dataIndex: "instance_name", width: 140, ellipsis: true },
+    { title: "库", dataIndex: "database_name", width: 140, ellipsis: true },
     {
       title: "范围",
+      width: 160,
+      ellipsis: true,
       render: (_, r) => {
         if (r.scope_type === "new_database" || r.privileges?.includes("create_database")) {
           return `新建库：${r.database_name}`;
@@ -146,49 +181,69 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
     {
       title: "权限",
       dataIndex: "privileges",
+      width: 180,
       ellipsis: true,
       render: (v?: string[]) => privilegeSummary(v),
     },
-    { title: "申请人", dataIndex: "requester_name" },
+    { title: "申请人", dataIndex: "requester_name", width: 110 },
     { title: "理由", dataIndex: "reason", ellipsis: true },
-    { title: "状态", dataIndex: "status", render: (v: string) => <Tag>{accessRequestStatusLabel(v)}</Tag> },
+    { title: "状态", dataIndex: "status", width: 100, render: (v: string) => <Tag>{accessRequestStatusLabel(v)}</Tag> },
     {
       title: "过期时间",
       dataIndex: "expires_at",
+      width: 170,
       render: (v?: string) => {
         if (!v) return "永久";
         const expired = dayjs(v).isBefore(dayjs());
         return <span style={expired ? { color: "#cf1322" } : undefined}>{formatDateTime(v)}</span>;
       },
     },
-    { title: "申请时间", dataIndex: "created_at", render: (v) => formatDateTime(v) },
+    { title: "申请时间", dataIndex: "created_at", width: 170, render: (v) => formatDateTime(v) },
   ];
 
   const submit = async () => {
-    if (!projectId || submitting) return;
+    if (!projectId || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const values = await form.validateFields();
       const period = values.grant_period as GrantValidityPeriod | null | undefined;
+      const databaseNameValue =
+        typeof values.database_name === "string" ? values.database_name.trim() : values.database_name;
       await createDbAccessRequest(projectId, {
         instance_id: values.instance_id,
         scope_type: values.scope_type,
-        database_name: values.database_name,
+        database_name: databaseNameValue,
         table_names: values.scope_type === "table" ? values.table_names : undefined,
         privileges: values.privileges,
         query_limit_num: values.query_limit_num,
-        reason: values.reason,
+        reason: typeof values.reason === "string" ? values.reason.trim() : values.reason,
         expires_at: grantPeriodToExpiresAt(period ?? null),
       });
       message.success("已提交申请");
       setOpen(false);
       form.resetFields();
+      setPage(1);
       void load();
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "提交失败");
+      message.error(extractApiErrorMessage(e, "提交失败"));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  const onProjectChange = (id: number) => {
+    loadSeqRef.current += 1;
+    databasesSeqRef.current += 1;
+    tablesSeqRef.current += 1;
+    setProjectId(id);
+    setPage(1);
+    setRows([]);
+    setInstances([]);
+    setDatabases([]);
+    setTables([]);
+    form.setFieldsValue({ instance_id: undefined, database_name: undefined, table_names: undefined });
   };
 
   const scopeOptions = useMemo(() => {
@@ -215,6 +270,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
   }, [preset]);
 
   const openCreate = () => {
+    form.resetFields();
     form.setFieldsValue({
       scope_type: meta.defaultScope,
       privileges: meta.defaultPrivileges,
@@ -238,23 +294,27 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
   ];
 
   return (
-    <Card
-      title={meta.title}
-      extra={
-        <Space>
+    <Card className="table-card" title={meta.title}>
+      <div className="toolbar">
+        <Space wrap>
           <Select
             style={{ width: 200 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
-            onChange={setProjectId}
+            onChange={onProjectChange}
           />
-          {meta.showList !== false ? <Button icon={<ReloadOutlined />} onClick={() => void load()} /> : null}
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+        </Space>
+        <div className="toolbar__actions">
+          {meta.showList !== false ? (
+            <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
+              刷新
+            </Button>
+          ) : null}
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} disabled={!projectId}>
             提交申请
           </Button>
-        </Space>
-      }
-    >
+        </div>
+      </div>
       {meta.hint ? <Alert type="info" showIcon message={meta.hint} style={{ marginBottom: 16 }} /> : null}
       {preset === "query" ? (
         <Alert
@@ -269,7 +329,25 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
           style={{ marginBottom: 16 }}
         />
       ) : null}
-      {meta.showList !== false ? <Table rowKey="id" columns={columns} dataSource={rows} /> : null}
+      {meta.showList !== false ? (
+        <Table
+          rowKey="id"
+          loading={loading}
+          columns={columns}
+          dataSource={rows}
+          scroll={{ x: 1250 }}
+          pagination={{
+            current: page,
+            pageSize,
+            total: rows.length,
+            showSizeChanger: true,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+            },
+          }}
+        />
+      ) : null}
       <Modal
         title={meta.title}
         open={open}
@@ -310,7 +388,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
             <Form.Item
               name="database_name"
               label="新建库名"
-              rules={[{ required: true, message: "请填写要创建的数据库名" }]}
+              rules={[{ required: true, whitespace: true, message: "请填写要创建的数据库名" }]}
               extra="库尚未存在，填写计划创建的库名，如 test"
             >
               <Input placeholder="例如 test" />
@@ -374,7 +452,7 @@ export function DbmgmtAccessRequestsPage({ preset = "all" }: { preset?: DbmgmtAc
           <Form.Item
             name="reason"
             label={preset === "database_create" ? "备注" : "申请理由"}
-            rules={[{ required: true }]}
+            rules={[{ required: true, whitespace: true }]}
           >
             <Input.TextArea rows={3} placeholder={preset === "database_create" ? "例如：用户中心业务库" : undefined} />
           </Form.Item>

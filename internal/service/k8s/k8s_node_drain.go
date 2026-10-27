@@ -54,6 +54,8 @@ type NodeDrainResult struct {
 	Skipped     int                `json:"skipped"`
 	Failed      int                `json:"failed"`
 	Pending     int                `json:"pending"`
+	Remaining   int                `json:"remaining"`
+	Completed   int                `json:"completed_pods"`
 	Pods        []NodeDrainPodItem `json:"pods"`
 	Message     string             `json:"message"`
 	CompletedAt string             `json:"completed_at"`
@@ -69,6 +71,7 @@ type NodeDrainStatus struct {
 	Unschedulable bool               `json:"unschedulable"`
 	Remaining     int                `json:"remaining"`
 	DaemonSet     int                `json:"daemonset_pods"`
+	Completed     int                `json:"completed_pods"`
 	Pods          []NodeDrainPodItem `json:"pods"`
 	Drained       bool               `json:"drained"`
 	Message       string             `json:"message"`
@@ -172,11 +175,24 @@ func (s *K8sNodeService) DrainNode(ctx context.Context, req NodeDrainRequest) (*
 		}
 		return out.Pods[i].Namespace < out.Pods[j].Namespace
 	})
+	if !req.DryRun {
+		// 驱逐请求返回后 Pod 仍在优雅终止期，重新统计真实剩余量，避免前端误判「已完成」。
+		if remainingPods, e := listPodsOnNode(ctx, cs, name); e == nil {
+			for _, p := range remainingPods {
+				if isCompletedPod(p) {
+					out.Completed++
+				}
+				if drainPodOutstanding(p, ignoreDS, deleteEmptyDir, req.Force) {
+					out.Remaining++
+				}
+			}
+		}
+	}
 	out.CompletedAt = time.Now().Format(time.RFC3339)
 	if req.DryRun {
 		out.Message = fmt.Sprintf("预览：将驱逐 %d，跳过 %d", out.Pending, out.Skipped)
 	} else {
-		out.Message = fmt.Sprintf("已 cordon；驱逐 %d，跳过 %d，失败 %d", out.Evicted, out.Skipped, out.Failed)
+		out.Message = fmt.Sprintf("已 cordon；驱逐 %d，跳过 %d，失败 %d，剩余 %d", out.Evicted, out.Skipped, out.Failed, out.Remaining)
 	}
 	return out, nil
 }
@@ -214,22 +230,31 @@ func (s *K8sNodeService) DrainStatus(ctx context.Context, q NodeDrainStatusQuery
 	ignoreDS := true
 	deleteEmptyDir := true
 	for _, p := range pods {
-		item, skip := classifyDrainPod(p, ignoreDS, deleteEmptyDir, false)
+		item, _ := classifyDrainPod(p, ignoreDS, deleteEmptyDir, false)
 		if item.OwnerKind == "DaemonSet" {
 			out.DaemonSet++
 		}
-		if skip {
+		if isCompletedPod(p) {
+			out.Completed++
+		}
+		if !drainPodOutstanding(p, ignoreDS, deleteEmptyDir, false) {
 			continue
 		}
-		item.Action = "pending"
+		if p.DeletionTimestamp != nil {
+			item.Action = "terminating"
+			item.Reason = "正在删除"
+		} else {
+			item.Action = "pending"
+			item.Reason = ""
+		}
 		out.Remaining++
 		out.Pods = append(out.Pods, item)
 	}
 	out.Drained = out.Remaining == 0
 	if out.Drained {
-		out.Message = "节点上无可驱逐工作负载"
+		out.Message = fmt.Sprintf("节点上无可驱逐工作负载（已完成 %d 个）", out.Completed)
 	} else {
-		out.Message = fmt.Sprintf("剩余 %d 个可驱逐 Pod（DaemonSet %d 个已忽略）", out.Remaining, out.DaemonSet)
+		out.Message = fmt.Sprintf("剩余 %d 个可驱逐 Pod（DaemonSet %d 个已忽略，已完成 %d 个）", out.Remaining, out.DaemonSet, out.Completed)
 	}
 	return out, nil
 }
@@ -263,9 +288,14 @@ func classifyDrainPod(p corev1.Pod, ignoreDS, deleteEmptyDir, force bool) (NodeD
 		Phase:     string(p.Status.Phase),
 		OwnerKind: primaryOwnerKind(p),
 	}
-	if p.Namespace == "kube-system" && isMirrorOrStatic(p) {
+	if isMirrorOrStatic(p) {
 		item.Action = "skipped"
 		item.Reason = "mirror/static pod"
+		return item, true
+	}
+	if isCompletedPod(p) {
+		item.Action = "skipped"
+		item.Reason = "Pod 已结束"
 		return item, true
 	}
 	if ignoreDS && item.OwnerKind == "DaemonSet" {
@@ -289,6 +319,28 @@ func classifyDrainPod(p corev1.Pod, ignoreDS, deleteEmptyDir, force bool) (NodeD
 		return item, true
 	}
 	return item, false
+}
+
+// drainPodOutstanding 该 Pod 是否仍阻碍节点排空（与 kubectl drain 的跳过规则一致）。
+func drainPodOutstanding(p corev1.Pod, ignoreDS, deleteEmptyDir, force bool) bool {
+	if isMirrorOrStatic(p) || isCompletedPod(p) {
+		return false
+	}
+	owner := primaryOwnerKind(p)
+	if ignoreDS && owner == "DaemonSet" {
+		return false
+	}
+	if !deleteEmptyDir && hasEmptyDir(p) {
+		return false
+	}
+	if owner == "" && !force {
+		return false
+	}
+	return true
+}
+
+func isCompletedPod(p corev1.Pod) bool {
+	return p.Status.Phase == corev1.PodSucceeded || p.Status.Phase == corev1.PodFailed
 }
 
 func primaryOwnerKind(p corev1.Pod) string {
@@ -378,19 +430,34 @@ func evictPod(ctx context.Context, cs *kubernetes.Clientset, p corev1.Pod, grace
 		})
 	}
 
-	var err error
-	if evictionGV.Version == "v1beta1" {
-		err = evictV1beta1()
-	} else {
-		err = evictV1()
+	attemptEviction := func() error {
+		if evictionGV.Version == "v1beta1" {
+			return evictV1beta1()
+		}
+		err := evictV1()
 		// 集群未提供 policy/v1 Eviction（404 / 405）时降级到 v1beta1；
 		// Pod 本身不存在也会是 404，但降级请求同样会返回 404，最终按「已消失」处理。
 		if err != nil && (apierrors.IsNotFound(err) || apierrors.IsMethodNotSupported(err)) {
 			if beErr := evictV1beta1(); beErr == nil {
 				return nil
 			} else if !apierrors.IsNotFound(beErr) && !apierrors.IsMethodNotSupported(beErr) {
-				err = beErr
+				return beErr
 			}
+		}
+		return err
+	}
+
+	var err error
+	for i := 0; i < drainEvictionRetryAttempts; i++ {
+		err = attemptEviction()
+		if err == nil || !apierrors.IsTooManyRequests(err) {
+			break
+		}
+		// PDB 暂时阻止驱逐（429）时按指数退避重试，避免整批排空因瞬时 PDB 立刻失败。
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(1<<i) * time.Second):
 		}
 	}
 	if err == nil {
@@ -402,3 +469,5 @@ func evictPod(ctx context.Context, cs *kubernetes.Clientset, p corev1.Pod, grace
 	}
 	return fmt.Errorf("驱逐 %s/%s: %w", p.Namespace, p.Name, err)
 }
+
+const drainEvictionRetryAttempts = 5

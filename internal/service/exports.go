@@ -96,6 +96,8 @@ type (
 	ReviewRequest                        = system.ReviewRequest
 	PermissionCreateRequest              = system.PermissionCreateRequest
 	PermissionUpdateRequest              = system.PermissionUpdateRequest
+	PermissionBatchK8sScopeRequest       = system.PermissionBatchK8sScopeRequest
+	PermissionBatchK8sScopeResponse      = system.PermissionBatchK8sScopeResponse
 	PermissionListQuery                  = system.PermissionListQuery
 	RoleCreateRequest                    = system.RoleCreateRequest
 	RoleUpdateRequest                    = system.RoleUpdateRequest
@@ -128,6 +130,7 @@ type (
 	DictEntryCreateRequest               = system.DictEntryCreateRequest
 	DictEntryUpdateRequest               = system.DictEntryUpdateRequest
 	DictEntryOption                      = system.DictEntryOption
+	DictEntryListItem                    = system.DictEntryListItem
 )
 
 // --- overview ---

@@ -13,8 +13,8 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/service/changeevent"
 
 	"gorm.io/gorm"
@@ -55,7 +55,7 @@ type AlertSilenceBatchItem struct {
 }
 
 type AlertSilenceBatchRequest struct {
-	ProjectID uint                     `json:"project_id"` // 应用到所有 items；单项可覆盖
+	ProjectID uint                    `json:"project_id"` // 应用到所有 items；单项可覆盖
 	Items     []AlertSilenceBatchItem `json:"items" binding:"required,min=1"`
 }
 
@@ -197,7 +197,14 @@ func LabelsMatchSilenceMatchers(ms []SilenceMatcher, labels map[string]string) b
 func (s *AlertSilenceService) List(ctx context.Context, q AlertSilenceListQuery) ([]model.AlertSilence, int64, int, int, error) {
 	s.disableExpiredSilences(ctx, time.Now())
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	list, total, err := s.repo.ListPaged(ctx, q.ProjectID, q.Keyword, (page-1)*pageSize, pageSize)
+	projectID, projectIDs, denyAll, err := resolveAlertEventScope(ctx, s.memberRepo, q.ProjectID)
+	if err != nil {
+		return nil, 0, page, pageSize, err
+	}
+	if denyAll {
+		return []model.AlertSilence{}, 0, page, pageSize, nil
+	}
+	list, total, err := s.repo.ListPaged(ctx, projectID, projectIDs, q.Keyword, (page-1)*pageSize, pageSize)
 	if err != nil {
 		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert.silence", "List", err)
 	}
@@ -371,37 +378,44 @@ func (s *AlertSilenceService) Delete(ctx context.Context, id uint, actor *auth.C
 }
 
 func (s *AlertSilenceService) CreateBatch(ctx context.Context, actor *auth.CurrentUser, req AlertSilenceBatchRequest) (int, error) {
-	n := 0
 	userID := uint(0)
 	if actor != nil {
 		userID = actor.ID
 	}
+	rows := make([]*model.AlertSilence, 0, len(req.Items))
+	seen := make(map[string]struct{}, len(req.Items))
 	for _, it := range req.Items {
 		ms, err := ParseSilenceMatchersJSON(it.MatchersJSON)
 		if err != nil {
-			return n, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
+			return 0, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
 		}
 		if len(ms) == 0 {
-			return n, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
+			return 0, constants.ErrBadRequestWithMsg("静默 matchers 不能为空")
 		}
 		if !it.EndsAt.After(it.StartsAt) {
-			return n, constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmtAlertSilenceBatchEndsAt, it.Name))
+			return 0, constants.ErrBadRequestWithMsg(fmt.Sprintf(constants.ErrFmtAlertSilenceBatchEndsAt, it.Name))
 		}
 		projectID := req.ProjectID
 		if it.ProjectID > 0 {
 			projectID = it.ProjectID
 		}
 		if err := s.assertSilenceProjectAccess(ctx, actor, projectID); err != nil {
-			return n, err
+			return 0, err
 		}
+		// 同批内相同 matchers 视为重复：逐条 Create 时库内查重无法拦截“都还不存在”的两条。
+		batchKey := fmt.Sprintf("%d\x00%s", projectID, normalizeSilenceMatchersKey(ms))
+		if _, dup := seen[batchKey]; dup {
+			return 0, constants.ErrBadRequestWithMsg(constants.ErrMsg76b99177ec58)
+		}
+		seen[batchKey] = struct{}{}
 		dup, err := s.hasEnabledUnexpiredDuplicate(ctx, projectID, it.MatchersJSON, time.Now())
 		if err != nil {
-			return n, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
+			return 0, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
 		}
 		if dup {
-			return n, constants.ErrBadRequestWithMsg(constants.ErrMsg76b99177ec58)
+			return 0, constants.ErrBadRequestWithMsg(constants.ErrMsg76b99177ec58)
 		}
-		row := model.AlertSilence{
+		rows = append(rows, &model.AlertSilence{
 			Name:         strings.TrimSpace(it.Name),
 			MatchersJSON: strings.TrimSpace(it.MatchersJSON),
 			StartsAt:     it.StartsAt,
@@ -410,11 +424,10 @@ func (s *AlertSilenceService) CreateBatch(ctx context.Context, actor *auth.Curre
 			CreatedBy:    userID,
 			ProjectID:    projectID,
 			Enabled:      it.Enabled == nil || *it.Enabled,
-		}
-		if err := s.repo.Create(ctx, &row); err != nil {
-			return n, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
-		}
-		n++
+		})
 	}
-	return n, nil
+	if err := s.repo.CreateBatch(ctx, rows); err != nil {
+		return 0, bizerrors.Pass(ctx, "alert.silence", "CreateBatch", err)
+	}
+	return len(rows), nil
 }

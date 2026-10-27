@@ -111,7 +111,7 @@ func (s *Service) resolveWriteAccess(
 	needDDL bool,
 	actor *auth.CurrentUser,
 ) error {
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		return nil
 	}
 	if inst.OwnerUserID != nil && *inst.OwnerUserID == actorUserID(actor) {

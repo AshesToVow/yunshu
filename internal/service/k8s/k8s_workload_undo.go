@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"strconv"
 	"strings"
 
@@ -73,7 +72,7 @@ func (s *K8sWorkloadService) DeploymentRolloutUndo(ctx context.Context, req Roll
 	}, nil
 }
 
-// StatefulSetRolloutUndo 基于 ControllerRevision 回滚 StatefulSet（更新 pod template 注解触发滚动并记录目标版本）。
+// StatefulSetRolloutUndo 基于 ControllerRevision 恢复 Pod 模板实现 StatefulSet 回滚。
 func (s *K8sWorkloadService) StatefulSetRolloutUndo(ctx context.Context, req RolloutUndoRequest) (*RolloutUndoResult, error) {
 	_, k, err := s.runtime.GetClusterKubectl(ctx, req.ClusterID)
 	if err != nil {
@@ -97,13 +96,9 @@ func (s *K8sWorkloadService) StatefulSetRolloutUndo(ctx context.Context, req Rol
 	}
 	toRev := target.Name
 	copyObj := sts.DeepCopy()
-	if copyObj.Spec.Template.Annotations == nil {
-		copyObj.Spec.Template.Annotations = map[string]string{}
-	} else {
-		copyObj.Spec.Template.Annotations = copyStrMap(copyObj.Spec.Template.Annotations)
+	if err := applyControllerRevisionTemplateToStatefulSet(copyObj, target); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("无法从历史版本恢复模板: " + err.Error())
 	}
-	copyObj.Spec.Template.Annotations["yunshu.io/rollback-to"] = toRev
-	copyObj.Spec.Template.Annotations["yunshu.io/rollback-at"] = metav1.Now().UTC().Format("2006-01-02T15:04:05Z")
 	if err := k.WithContext(ctx).Resource(&appsv1.StatefulSet{}).Namespace(ns).Name(name).Update(copyObj).Error; err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.workload.undo", "update", err, "回滚 StatefulSet 失败")
 	}
@@ -113,7 +108,7 @@ func (s *K8sWorkloadService) StatefulSetRolloutUndo(ctx context.Context, req Rol
 		Name:         name,
 		FromRevision: fromRev,
 		ToRevision:   toRev,
-		Message:      "已标记 StatefulSet 回滚目标（ControllerRevision），请确认滚动状态",
+		Message:      "StatefulSet 已回滚到历史 ControllerRevision",
 	}, nil
 }
 
@@ -134,7 +129,7 @@ func (s *K8sWorkloadService) DaemonSetRolloutUndo(ctx context.Context, req Rollo
 	if err := k.WithContext(ctx).Resource(&appsv1.ControllerRevision{}).Namespace(ns).List(&crList).Error; err != nil {
 		return nil, bizerrors.Internalf(ctx, "k8s.workload.undo", "list_cr", err, "列出 ControllerRevision 失败")
 	}
-	owned := filterOwnedDaemonSetControllerRevisions(crList, &ds)
+	owned := filterOwnedControllerRevisions(crList, &ds)
 	target, err := pickControllerRevision(owned, req.Revision)
 	if err != nil {
 		return nil, constants.ErrBadRequestWithMsg(err.Error())
@@ -248,10 +243,10 @@ func sortReplicaSetsByRevisionDesc(items []appsv1.ReplicaSet) {
 	}
 }
 
-func filterOwnedControllerRevisions(items []appsv1.ControllerRevision, sts *appsv1.StatefulSet) []appsv1.ControllerRevision {
+func filterOwnedControllerRevisions(items []appsv1.ControllerRevision, owner metav1.Object) []appsv1.ControllerRevision {
 	out := make([]appsv1.ControllerRevision, 0)
 	for i := range items {
-		if metav1.IsControlledBy(&items[i], sts) {
+		if metav1.IsControlledBy(&items[i], owner) {
 			out = append(out, items[i])
 		}
 	}
@@ -283,13 +278,19 @@ func pickControllerRevision(items []appsv1.ControllerRevision, revision int64) (
 	return &items[1], nil
 }
 
-func copyStrMap(in map[string]string) map[string]string {
-	if in == nil {
-		return nil
+func applyControllerRevisionTemplateToStatefulSet(sts *appsv1.StatefulSet, cr *appsv1.ControllerRevision) error {
+	if sts == nil || cr == nil || len(cr.Data.Raw) == 0 {
+		return fmt.Errorf("历史版本数据为空")
 	}
-	out := make(map[string]string, len(in))
-	maps.Copy(out, in)
-	return out
+	var hist appsv1.StatefulSet
+	if err := json.Unmarshal(cr.Data.Raw, &hist); err != nil {
+		return err
+	}
+	if hist.Spec.Template.Spec.Containers == nil && len(hist.Spec.Template.Spec.InitContainers) == 0 {
+		return fmt.Errorf("历史版本未包含 Pod 模板")
+	}
+	sts.Spec.Template = hist.Spec.Template
+	return nil
 }
 
 func applyControllerRevisionTemplateToDaemonSet(ds *appsv1.DaemonSet, cr *appsv1.ControllerRevision) error {

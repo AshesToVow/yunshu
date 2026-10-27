@@ -21,10 +21,18 @@ func (s *AlertService) ListEvents(ctx context.Context, q AlertEventListQuery) (l
 		q.ProjectID = q.ProjectIDAlias
 	}
 	page, pageSize = pagination.Normalize(q.Page, q.PageSize)
+	projectID, projectIDs, denyAll, err := resolveAlertEventScope(ctx, s.memberRepo, q.ProjectID)
+	if err != nil {
+		return nil, 0, page, pageSize, bizerrors.Pass(ctx, "alert", "ListEvents", err)
+	}
+	if denyAll {
+		return []model.AlertEvent{}, 0, page, pageSize, nil
+	}
 	f := repository.AlertEventListFilter{
 		Keyword: q.Keyword, Cluster: q.Cluster, AlertIP: q.AlertIP, Status: q.Status,
-		Severity: q.Severity, MonitorPipeline: q.MonitorPipeline, DatasourceID: q.DatasourceID, ProjectID: q.ProjectID,
-		GroupKey: q.GroupKey, Fingerprint: q.Fingerprint,
+		Severity: q.Severity, MonitorPipeline: q.MonitorPipeline, DatasourceID: q.DatasourceID, ProjectID: projectID,
+		ProjectIDs: projectIDs,
+		GroupKey:   q.GroupKey, Fingerprint: q.Fingerprint,
 	}
 	if v := strings.TrimSpace(q.Category); v != "" && ValidAlertEventCategory(v) {
 		f.Category = v

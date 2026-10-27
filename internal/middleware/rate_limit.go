@@ -158,6 +158,39 @@ func applyMemoryRegistrationRateLimit(c *gin.Context, limiter *memoryRegisterLim
 	c.Next()
 }
 
+// AuthRateLimit limits unauthenticated auth endpoints per client IP to slow
+// credential stuffing, captcha enumeration and email verification code brute force.
+// Redis 异常时放行，避免限流存储故障扩大为全站无法登录。
+func AuthRateLimit(rdb *redis.Client) gin.HandlerFunc {
+	const limitPerMinute = int64(120)
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		if rdb == nil {
+			if !defaultMemoryRegisterLimiter.allowIP(ip, int(limitPerMinute), time.Now()) {
+				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"message": "请求过于频繁，请稍后再试"})
+				return
+			}
+			c.Next()
+			return
+		}
+		ctx := c.Request.Context()
+		key := fmt.Sprintf("rl:auth:ip:%s", ip)
+		n, err := rdb.Incr(ctx, key).Result()
+		if err != nil {
+			c.Next()
+			return
+		}
+		if n == 1 {
+			rdb.Expire(ctx, key, time.Minute)
+		}
+		if n > limitPerMinute {
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"message": "请求过于频繁，请稍后再试"})
+			return
+		}
+		c.Next()
+	}
+}
+
 // AgentPublicRegisterRateLimit limits public agent self-registration attempts per IP.
 func AgentPublicRegisterRateLimit(rdb *redis.Client) gin.HandlerFunc {
 	const ipLimit = 30

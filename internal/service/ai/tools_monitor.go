@@ -197,10 +197,11 @@ func (s *Service) executeMonitorTool(
 			return nil, fmt.Errorf("fingerprint 必填")
 		}
 		pid := getUint("project_id", projectID)
-		if pid > 0 {
-			if err := s.assertProjectMember(ctx, actor, pid); err != nil {
-				return nil, err
-			}
+		if pid == 0 {
+			return nil, fmt.Errorf("project_id 必填")
+		}
+		if err := s.assertProjectMember(ctx, actor, pid); err != nil {
+			return nil, err
 		}
 		ps := int(getUint("page_size", 10))
 		if ps <= 0 || ps > 30 {

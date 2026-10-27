@@ -12,7 +12,7 @@ export function useAiEnabled() {
       const st = await getAIStatus();
       setEnabled(!!st?.enabled);
     } catch {
-      setEnabled(false);
+      // 请求失败（网络抖动/500）时保留上一次结果，不误判为未启用
     } finally {
       setLoading(false);
     }

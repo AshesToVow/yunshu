@@ -8,6 +8,7 @@ export function ticketStatusLabel(s?: string) {
     executing: "执行中",
     success: "执行成功",
     failed: "执行失败",
+    result_unknown: "结果未知",
     rejected: "已驳回",
     approved: "已审批",
     closed: "已关闭",

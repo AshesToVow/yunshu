@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
@@ -16,6 +15,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/yaml"
 )
 
@@ -136,7 +136,13 @@ func (s *K8sWorkloadService) JobRerun(ctx context.Context, req JobRerunRequest) 
 		}
 		return "", bizerrors.Internalf(ctx, "k8s.workload", "api", err, constants.ErrFmt1a7e7f82dbdc)
 	}
-	newName := fmt.Sprintf("%s-rerun-%d", job.Name, time.Now().Unix())
+	// 秒级时间戳在连续重跑时会撞名（AlreadyExists），改用随机后缀并截断超长基础名（Job 名上限 63）。
+	const rerunSuffixLen = len("-rerun-") + 5
+	baseName := strings.TrimRight(job.Name, "-")
+	if maxBase := 63 - rerunSuffixLen; len(baseName) > maxBase {
+		baseName = strings.TrimRight(baseName[:maxBase], "-")
+	}
+	newName := fmt.Sprintf("%s-rerun-%s", baseName, utilrand.String(5))
 	newJob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      newName,

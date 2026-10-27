@@ -164,7 +164,7 @@ func (s *Service) buildReleaseApprovalStepItemsFromWorkflow(ctx context.Context,
 	if err != nil || ticket == nil {
 		return nil, false
 	}
-	detail, err := wf.TicketDetail(ctx, ticket.ID)
+	detail, err := wf.TicketDetail(ctx, ticket.ID, nil)
 	if err != nil || detail == nil || len(detail.Steps) == 0 {
 		return nil, false
 	}

@@ -26,29 +26,35 @@ type OSCJobItem struct {
 }
 
 func (s *Service) GetTicketRollback(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) ([]RollbackItem, error) {
+	_, _, items, err := s.loadTicketRollback(ctx, projectID, ticketID, actor)
+	return items, err
+}
+
+// loadTicketRollback 一次拉取工单、实例与回滚项，供查询/预览/提交复用，避免重复请求 goInception。
+func (s *Service) loadTicketRollback(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) (*model.DbSqlTicket, *model.DbInstance, []RollbackItem, error) {
 	ticket, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	if ticket.Status != model.DbTicketStatusSuccess && ticket.Status != model.DbTicketStatusFailed {
-		return nil, constants.ErrBadRequestWithMsg("仅已执行完成的工单可查询回滚 SQL")
+		return nil, nil, nil, constants.ErrBadRequestWithMsg("仅已执行完成的工单可查询回滚 SQL")
 	}
 	if !ticket.IsBackup {
-		return nil, constants.ErrBadRequestWithMsg("该工单未开启备份，无法生成回滚 SQL")
+		return nil, nil, nil, constants.ErrBadRequestWithMsg("该工单未开启备份，无法生成回滚 SQL")
 	}
 	rows := goinception.ParseExecuteRows(ticket.ExecuteJSON)
 	if len(rows) == 0 {
-		return nil, constants.ErrBadRequestWithMsg("无执行结果，无法查询回滚 SQL")
+		return nil, nil, nil, constants.ErrBadRequestWithMsg("无执行结果，无法查询回滚 SQL")
 	}
 	inst, err := s.repo.GetInstanceInProject(ctx, projectID, ticket.InstanceID)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	if err := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, ticket.SqlText, true, actor); err != nil {
 		if err2 := s.checkWritePermission(ctx, projectID, inst, ticket.DatabaseName, ticket.SqlText, false, actor); err2 != nil {
-			if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
+			if ticket.SubmitterUserID != actorUserID(actor) && !isSuperAdmin(actor) {
 				if qerr := s.checkQueryPermission(ctx, projectID, inst, ticket.DatabaseName, actor); qerr != nil {
-					return nil, constants.ErrForbidden
+					return nil, nil, nil, constants.ErrForbidden
 				}
 			}
 		}
@@ -57,17 +63,17 @@ func (s *Service) GetTicketRollback(ctx context.Context, projectID, ticketID uin
 	defer release()
 	sess, err := s.openSession(ctx, inst)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	defer sess.Close()
 	items, err := goinception.FetchRollbackFromExecuteRows(ctx, sess.DB, rows)
 	if err != nil {
-		return nil, constants.ErrBadRequestWithMsg("查询回滚 SQL 失败: " + err.Error())
+		return nil, nil, nil, constants.ErrBadRequestWithMsg("查询回滚 SQL 失败: " + err.Error())
 	}
 	if len(items) == 0 {
-		return nil, constants.ErrBadRequestWithMsg("未在 goInception 备份库中找到回滚 SQL，请确认：1) goInception config.toml 已配置 backup 且执行时 --backup=1；2) 实例账号对备份库（如 10_10_10_103_3306_test）有 SELECT 权限")
+		return nil, nil, nil, constants.ErrBadRequestWithMsg("未在 goInception 备份库中找到回滚 SQL，请确认：1) goInception config.toml 已配置 backup 且执行时 --backup=1；2) 实例账号对备份库（如 10_10_10_103_3306_test）有 SELECT 权限")
 	}
-	return items, nil
+	return ticket, inst, items, nil
 }
 
 func (s *Service) ListTicketOSCJobs(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) ([]OSCJobItem, error) {
@@ -97,7 +103,7 @@ func (s *Service) ensureTicketOSCAccess(ctx context.Context, projectID uint, tic
 	if actor == nil {
 		return constants.ErrForbidden
 	}
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		return nil
 	}
 	if ticket.SubmitterUserID == actorUserID(actor) {
@@ -146,7 +152,7 @@ func (s *Service) ensureOSCAccess(ctx context.Context, projectID, ticketID uint,
 	if !s.goInceptionAvailable(ctx, inst) {
 		return constants.ErrBadRequestWithMsg("当前实例不支持 goInception OSC")
 	}
-	if ticket.SubmitterUserID != actorUserID(actor) && !auth.IsSuperAdminRole(actor.RoleCodes) {
+	if ticket.SubmitterUserID != actorUserID(actor) && !isSuperAdmin(actor) {
 		perm, _ := s.GetEffectivePermission(ctx, projectID, ticket.InstanceID, actor)
 		if perm == nil || !perm.CanManage {
 			if ok, _ := s.isProjectAdminOrOwner(ctx, projectID, actor); !ok {
@@ -180,14 +186,13 @@ type SubmitRollbackTicketRequest struct {
 }
 
 func (s *Service) PreviewRollbackTicket(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) (*RollbackPreviewResponse, error) {
-	source, sqlText, err := s.buildRollbackSQL(ctx, projectID, ticketID, actor)
+	source, _, sqlText, count, err := s.buildRollbackSQL(ctx, projectID, ticketID, actor)
 	if err != nil {
 		return nil, err
 	}
-	items, _ := s.GetTicketRollback(ctx, projectID, ticketID, actor)
 	return &RollbackPreviewResponse{
 		SourceTicketID: ticketID,
-		ItemCount:      len(items),
+		ItemCount:      count,
 		SQL:            sqlText,
 		DatabaseName:   source.DatabaseName,
 		InstanceID:     source.InstanceID,
@@ -195,11 +200,7 @@ func (s *Service) PreviewRollbackTicket(ctx context.Context, projectID, ticketID
 }
 
 func (s *Service) SubmitRollbackTicket(ctx context.Context, projectID, ticketID uint, req SubmitRollbackTicketRequest, actor *auth.CurrentUser) (*ExecuteResponse, error) {
-	source, sqlText, err := s.buildRollbackSQL(ctx, projectID, ticketID, actor)
-	if err != nil {
-		return nil, err
-	}
-	inst, err := s.repo.GetInstanceInProject(ctx, projectID, source.InstanceID)
+	source, inst, sqlText, _, err := s.buildRollbackSQL(ctx, projectID, ticketID, actor)
 	if err != nil {
 		return nil, err
 	}
@@ -210,17 +211,10 @@ func (s *Service) SubmitRollbackTicket(ctx context.Context, projectID, ticketID 
 	return s.createSqlExecuteTicket(ctx, projectID, inst, source.DatabaseName, sqlText, reason, actor, true)
 }
 
-func (s *Service) buildRollbackSQL(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) (*model.DbSqlTicket, string, error) {
-	source, err := s.repo.GetSqlTicketInProject(ctx, projectID, ticketID)
+func (s *Service) buildRollbackSQL(ctx context.Context, projectID, ticketID uint, actor *auth.CurrentUser) (*model.DbSqlTicket, *model.DbInstance, string, int, error) {
+	source, inst, items, err := s.loadTicketRollback(ctx, projectID, ticketID, actor)
 	if err != nil {
-		return nil, "", err
-	}
-	items, err := s.GetTicketRollback(ctx, projectID, ticketID, actor)
-	if err != nil {
-		return nil, "", err
-	}
-	if len(items) == 0 {
-		return nil, "", constants.ErrBadRequestWithMsg("未找到可回滚的 SQL")
+		return nil, nil, "", 0, err
 	}
 	var parts []string
 	for _, item := range items {
@@ -230,7 +224,7 @@ func (s *Service) buildRollbackSQL(ctx context.Context, projectID, ticketID uint
 		}
 	}
 	if len(parts) == 0 {
-		return nil, "", constants.ErrBadRequestWithMsg("回滚 SQL 为空")
+		return nil, nil, "", 0, constants.ErrBadRequestWithMsg("回滚 SQL 为空")
 	}
-	return source, strings.Join(parts, "\n"), nil
+	return source, inst, strings.Join(parts, "\n"), len(items), nil
 }

@@ -51,7 +51,11 @@ func (s *LogSearchService) TopN(ctx context.Context, q LogTopNQuery) (*LogTopNRe
 	if len(fields) == 0 {
 		return nil, constants.ErrBadRequestWithMsg("不支持的 dim，可选 service/pod/host/level/namespace/container/status")
 	}
-	counts := s.queryTermsFacet(ctx, prep, fields, size)
+	cli, _, err := s.es.Client(ctx)
+	if err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	counts := s.queryTermsFacet(ctx, cli, prep, fields, size)
 	type kv struct {
 		k string
 		v int64

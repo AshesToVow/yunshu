@@ -153,7 +153,7 @@ func (s *K8sServiceResourceService) Apply(ctx context.Context, req K8sServiceApp
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, nil); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.service.resource", "api", err)
 	}
 	return nil

@@ -27,10 +27,14 @@ func (h *WorkflowHandler) GetDefinition(c *gin.Context) {
 		return
 	}
 	domain := c.Param("domain")
-	projectID, _ := strconv.ParseUint(c.Param("project_id"), 10, 64)
+	projectID, err := parseWorkflowProjectParam(c, "project_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	ticketType := c.DefaultQuery("ticket_type", model.WorkflowTicketTypeDefault)
 	def, err := h.svc.GetDefinition(c.Request.Context(), service.DefinitionKey{
-		Domain: domain, ProjectID: uint(projectID), TicketType: ticketType,
+		Domain: domain, ProjectID: projectID, TicketType: ticketType,
 	}, defaultStagesForDomain(domain))
 	if err != nil {
 		response.Error(c, err)
@@ -41,11 +45,15 @@ func (h *WorkflowHandler) GetDefinition(c *gin.Context) {
 
 func (h *WorkflowHandler) UpsertDefinition(c *gin.Context) {
 	domain := c.Param("domain")
-	projectID, _ := strconv.ParseUint(c.Param("project_id"), 10, 64)
+	projectID, err := parseWorkflowProjectParam(c, "project_id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
 	ticketType := c.DefaultQuery("ticket_type", model.WorkflowTicketTypeDefault)
 	ServeJSON(c, func(ctx context.Context, req service.DefinitionUpsertRequest) (*service.DefinitionResponse, error) {
 		return h.svc.UpsertDefinition(ctx, service.DefinitionKey{
-			Domain: domain, ProjectID: uint(projectID), TicketType: ticketType,
+			Domain: domain, ProjectID: projectID, TicketType: ticketType,
 		}, req)
 	})
 }
@@ -69,15 +77,10 @@ func (h *WorkflowHandler) ListPending(c *gin.Context) {
 	response.Success(c, data)
 }
 
-func (h *WorkflowHandler) ReviewPendingStep(c *gin.Context) {
-	stepID, err := parseWorkflowUintParam(c, "step_id")
-	if err != nil {
-		response.Error(c, err)
-		return
-	}
-	ticketID, err := parseWorkflowUintParam(c, "id")
-	if err != nil {
-		response.Error(c, err)
+func (h *WorkflowHandler) ListTickets(c *gin.Context) {
+	var q service.WorkflowTicketListQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Error(c, constants.ErrBadRequest)
 		return
 	}
 	actor, ok := auth.CurrentUserFromContext(c)
@@ -85,18 +88,7 @@ func (h *WorkflowHandler) ReviewPendingStep(c *gin.Context) {
 		response.Error(c, constants.ErrNotLoggedIn)
 		return
 	}
-	ServeJSON(c, func(ctx context.Context, req service.ReviewStepRequest) (*service.TicketDetail, error) {
-		return h.svc.ReviewStep(ctx, ticketID, stepID, req, actor)
-	})
-}
-
-func (h *WorkflowHandler) ListTickets(c *gin.Context) {
-	var q service.WorkflowTicketListQuery
-	if err := c.ShouldBindQuery(&q); err != nil {
-		response.Error(c, constants.ErrBadRequest)
-		return
-	}
-	data, err := h.svc.ListTickets(c.Request.Context(), q)
+	data, err := h.svc.ListTickets(c.Request.Context(), q, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -110,7 +102,12 @@ func (h *WorkflowHandler) TicketDetail(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	data, err := h.svc.TicketDetail(c.Request.Context(), id)
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok {
+		response.Error(c, constants.ErrNotLoggedIn)
+		return
+	}
+	data, err := h.svc.TicketDetail(c.Request.Context(), id, actor)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -119,8 +116,14 @@ func (h *WorkflowHandler) TicketDetail(c *gin.Context) {
 }
 
 func (h *WorkflowHandler) CreateTicket(c *gin.Context) {
-	actor, _ := auth.CurrentUserFromContext(c)
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok {
+		response.Error(c, constants.ErrNotLoggedIn)
+		return
+	}
 	ServeJSON201(c, func(ctx context.Context, req service.CreateTicketRequest) (*service.TicketDetail, error) {
+		// 提交人以登录态为准，忽略客户端传值（防止伪造提交人绕过禁止自审）
+		req.SubmitterUserID = actor.ID
 		return h.svc.CreateTicket(ctx, req, actor)
 	})
 }
@@ -208,6 +211,15 @@ func defaultStagesForDomain(domain string) []service.StageItem {
 func parseWorkflowUintParam(c *gin.Context, name string) (uint, error) {
 	v, err := strconv.ParseUint(c.Param(name), 10, 64)
 	if err != nil || v == 0 {
+		return 0, constants.ErrBadRequest
+	}
+	return uint(v), nil
+}
+
+// parseWorkflowProjectParam 允许 0（全局流程定义挂在 project_id=0 下）。
+func parseWorkflowProjectParam(c *gin.Context, name string) (uint, error) {
+	v, err := strconv.ParseUint(c.Param(name), 10, 64)
+	if err != nil {
 		return 0, constants.ErrBadRequest
 	}
 	return uint(v), nil

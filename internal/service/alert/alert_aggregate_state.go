@@ -313,6 +313,8 @@ func humanReadableGroupTimingSuppression(reason string, cfg config.AlertConfig) 
 		return fmt.Sprintf("平台按「首次同组等待」（当前 %d 秒）聚合同组告警，等待窗口结束前本轮不推送。", gw)
 	case "ack_active":
 		return "值班已认领该告警实例，认领有效期内同指纹不再重复推送（当前告警仍保留在事件台）。"
+	case "group_send_busy":
+		return "同组告警正在由另一处理线程/副本投递，本实例并入该轮通知；若该轮投递失败，将在下个重复提醒周期再次通知。"
 	default:
 		return "本轮根据通知合并策略未向渠道推送，可能与「首次同组等待」「同组变化间隔」或「重复提醒间隔」有关，具体以平台告警配置为准。"
 	}

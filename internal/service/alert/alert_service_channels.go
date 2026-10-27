@@ -187,7 +187,13 @@ func (s *AlertService) setCachedCurrentValue(ctx context.Context, fingerprint, v
 // ListChannels 查询列表相关的业务逻辑。
 func (s *AlertService) ListChannels(ctx context.Context, q AlertChannelListQuery) ([]model.AlertChannel, error) {
 	list, err := s.channelRepo.List(ctx, repository.AlertChannelListFilter{Keyword: q.Keyword})
-	return list, bizerrors.Pass(ctx, "alert", "ListChannels", err)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "alert", "ListChannels", err)
+	}
+	for i := range list {
+		maskChannelSecrets(&list[i])
+	}
+	return list, nil
 }
 
 // CreateChannel 创建相关的业务逻辑。
@@ -206,6 +212,9 @@ func (s *AlertService) CreateChannel(ctx context.Context, req AlertChannelUpsert
 	if requiresWebhookURL(ch.Type, ch.HeadersJSON) && strings.TrimSpace(ch.URL) == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgaae2bd7c8c91)
 	}
+	if err := validateChannelOutboundURL(ch.URL); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
 	if ch.TimeoutMS <= 0 {
 		ch.TimeoutMS = s.cfg.DefaultTimeoutMS
 	}
@@ -223,6 +232,7 @@ func (s *AlertService) CreateChannel(ctx context.Context, req AlertChannelUpsert
 	if err := s.channelRepo.Create(ctx, ch); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert", "CreateChannel", err)
 	}
+	maskChannelSecrets(ch)
 	return ch, nil
 }
 
@@ -232,16 +242,22 @@ func (s *AlertService) UpdateChannel(ctx context.Context, id uint, req AlertChan
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "alert", "UpdateChannel", err)
 	}
+	oldURL, oldSecret, oldHeaders := ch.URL, ch.Secret, ch.HeadersJSON
 	ch.Name = strings.TrimSpace(req.Name)
 	ch.Type = strings.TrimSpace(req.Type)
-	ch.URL = strings.TrimSpace(req.URL)
-	ch.Secret = strings.TrimSpace(req.Secret)
-	ch.HeadersJSON = strings.TrimSpace(req.HeadersJSON)
+	ch.URL = restoreMaskedChannelURL(req.URL, oldURL)
+	ch.Secret = restoreMaskedChannelSecret(req.Secret, oldSecret)
+	ch.HeadersJSON = restoreMaskedChannelHeaders(req.HeadersJSON, oldHeaders)
 	if ch.Type == "" {
 		ch.Type = "generic_webhook"
 	}
 	if requiresWebhookURL(ch.Type, ch.HeadersJSON) && strings.TrimSpace(ch.URL) == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgaae2bd7c8c91)
+	}
+	if ch.URL != oldURL {
+		if err := validateChannelOutboundURL(ch.URL); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
+		}
 	}
 	if req.TimeoutMS > 0 {
 		ch.TimeoutMS = req.TimeoutMS
@@ -261,6 +277,7 @@ func (s *AlertService) UpdateChannel(ctx context.Context, id uint, req AlertChan
 	if err := s.channelRepo.Save(ctx, ch); err != nil {
 		return nil, bizerrors.Pass(ctx, "alert", "UpdateChannel", err)
 	}
+	maskChannelSecrets(ch)
 	return ch, nil
 }
 

@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"bytes"
+	"encoding/base64"
 	"testing"
 
 	"yunshu/internal/model"
@@ -41,6 +43,18 @@ func TestOpenClusterSecret_PlaintextCompat(t *testing.T) {
 	}
 	if opened != plain {
 		t.Fatalf("plaintext compat failed: %q", opened)
+	}
+}
+
+func TestOpenClusterSecret_CorruptedCiphertextNotTreatedAsPlaintext(t *testing.T) {
+	aead, err := cryptox.NewAESGCMFromKeyString("0123456789abcdef0123456789abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 合法 base64 且长度足够，但无法解密：应报错，而不是当成明文使用。
+	corrupted := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x7f}, 64))
+	if _, err := openClusterSecret(aead, corrupted); err == nil {
+		t.Fatal("expected decrypt error for corrupted ciphertext")
 	}
 }
 

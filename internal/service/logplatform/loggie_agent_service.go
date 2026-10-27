@@ -32,6 +32,7 @@ type LoggieAgentService struct {
 	logSourceRepo interfaces.LogSourceRepository
 	projectRepo   interfaces.ProjectRepository
 	serviceRepo   interfaces.ServiceRepository
+	memberRepo    interfaces.ProjectMemberRepository
 	esProvider    *ElasticsearchProvider
 	kafkaProvider *KafkaProvider
 	aead          cipher.AEAD
@@ -44,6 +45,7 @@ func NewLoggieAgentService(
 	logSourceRepo interfaces.LogSourceRepository,
 	projectRepo interfaces.ProjectRepository,
 	serviceRepo interfaces.ServiceRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	esProvider *ElasticsearchProvider,
 	kafkaProvider *KafkaProvider,
 	encryptionKey string,
@@ -59,6 +61,7 @@ func NewLoggieAgentService(
 		logSourceRepo: logSourceRepo,
 		projectRepo:   projectRepo,
 		serviceRepo:   serviceRepo,
+		memberRepo:    memberRepo,
 		esProvider:    esProvider,
 		kafkaProvider: kafkaProvider,
 		aead:          aead,
@@ -110,10 +113,10 @@ type LoggieInstallRequest struct {
 
 // LoggieUninstallRequest 删除 Agent：远端卸载 + 清除平台登记。
 type LoggieUninstallRequest struct {
-	ServerID    uint `json:"server_id"`
-	SkipRemote  bool `json:"skip_remote"`  // 仅清登记，不 SSH
-	KeepFiles   bool `json:"keep_files"`   // 远端保留部署目录文件
-	ForceLocal  bool `json:"force_local"`  // SSH 失败时仍清登记
+	ServerID   uint `json:"server_id"`
+	SkipRemote bool `json:"skip_remote"` // 仅清登记，不 SSH
+	KeepFiles  bool `json:"keep_files"`  // 远端保留部署目录文件
+	ForceLocal bool `json:"force_local"` // SSH 失败时仍清登记
 }
 
 type LoggieDeployResult struct {
@@ -264,6 +267,9 @@ func (s *LoggieAgentService) Bootstrap(ctx context.Context, projectID uint, req 
 	if sv.ProjectID != projectID {
 		return nil, constants.ErrServerNotInCurrentProject
 	}
+	if err := validateLoggieDeployDir(req.DeployDir); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("部署目录不合法: " + err.Error())
+	}
 	agent, err := s.ensureAgent(ctx, projectID, req.ServerID, req.MonitorPort)
 	if err != nil {
 		return nil, err
@@ -400,8 +406,22 @@ func (s *LoggieAgentService) DeployCustomPipelinesYAML(ctx context.Context, proj
 		return nil, constants.ErrBadRequestWithMsg("project_id 与 server_id 必填")
 	}
 	yml := strings.TrimSpace(pipelinesYAML)
-	if yml == "" || !strings.Contains(yml, "pipelines:") {
+	if yml == "" {
 		return nil, constants.ErrBadRequestWithMsg("pipelines_yml 无效")
+	}
+	var esCfg config.ElasticsearchConfig
+	if s.esProvider != nil {
+		esCfg, _ = s.esProvider.Resolve(ctx)
+	}
+	var kafkaCfg config.KafkaConfig
+	if s.kafkaProvider != nil {
+		kafkaCfg, _ = s.kafkaProvider.Resolve(ctx)
+	}
+	if err := validateLoggiePipelinesStructure(yml); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
+	if err := validateLoggiePipelinesSinks(yml, esCfg, kafkaCfg); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
 	}
 	agent, err := s.repo.GetByProjectAndServer(ctx, projectID, serverID)
 	if err != nil {
@@ -504,6 +524,9 @@ func (s *LoggieAgentService) InstallLoggie(ctx context.Context, projectID uint, 
 	}
 	if sv.ProjectID != projectID {
 		return nil, constants.ErrServerNotInCurrentProject
+	}
+	if err := validateLoggieDeployDir(req.DeployDir); err != nil {
+		return nil, constants.ErrBadRequestWithMsg("部署目录不合法: " + err.Error())
 	}
 	agent, err := s.ensureAgent(ctx, projectID, req.ServerID, req.MonitorPort)
 	if err != nil {

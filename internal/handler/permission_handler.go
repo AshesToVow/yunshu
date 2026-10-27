@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"yunshu/internal/config"
+	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/plugingate"
@@ -57,7 +59,14 @@ func (h *PermissionHandler) Create(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/permissions/{id} [put]
 func (h *PermissionHandler) Update(c *gin.Context) {
-	ServePatch(c, h.service.Update, "")
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServePatch(c, func(ctx context.Context, id uint, req service.PermissionUpdateRequest) (*service.PermissionItem, error) {
+		return h.service.UpdateByActor(ctx, actor, id, req)
+	}, "")
 }
 
 // Delete godoc
@@ -166,5 +175,12 @@ func (h *PermissionHandler) List(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/permissions/k8s-scope/batch [post]
 func (h *PermissionHandler) BatchSetK8sScope(c *gin.Context) {
-	ServeJSON(c, h.service.BatchSetK8sScope)
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.PermissionBatchK8sScopeRequest) (*service.PermissionBatchK8sScopeResponse, error) {
+		return h.service.BatchSetK8sScopeByActor(ctx, actor, req)
+	})
 }

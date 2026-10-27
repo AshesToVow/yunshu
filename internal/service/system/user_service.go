@@ -22,8 +22,10 @@ import (
 	"yunshu/internal/pkg/password"
 	"yunshu/internal/repository"
 	"yunshu/internal/service/alert"
+	"yunshu/internal/store"
 
 	"github.com/casbin/casbin/v2"
+	"github.com/redis/go-redis/v9"
 	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
@@ -36,6 +38,7 @@ type UserService struct {
 	assigneeSvc       *alert.AlertRuleAssigneeService
 	enforcer          *casbin.SyncedEnforcer
 	resolvePolicy     PasswordPolicyResolver
+	redis             *redis.Client
 }
 
 // NewUserService 创建相关逻辑。
@@ -47,6 +50,7 @@ func NewUserService(
 	projectMemberRepo interfaces.ProjectMemberRepository,
 	assigneeSvc *alert.AlertRuleAssigneeService,
 	resolvePolicy PasswordPolicyResolver,
+	redisClient *redis.Client,
 ) *UserService {
 	return &UserService{
 		userRepo:          userRepo,
@@ -56,6 +60,7 @@ func NewUserService(
 		assigneeSvc:       assigneeSvc,
 		enforcer:          enforcer,
 		resolvePolicy:     resolvePolicy,
+		redis:             redisClient,
 	}
 }
 
@@ -84,6 +89,84 @@ func (s *UserService) canAccessUser(ctx context.Context, actor *auth.CurrentUser
 		return false, bizerrors.Pass(ctx, "user", "canAccessUser", err)
 	}
 	return slices.Contains(ids, *target.DepartmentID), nil
+}
+
+// ensureTargetManageable 部门管理员即便能看到超级管理员（如同部门），也不得改动其账号。
+func (s *UserService) ensureTargetManageable(actor *auth.CurrentUser, target *model.User) error {
+	if actor == nil || target == nil {
+		return constants.ErrForbidden
+	}
+	if auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil
+	}
+	if auth.IsSuperAdminRole(model.ExtractRoleCodes(target.Roles)) {
+		return constants.ErrForbiddenWithMsg("仅内置超级管理员可以操作内置超级管理员账号")
+	}
+	return nil
+}
+
+// ensureAssignableRoles 非超管只能分配自己已持有的角色，防止通过用户管理提权。
+func ensureAssignableRoles(actor *auth.CurrentUser, roles []model.Role) error {
+	if actor == nil {
+		return constants.ErrUnauthorized
+	}
+	if auth.IsSuperAdminRole(actor.RoleCodes) {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(actor.RoleCodes))
+	for _, code := range actor.RoleCodes {
+		allowed[strings.TrimSpace(code)] = struct{}{}
+	}
+	for _, role := range roles {
+		if _, ok := allowed[strings.TrimSpace(role.Code)]; !ok {
+			return constants.ErrForbiddenWithMsg("不能分配超出自身权限范围的角色")
+		}
+	}
+	return nil
+}
+
+func (s *UserService) resolveAssignableRoles(ctx context.Context, actor *auth.CurrentUser, roleIDs []uint) ([]model.Role, error) {
+	roles, err := s.roleRepo.GetByIDs(ctx, roleIDs)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "user", "resolveAssignableRoles", err)
+	}
+	if len(roleIDs) > 0 && len(roles) != len(roleIDs) {
+		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgbc90b8ad5f29)
+	}
+	if err := ensureAssignableRoles(actor, roles); err != nil {
+		return nil, err
+	}
+	return roles, nil
+}
+
+// ensureSuperAdminRemains 禁止禁用/删除最后一名启用状态的内置超级管理员，避免系统失去管理入口。
+func (s *UserService) ensureSuperAdminRemains(ctx context.Context, target *model.User) error {
+	if target == nil || target.Status != model.StatusEnabled {
+		return nil
+	}
+	if !auth.IsSuperAdminRole(model.ExtractEnabledRoleCodes(target.Roles)) {
+		return nil
+	}
+	if s.userRepo == nil {
+		return constants.ErrInternal
+	}
+	n, err := s.userRepo.CountEnabledUsersByRoleCode(ctx, auth.SuperAdminRoleCode)
+	if err != nil {
+		return bizerrors.Pass(ctx, "user", "ensureSuperAdminRemains", err)
+	}
+	if n <= 1 {
+		return constants.ErrForbiddenWithMsg("系统至少需要保留一名启用状态的内置超级管理员")
+	}
+	return nil
+}
+
+// invalidateUserSessions 踢出目标用户的全部 access/refresh 会话（管理员重置密码后必须重新登录）。
+func (s *UserService) invalidateUserSessions(ctx context.Context, userID uint) {
+	if s.redis == nil || userID == 0 {
+		return
+	}
+	_ = store.InvalidateAllUserAccessTokens(ctx, s.redis, userID)
+	_ = store.InvalidateAllUserRefreshTokens(ctx, s.redis, userID)
 }
 
 // Create 创建相关的业务逻辑。
@@ -154,6 +237,9 @@ func (s *UserService) CreateByActor(ctx context.Context, actor *auth.CurrentUser
 	if auth.IsSuperAdminRole(actor.RoleCodes) {
 		return s.Create(ctx, req)
 	}
+	if _, err := s.resolveAssignableRoles(ctx, actor, req.RoleIDs); err != nil {
+		return nil, err
+	}
 	if actor.DepartmentID == nil || *actor.DepartmentID == 0 {
 		return nil, constants.ErrForbiddenWithMsg(constants.ErrMsgc8caf91c1d57)
 	}
@@ -180,8 +266,11 @@ func (s *UserService) Update(ctx context.Context, id uint, req UserUpdateRequest
 		return nil, bizerrors.Pass(ctx, "user", "Update", err)
 	}
 
+	// 只更新请求中出现的列，避免全行 Save 用陈旧快照覆盖并发修改（如登录时间、其他管理员改的字段）。
+	fields := make(map[string]any, 8)
 	if req.Nickname != nil {
 		user.Nickname = strings.TrimSpace(*req.Nickname)
+		fields["nickname"] = user.Nickname
 	}
 	if req.Email != nil && strings.TrimSpace(*req.Email) != "" {
 		email := normalizeEmail(*req.Email)
@@ -189,13 +278,21 @@ func (s *UserService) Update(ctx context.Context, id uint, req UserUpdateRequest
 			return nil, bizerrors.Pass(ctx, "user", "Update", err)
 		}
 		user.Email = &email
+		fields["email"] = email
 	}
 	if req.Status != nil {
+		if *req.Status == model.StatusDisabled {
+			if err = s.ensureSuperAdminRemains(ctx, user); err != nil {
+				return nil, err
+			}
+		}
 		user.Status = *req.Status
+		fields["status"] = user.Status
 	}
 	if req.DepartmentID != nil {
 		if *req.DepartmentID == 0 {
 			user.DepartmentID = nil
+			fields["department_id"] = nil
 		} else {
 			if _, err = s.departmentRepo.GetByID(ctx, *req.DepartmentID); err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -204,24 +301,36 @@ func (s *UserService) Update(ctx context.Context, id uint, req UserUpdateRequest
 				return nil, bizerrors.Pass(ctx, "user", "Update", err)
 			}
 			user.DepartmentID = req.DepartmentID
+			fields["department_id"] = *req.DepartmentID
 		}
 	}
 	if req.Phone != nil {
 		user.Phone = strings.TrimSpace(*req.Phone)
+		fields["phone"] = user.Phone
 	}
+	passwordReset := false
 	if req.Password != nil && *req.Password != "" {
 		if err := enforcePasswordComplexity(ctx, s.resolvePolicy, *req.Password, user.Username); err != nil {
 			return nil, err
 		}
+		passwordReset = true
 		user.Password, err = password.Hash(*req.Password)
 		if err != nil {
 			return nil, bizerrors.Pass(ctx, "user", "Update", err)
 		}
 		touchPasswordChanged(user)
+		// 管理员重置密码后强制对方下次登录改密。
+		user.MustChangePassword = true
+		fields["password"] = user.Password
+		fields["password_changed_at"] = user.PasswordChangedAt
+		fields["must_change_password"] = true
 	}
 
-	if err = s.userRepo.Save(ctx, user); err != nil {
+	if err = s.userRepo.UpdateFields(ctx, user.ID, fields); err != nil {
 		return nil, bizerrors.Pass(ctx, "user", "Update", err)
+	}
+	if passwordReset {
+		s.invalidateUserSessions(ctx, user.ID)
 	}
 	response := NewUserDetailResponse(*user)
 	return &response, nil
@@ -244,6 +353,15 @@ func (s *UserService) UpdateByActor(ctx context.Context, actor *auth.CurrentUser
 	}
 	if !ok {
 		return nil, constants.ErrForbidden
+	}
+	if err := s.ensureTargetManageable(actor, target); err != nil {
+		return nil, err
+	}
+	if target.ID != actor.ID && req.Email != nil && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		desired := normalizeEmail(*req.Email)
+		if desired != "" && desired != userEmailValue(target) {
+			return nil, constants.ErrForbiddenWithMsg("仅内置超级管理员可以修改其他账号的邮箱")
+		}
 	}
 	if req.Password != nil && strings.TrimSpace(*req.Password) != "" {
 		if actor.ID == target.ID {
@@ -273,6 +391,9 @@ func (s *UserService) Delete(ctx context.Context, id uint) error {
 			return constants.ErrUserNotFound
 		}
 		return bizerrors.Pass(ctx, "user", "Delete", err)
+	}
+	if err = s.ensureSuperAdminRemains(ctx, user); err != nil {
+		return err
 	}
 
 	if err = s.userRepo.Delete(ctx, user); err != nil {
@@ -311,6 +432,9 @@ func (s *UserService) DeleteByActor(ctx context.Context, actor *auth.CurrentUser
 	}
 	if !ok {
 		return constants.ErrForbidden
+	}
+	if err := s.ensureTargetManageable(actor, target); err != nil {
+		return err
 	}
 	return s.Delete(ctx, id)
 }
@@ -434,6 +558,14 @@ func (s *UserService) AssignRoles(ctx context.Context, id uint, req UserAssignRo
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsgbc90b8ad5f29)
 	}
 
+	hadSuper := auth.IsSuperAdminRole(model.ExtractEnabledRoleCodes(user.Roles))
+	keepsSuper := auth.IsSuperAdminRole(model.ExtractEnabledRoleCodes(roles))
+	if hadSuper && !keepsSuper {
+		if err = s.ensureSuperAdminRemains(ctx, user); err != nil {
+			return nil, err
+		}
+	}
+
 	if err = s.userRepo.ReplaceRoles(ctx, user, roles); err != nil {
 		return nil, bizerrors.Pass(ctx, "user", "AssignRoles", err)
 	}
@@ -464,7 +596,20 @@ func (s *UserService) AssignRolesByActor(ctx context.Context, actor *auth.Curren
 	if !ok {
 		return nil, constants.ErrForbidden
 	}
+	if err := s.ensureTargetManageable(actor, target); err != nil {
+		return nil, err
+	}
+	if _, err := s.resolveAssignableRoles(ctx, actor, req.RoleIDs); err != nil {
+		return nil, err
+	}
 	return s.AssignRoles(ctx, id, req)
+}
+
+func userEmailValue(user *model.User) string {
+	if user == nil || user.Email == nil {
+		return ""
+	}
+	return normalizeEmail(*user.Email)
 }
 
 func (s *UserService) ensureUserUnique(ctx context.Context, currentID uint, username, email string) error {

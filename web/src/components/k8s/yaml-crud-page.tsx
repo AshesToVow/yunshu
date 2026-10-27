@@ -81,6 +81,11 @@ export type YamlCrudToolbarCtx = {
   clusterId?: number;
   namespace?: string;
   reload: () => void;
+  /** 列表是否正在加载 */
+  loading?: boolean;
+  /** 当前用户对该集群是否可写（档位加载中为 undefined，由调用方按乐观策略处理） */
+  canMutate?: boolean;
+  tierLoading?: boolean;
 };
 
 /** 创建抽屉打开时传给子组件（含关闭外层抽屉） */
@@ -97,7 +102,13 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   api: YamlCrudApi<TItem, TDetail>;
   extraRowActions?: (
     record: TItem,
-    ctx: { clusterId: number; namespace?: string; reload: () => void },
+    ctx: {
+      clusterId: number;
+      namespace?: string;
+      reload: () => void;
+      canMutate?: boolean;
+      tierLoading?: boolean;
+    },
   ) => React.ReactNode;
   onEdit?: (record: TItem, ctx: { clusterId: number; namespace?: string; reload: () => void }) => void;
   detailExtra?: (detail: TDetail, yamlCtx?: { yaml: string; setYaml: (v: string) => void }) => React.ReactNode;
@@ -127,6 +138,8 @@ export interface YamlCrudPageProps<TItem extends { name: string }, TDetail exten
   renderSummary?: (items: TItem[], ctx: YamlCrudToolbarCtx) => React.ReactNode;
   /** 表格横向滚动最小宽度；未设或小于列宽总和时自动按列宽 + 操作列计算 */
   tableScrollX?: number | string;
+  /** 删除确认弹窗内的额外风险提示（如命名空间级联删除） */
+  deleteWarning?: string;
 }
 
 export function YamlCrudPage<TItem extends { name: string }, TDetail extends { yaml: string }>(
@@ -157,6 +170,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     headerExtra,
     renderSummary,
     tableScrollX,
+    deleteWarning,
   } = props;
   const { clusterId, namespace, setClusterId, setNamespace, clusterOptions, namespaceOptions } = useK8sContext({
     needNamespace: Boolean(needNamespace),
@@ -316,7 +330,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
             编辑
           </Button>
         ) : null}
-        {extraRowActions?.(record, { clusterId: clusterId ?? 0, namespace, reload })}
+        {extraRowActions?.(record, { clusterId: clusterId ?? 0, namespace, reload, canMutate, tierLoading })}
         {!mutationsDisabled && api.remove ? (
           <Button
             danger
@@ -346,6 +360,9 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
     clusterId,
     namespace,
     reload: () => void reload(),
+    loading,
+    canMutate,
+    tierLoading,
   };
 
   const createCtx: YamlCrudCreateCtx = {
@@ -753,6 +770,7 @@ export function YamlCrudPage<TItem extends { name: string }, TDetail extends { y
           open={deleteDialogOpen}
           resourceName={deleteTarget?.name ?? ""}
           loading={deleteLoading}
+          warning={deleteWarning}
           onCancel={() => {
             setDeleteDialogOpen(false);
             setDeleteTarget(null);

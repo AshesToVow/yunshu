@@ -1,6 +1,6 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Radio, Select, Space, Typography, message } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   APPLY_TYPE_OPTIONS,
@@ -19,8 +19,18 @@ import {
   type DbInstance,
   type DbInstanceMySQLUser,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { MYSQL_GLOBAL_ONLY_PRIVS, parseMysqlGrantPrivileges } from "../utils/mysql-grants";
+
+function normalizeGrantHosts(value?: string): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const hosts = value
+    .split("|")
+    .map((h) => h.trim())
+    .filter(Boolean);
+  return hosts.length ? hosts.join("|") : undefined;
+}
 
 export function DbmgmtAppUserApplyPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -32,28 +42,53 @@ export function DbmgmtAppUserApplyPage() {
   const [privsLoading, setPrivsLoading] = useState(false);
   const [privsLoaded, setPrivsLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [instancesLoading, setInstancesLoading] = useState(false);
+  const instancesSeqRef = useRef(0);
+  const metadataSeqRef = useRef(0);
+  const privsSeqRef = useRef(0);
+  const submittingRef = useRef(false);
   const [form] = Form.useForm();
   const instanceId = Form.useWatch("instance_id", form);
   const applyType = (Form.useWatch("apply_type", form) ?? "new_user") as AppUserApplyType;
   const privLevel = Form.useWatch("priv_level", form) ?? "global";
-  const mysqlUserKey = Form.useWatch("mysql_user_key", form) as string | undefined;
-  const databaseName = Form.useWatch("database_name", form) as string | undefined;
+  const mysqlUserKeyRaw = Form.useWatch("mysql_user_key", form) as string | undefined;
+  const mysqlUserKey = mysqlUserKeyRaw?.trim() || undefined;
+  const databaseNameRaw = Form.useWatch("database_name", form) as string | undefined;
+  const databaseName = databaseNameRaw?.trim() || undefined;
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) {
-        setProjectId(res.list[0].id);
-        form.setFieldValue("project_id", res.list[0].id);
-      }
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) {
+          setProjectId(res.list[0].id);
+          form.setFieldValue("project_id", res.list[0].id);
+        }
+      })
+      .catch(() => {
+        /* 项目列表加载失败不阻断页面 */
+      });
   }, [form]);
 
   const loadInstances = useCallback(async () => {
-    if (!projectId) return;
-    const res = await listDbInstances(projectId, { page: 1, page_size: 200 });
-    const list = (res.list ?? []).filter((i) => i.driver === "mysql");
-    setInstances(list);
+    const seq = ++instancesSeqRef.current;
+    if (!projectId) {
+      setInstances([]);
+      setInstancesLoading(false);
+      return;
+    }
+    setInstancesLoading(true);
+    try {
+      const res = await listDbInstances(projectId, { page: 1, page_size: 200 });
+      if (seq !== instancesSeqRef.current) return;
+      setInstances((res.list ?? []).filter((i) => i.driver === "mysql"));
+    } catch (e) {
+      if (seq !== instancesSeqRef.current) return;
+      setInstances([]);
+      message.error(extractApiErrorMessage(e, "加载实例列表失败"));
+    } finally {
+      if (seq === instancesSeqRef.current) setInstancesLoading(false);
+    }
   }, [projectId]);
 
   useEffect(() => {
@@ -61,15 +96,26 @@ export function DbmgmtAppUserApplyPage() {
   }, [loadInstances]);
 
   useEffect(() => {
+    const seq = ++metadataSeqRef.current;
     if (!projectId || !instanceId) {
       setDatabases([]);
       setMysqlUsers([]);
       return;
     }
-    void listDbDatabases(projectId, instanceId).then((dbs) => setDatabases((dbs ?? []).map((d) => d.name)));
+    void listDbDatabases(projectId, instanceId)
+      .then((dbs) => {
+        if (seq === metadataSeqRef.current) setDatabases((dbs ?? []).map((d) => d.name));
+      })
+      .catch(() => {
+        if (seq === metadataSeqRef.current) setDatabases([]);
+      });
     void listInstanceMySQLUsers(projectId, instanceId)
-      .then((list) => setMysqlUsers(list ?? []))
-      .catch(() => setMysqlUsers([]));
+      .then((list) => {
+        if (seq === metadataSeqRef.current) setMysqlUsers(list ?? []);
+      })
+      .catch(() => {
+        if (seq === metadataSeqRef.current) setMysqlUsers([]);
+      });
   }, [projectId, instanceId]);
 
   const isNewUser = applyType === "new_user";
@@ -80,19 +126,21 @@ export function DbmgmtAppUserApplyPage() {
   const showExtraHosts = applyType === "add_priv";
 
   useEffect(() => {
+    const seq = ++privsSeqRef.current;
     if (!projectId || !instanceId || !isExistingUser || !mysqlUserKey || !showPrivs) {
       setHeldPrivs([]);
       setPrivsLoaded(false);
+      setPrivsLoading(false);
       return;
     }
     if (privLevel === "database" && !databaseName) {
       setHeldPrivs([]);
       setPrivsLoaded(false);
+      setPrivsLoading(false);
       return;
     }
     const parsed = parseMysqlUserKey(mysqlUserKey);
     const selectedUser = mysqlUsers.find((u) => u.username === parsed.user && u.host === parsed.host);
-    let cancelled = false;
     setPrivsLoading(true);
     setPrivsLoaded(false);
     void getInstanceMySQLUserPrivileges(projectId, instanceId, {
@@ -102,7 +150,7 @@ export function DbmgmtAppUserApplyPage() {
       database: databaseName,
     })
       .then((res) => {
-        if (cancelled) return;
+        if (seq !== privsSeqRef.current) return;
         let privs = (res.privileges ?? []).map((p) => p.toUpperCase());
         if (privs.length === 0 && selectedUser?.grant_lines?.length) {
           privs = [
@@ -116,7 +164,7 @@ export function DbmgmtAppUserApplyPage() {
         setPrivsLoaded(true);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (seq !== privsSeqRef.current) return;
         if (selectedUser?.grant_lines?.length) {
           setHeldPrivs([
             ...parseMysqlGrantPrivileges(selectedUser.grant_lines, {
@@ -130,11 +178,8 @@ export function DbmgmtAppUserApplyPage() {
         setPrivsLoaded(true);
       })
       .finally(() => {
-        if (!cancelled) setPrivsLoading(false);
+        if (seq === privsSeqRef.current) setPrivsLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [projectId, instanceId, isExistingUser, mysqlUserKey, showPrivs, privLevel, databaseName, mysqlUsers]);
 
   const instanceOptions = useMemo(
@@ -184,38 +229,61 @@ export function DbmgmtAppUserApplyPage() {
   }, [form, showPrivs, isRevoke, heldPrivs, lockedPrivs, disabledPrivs]);
 
   const onProjectChange = (id: number) => {
+    instancesSeqRef.current += 1;
+    metadataSeqRef.current += 1;
+    privsSeqRef.current += 1;
     setProjectId(id);
-    form.setFieldsValue({ instance_id: undefined, mysql_user_key: undefined });
+    setInstances([]);
+    setDatabases([]);
+    setMysqlUsers([]);
+    setHeldPrivs([]);
+    setPrivsLoaded(false);
+    form.setFieldsValue({
+      instance_id: undefined,
+      mysql_user: undefined,
+      mysql_user_key: undefined,
+      database_name: undefined,
+    });
   };
 
   const submit = async () => {
-    if (!projectId || submitting) return;
+    if (!projectId || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       const values = await form.validateFields();
-      let mysqlUser = values.mysql_user as string | undefined;
+      const userKey = typeof values.mysql_user_key === "string" ? values.mysql_user_key.trim() : "";
+      let mysqlUser = typeof values.mysql_user === "string" ? values.mysql_user.trim() : "";
       let mysqlHost = "%";
-      if (values.mysql_user_key) {
-        const parsed = parseMysqlUserKey(values.mysql_user_key);
-        mysqlUser = parsed.user;
-        mysqlHost = parsed.host;
+      if (userKey) {
+        const parsed = parseMysqlUserKey(userKey);
+        mysqlUser = parsed.user.trim();
+        mysqlHost = parsed.host.trim() || "%";
       }
+      const databaseNameValue =
+        typeof values.database_name === "string" && values.database_name.trim()
+          ? values.database_name.trim()
+          : undefined;
+      const privileges = Array.isArray(values.privileges)
+        ? (values.privileges as unknown[]).map((p) => String(p).trim()).filter(Boolean)
+        : [];
       await createDbAppUserRequest(projectId, {
         instance_id: values.instance_id,
         apply_type: values.apply_type,
-        mysql_user: mysqlUser!,
+        mysql_user: mysqlUser,
         mysql_host: mysqlHost,
-        database_name: values.database_name,
+        database_name: databaseNameValue,
         priv_level: values.priv_level || "global",
-        privileges: values.privileges ?? [],
-        grant_hosts: values.grant_hosts,
-        reason: values.reason,
+        privileges,
+        grant_hosts: normalizeGrantHosts(values.grant_hosts),
+        reason: typeof values.reason === "string" ? values.reason.trim() : values.reason,
       });
       message.success("已提交应用用户权限申请");
       reset();
     } catch (e) {
-      if (e instanceof Error) message.error(e.message);
+      message.error(extractApiErrorMessage(e, "提交申请失败"));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -226,16 +294,14 @@ export function DbmgmtAppUserApplyPage() {
   };
 
   return (
-    <Card
-      title="应用用户权限申请"
-      extra={
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadInstances()}>
+    <Card className="table-card" title="应用用户权限申请">
+      <div className="toolbar">
+        <Space wrap>
+          <Button icon={<ReloadOutlined />} loading={instancesLoading} onClick={() => void loadInstances()}>
             刷新
           </Button>
         </Space>
-      }
-    >
+      </div>
       <Form
         form={form}
         layout="horizontal"
@@ -265,15 +331,22 @@ export function DbmgmtAppUserApplyPage() {
         </Form.Item>
 
         <Form.Item name="instance_id" label="实例名称" rules={[{ required: true, message: "请选择实例" }]}>
-          <Select showSearch optionFilterProp="label" options={instanceOptions} placeholder="请选择 MySQL 实例" />
+          <Select
+            showSearch
+            optionFilterProp="label"
+            loading={instancesLoading}
+            options={instanceOptions}
+            placeholder="请选择 MySQL 实例"
+          />
         </Form.Item>
 
         {isNewUser ? (
           <Form.Item
             name="mysql_user"
             label="应用用户"
+            normalize={(v?: string) => (typeof v === "string" ? v.trim() : v)}
             rules={[
-              { required: true, message: "请填写应用用户名" },
+              { required: true, whitespace: true, message: "请填写应用用户名" },
               { pattern: /^[a-zA-Z0-9_]+$/, message: "用户名仅允许字母、数字和下划线" },
               { max: 32, message: "用户名不超过 32 个字符" },
             ]}
@@ -372,7 +445,7 @@ export function DbmgmtAppUserApplyPage() {
           <Form.Item
             name="grant_hosts"
             label="授权IP"
-            rules={[{ required: true, message: "请填写授权 IP" }]}
+            rules={[{ required: true, whitespace: true, message: "请填写授权 IP" }]}
             extra={
               <Alert
                 type="info"
@@ -412,7 +485,7 @@ export function DbmgmtAppUserApplyPage() {
         <Form.Item
           name="reason"
           label="备注"
-          rules={[{ required: true, message: "请填写备注" }]}
+          rules={[{ required: true, whitespace: true, message: "请填写备注" }]}
           extra={
             <span style={{ color: "#1890ff" }}>请简单的描述一下数据库信息，尽量使用中文，例如：用户中心数据库</span>
           }

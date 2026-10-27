@@ -53,6 +53,15 @@ func (f *fakeSilenceRepo) Create(ctx context.Context, row *model.AlertSilence) e
 	return nil
 }
 
+func (f *fakeSilenceRepo) CreateBatch(ctx context.Context, rows []*model.AlertSilence) error {
+	for _, row := range rows {
+		if err := f.Create(ctx, row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (f *fakeSilenceRepo) GetByID(ctx context.Context, id uint) (*model.AlertSilence, error) {
 	for i := range f.rows {
 		if f.rows[i].ID == id {
@@ -83,11 +92,20 @@ func (f *fakeSilenceRepo) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
-func (f *fakeSilenceRepo) ListPaged(ctx context.Context, projectID uint, keyword string, offset, limit int) ([]model.AlertSilence, int64, error) {
+func (f *fakeSilenceRepo) ListPaged(ctx context.Context, projectID uint, projectIDs []uint, keyword string, offset, limit int) ([]model.AlertSilence, int64, error) {
+	allowed := make(map[uint]struct{}, len(projectIDs))
+	for _, id := range projectIDs {
+		allowed[id] = struct{}{}
+	}
 	var filtered []model.AlertSilence
 	for _, r := range f.rows {
 		if projectID > 0 && r.ProjectID != projectID {
 			continue
+		}
+		if projectID == 0 && len(allowed) > 0 {
+			if _, ok := allowed[r.ProjectID]; !ok {
+				continue
+			}
 		}
 		filtered = append(filtered, r)
 	}

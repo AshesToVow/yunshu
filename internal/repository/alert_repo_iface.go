@@ -22,6 +22,7 @@ type AlertEventListFilter struct {
 	MonitorPipeline string
 	DatasourceID    uint
 	ProjectID       uint
+	ProjectIDs      []uint
 	GroupKey        string
 	Fingerprint     string
 	Category        string
@@ -42,13 +43,13 @@ type AlertHistoryStatsRow struct {
 
 // AlertEventGroupRow 按 group_key 聚合的查询行。
 type AlertEventGroupRow struct {
-	GroupKey   string    `gorm:"column:group_key"`
-	Title      string    `gorm:"column:title"`
-	Count      int64     `gorm:"column:cnt"`
-	LastAt     time.Time `gorm:"column:last_at"`
-	Status     string    `gorm:"column:status"`
-	Severity   string    `gorm:"column:severity"`
-	Cluster    string    `gorm:"column:cluster"`
+	GroupKey string    `gorm:"column:group_key"`
+	Title    string    `gorm:"column:title"`
+	Count    int64     `gorm:"column:cnt"`
+	LastAt   time.Time `gorm:"column:last_at"`
+	Status   string    `gorm:"column:status"`
+	Severity string    `gorm:"column:severity"`
+	Cluster  string    `gorm:"column:cluster"`
 }
 
 // AlertDatasourceFilterOption is a datasource option for history filters.

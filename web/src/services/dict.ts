@@ -4,7 +4,9 @@ export interface DictEntryItem {
   id: number;
   dict_type: string;
   label: string;
+  /** 敏感类型返回脱敏预览，明文需调用 revealDictEntryValue。 */
   value: string;
+  sensitive?: boolean;
   sort: number;
   status: number;
   remark?: string;

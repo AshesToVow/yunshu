@@ -74,6 +74,8 @@ type HarborConfig struct {
 	ProjectGroup string `mapstructure:"project_group"`
 	Username     string `mapstructure:"username"`
 	Password     string `mapstructure:"password"`
+	// TLSVerify 为 true 时校验 Harbor 服务端证书；零值跳过校验以兼容内网自签部署。
+	TLSVerify bool `mapstructure:"tls_verify"`
 }
 
 type CicdCredentialsConfig struct {

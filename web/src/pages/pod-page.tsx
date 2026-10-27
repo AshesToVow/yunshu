@@ -222,14 +222,18 @@ export function PodPage() {
 
   async function handleDeletePod(record: PodItem, deleteOpts?: K8sDeleteOptions) {
     if (!clusterId) return;
-    await deletePod({
-      cluster_id: clusterId,
-      namespace: record.namespace,
-      name: record.name,
-      ...deleteOpts,
-    });
-    message.success("Pod 已删除");
-    await loadPods();
+    try {
+      await deletePod({
+        cluster_id: clusterId,
+        namespace: record.namespace,
+        name: record.name,
+        ...deleteOpts,
+      });
+      message.success("Pod 已删除");
+      await loadPods();
+    } catch {
+      /* interceptor */
+    }
   }
 
   function buildPodLogsQuery(record: PodItem, tailLines?: number): PodLogsQuery {
@@ -476,9 +480,21 @@ export function PodPage() {
 
   async function handleRestartPod(record: PodItem) {
     if (!clusterId) return;
-    await restartPod({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
-    message.success("Pod 已重启");
-    await loadPods();
+    Modal.confirm({
+      title: `确认重启 Pod ${record.namespace}/${record.name}？`,
+      content: "Pod 重启即删除并重建该 Pod 实例，容器内未持久化数据将丢失。",
+      okText: "重启",
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          await restartPod({ cluster_id: clusterId, namespace: record.namespace, name: record.name });
+          message.success("Pod 已重启");
+          await loadPods();
+        } catch {
+          /* interceptor */
+        }
+      },
+    });
   }
 
   async function loadFiles(target: PodItem, path: string) {

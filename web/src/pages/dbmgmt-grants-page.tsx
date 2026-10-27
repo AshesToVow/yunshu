@@ -1,6 +1,6 @@
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, message } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   GrantValidityCalendarPicker,
@@ -17,6 +17,7 @@ import {
   type DbGrant,
   type DbInstance,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { getUsers } from "../services/users";
 import type { UserItem } from "../types/api";
@@ -56,27 +57,45 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
   const [searchText, setSearchText] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<DbGrant>();
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [actingId, setActingId] = useState<number | null>(null);
+  const loadSeqRef = useRef(0);
   const [editForm] = Form.useForm();
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
-    void getUsers({ page: 1, page_size: 500 }).then((res) => setUsers(res.list ?? []));
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch(() => undefined);
+    void getUsers({ page: 1, page_size: 500 })
+      .then((res) => setUsers(res.list ?? []))
+      .catch(() => setUsers([]));
   }, []);
 
   const load = useCallback(async () => {
-    if (!projectId) return;
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setRows([]);
+      setInstances([]);
+      return;
+    }
+    setLoading(true);
     try {
       const [grants, inst] = await Promise.all([
         listDbGrants(projectId),
         listDbInstances(projectId, { page: 1, page_size: 200 }),
       ]);
+      if (seq !== loadSeqRef.current) return;
       setRows((grants ?? []).filter((g) => (preset === "query" ? isQueryGrant(g) : true)));
       setInstances(inst.list ?? []);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "加载授权列表失败");
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载授权列表失败"));
+    } finally {
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [projectId, preset]);
 
@@ -94,10 +113,13 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
     return m;
   }, [users]);
 
-  const displayName = (g: DbGrant) => {
-    if (g.principal_kind === "user") return userNameMap.get(g.principal_ref) ?? g.principal_ref;
-    return g.principal_ref;
-  };
+  const displayName = useCallback(
+    (g: DbGrant) => {
+      if (g.principal_kind === "user") return userNameMap.get(g.principal_ref) ?? g.principal_ref;
+      return g.principal_ref;
+    },
+    [userNameMap],
+  );
 
   const filteredRows = useMemo(() => {
     const kw = searchText.trim().toLowerCase();
@@ -111,7 +133,7 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
         (g.database_name ?? "").toLowerCase().includes(kw)
       );
     });
-  }, [rows, searchText, instanceMap, userNameMap]);
+  }, [rows, searchText, instanceMap, displayName]);
 
   const instanceIp = (id: number) => {
     const inst = instanceMap.get(id);
@@ -129,59 +151,90 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
   };
 
   const submitEdit = async () => {
-    if (!projectId || !editing) return;
-    const values = await editForm.validateFields();
-    const period = values.grant_period as GrantValidityPeriod | null | undefined;
-    await updateDbGrant(projectId, editing.id, {
-      query_limit_num: values.query_limit_num,
-      expires_at: grantPeriodToExpiresAt(period ?? null),
-      remark: values.remark,
-    });
-    message.success("已更新查询权限");
-    setEditOpen(false);
-    void load();
+    if (!projectId || !editing || submitting) return;
+    let values: { query_limit_num?: number; grant_period?: GrantValidityPeriod | null; remark?: string };
+    try {
+      values = await editForm.validateFields();
+    } catch {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await updateDbGrant(projectId, editing.id, {
+        query_limit_num: values.query_limit_num,
+        expires_at: grantPeriodToExpiresAt(values.grant_period ?? null),
+        remark: values.remark,
+      });
+      message.success("已更新查询权限");
+      setEditOpen(false);
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "更新授权失败"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const removeGrant = async (row: DbGrant) => {
+    if (!projectId || actingId !== null) return;
+    setActingId(row.id);
+    try {
+      await deleteDbGrant(projectId, row.id);
+      message.success("已删除授权");
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除授权失败"));
+    } finally {
+      setActingId(null);
+    }
   };
 
   if (preset === "query") {
     return (
-      <Card title="SQL查询权限管理">
-        <Space style={{ marginBottom: 16 }} wrap>
-          <Link to="/dbmgmt/apply/query">
-            <Button type="primary" icon={<PlusOutlined />}>
-              SQL查询权限申请
+      <Card className="table-card" title="SQL查询权限管理">
+        <div className="toolbar">
+          <Space wrap>
+            <Link to="/dbmgmt/apply/query">
+              <Button type="primary" icon={<PlusOutlined />}>
+                SQL查询权限申请
+              </Button>
+            </Link>
+            <Input
+              style={{ width: 220 }}
+              placeholder="请输入名称进行搜索"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onPressEnter={() => setSearchText(keyword)}
+            />
+            <Button type="primary" icon={<SearchOutlined />} onClick={() => setSearchText(keyword)}>
+              搜索
             </Button>
-          </Link>
-          <Input
-            style={{ width: 220 }}
-            placeholder="请输入名称进行搜索"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onPressEnter={() => setSearchText(keyword)}
-          />
-          <Button type="primary" icon={<SearchOutlined />} onClick={() => setSearchText(keyword)}>
-            搜索
-          </Button>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              setKeyword("");
-              setSearchText("");
-              void load();
-            }}
-          >
-            刷新重置
-          </Button>
-          <Select
-            style={{ width: 180 }}
-            value={projectId}
-            options={projects.map((p) => ({ value: p.id, label: p.name }))}
-            onChange={setProjectId}
-          />
-        </Space>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={loading}
+              disabled={loading}
+              onClick={() => {
+                setKeyword("");
+                setSearchText("");
+                void load();
+              }}
+            >
+              刷新重置
+            </Button>
+            <Select
+              style={{ width: 180 }}
+              value={projectId}
+              options={projects.map((p) => ({ value: p.id, label: p.name }))}
+              onChange={setProjectId}
+            />
+          </Space>
+        </div>
         <Table
           rowKey="id"
+          loading={loading}
           dataSource={filteredRows}
           pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+          scroll={{ x: 1200 }}
           columns={[
             { title: "ID", dataIndex: "id", width: 70 },
             { title: "中文名称", render: (_: unknown, r: DbGrant) => displayName(r) },
@@ -200,16 +253,30 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
             {
               title: "操作",
               width: 140,
+              fixed: "right",
               render: (_, r) => (
                 <Space>
-                  <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => openEdit(r)}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<EditOutlined />}
+                    disabled={actingId !== null}
+                    onClick={() => openEdit(r)}
+                  >
                     编辑
                   </Button>
                   <Popconfirm
                     title="删除该查询权限？"
-                    onConfirm={() => void deleteDbGrant(projectId!, r.id).then(load)}
+                    onConfirm={() => void removeGrant(r)}
+                    disabled={actingId !== null}
                   >
-                    <Button size="small" danger icon={<DeleteOutlined />} />
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      loading={actingId === r.id}
+                      disabled={actingId !== null}
+                    />
                   </Popconfirm>
                 </Space>
               ),
@@ -219,8 +286,13 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
         <Modal
           title="编辑查询权限"
           open={editOpen}
-          onCancel={() => setEditOpen(false)}
+          onCancel={() => {
+            if (!submitting) setEditOpen(false);
+          }}
           onOk={() => void submitEdit()}
+          confirmLoading={submitting}
+          cancelButtonProps={{ disabled: submitting }}
+          maskClosable={!submitting}
           destroyOnClose
           width={760}
         >
@@ -256,24 +328,24 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
   }
 
   return (
-    <Card
-      title="授权管理"
-      extra={
-        <Space>
+    <Card className="table-card" title="授权管理">
+      <div className="toolbar">
+        <Space wrap>
           <Select
             style={{ width: 200 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
             onChange={setProjectId}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} />
+          <Button icon={<ReloadOutlined />} loading={loading} disabled={loading} onClick={() => void load()} />
         </Space>
-      }
-    >
+      </div>
       <Table
         rowKey="id"
+        loading={loading}
         dataSource={rows}
         pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }}
+        scroll={{ x: 1000 }}
         columns={[
           { title: "ID", dataIndex: "id", width: 70 },
           { title: "主体", render: (_: unknown, r: DbGrant) => displayName(r) },
@@ -286,9 +358,20 @@ export function DbmgmtGrantsPage({ preset = "all" }: { preset?: "all" | "query" 
           {
             title: "操作",
             width: 80,
+            fixed: "right",
             render: (_, r) => (
-              <Popconfirm title="删除该授权？" onConfirm={() => void deleteDbGrant(projectId!, r.id).then(load)}>
-                <Button size="small" danger icon={<DeleteOutlined />} />
+              <Popconfirm
+                title="删除该授权？"
+                onConfirm={() => void removeGrant(r)}
+                disabled={actingId !== null}
+              >
+                <Button
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  loading={actingId === r.id}
+                  disabled={actingId !== null}
+                />
               </Popconfirm>
             ),
           },

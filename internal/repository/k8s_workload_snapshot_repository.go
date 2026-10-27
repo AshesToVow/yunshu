@@ -36,6 +36,13 @@ func (r *K8sWorkloadSnapshotRepository) List(
 ) (*pagination.Result[model.K8sWorkloadSnapshot], error) {
 	page, pageSize := pagination.Normalize(p.Page, p.PageSize)
 	q := r.db.WithContext(ctx).Model(&model.K8sWorkloadSnapshot{})
+	if p.ProjectScope {
+		if len(p.ProjectIDs) == 0 {
+			q = q.Where("1 = 0")
+		} else {
+			q = q.Where("project_id IN ?", p.ProjectIDs)
+		}
+	}
 	if p.ProjectID > 0 {
 		q = q.Where("project_id = ?", p.ProjectID)
 	}

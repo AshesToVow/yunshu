@@ -225,8 +225,9 @@ func provideUserService(
 	projectMemberRepo interfaces.ProjectMemberRepository,
 	assigneeSvc *service.AlertRuleAssigneeService,
 	resolvePolicy service.PasswordPolicyResolver,
+	redisClient *redis.Client,
 ) *service.UserService {
-	return service.NewUserService(userRepo, roleRepo, departmentRepo, enforcer, projectMemberRepo, assigneeSvc, resolvePolicy)
+	return service.NewUserService(userRepo, roleRepo, departmentRepo, enforcer, projectMemberRepo, assigneeSvc, resolvePolicy, redisClient)
 }
 
 func provideK8sRuntimeService(
@@ -292,7 +293,7 @@ func provideDbmgmtService(
 	resolveCfg := func(ctx context.Context) config.DbmgmtConfig {
 		return dictconfig.ResolveDbmgmtConfig(ctx, db, cfg)
 	}
-	wf := service.NewWorkflowService(workflowRepo, userGroupRepo, dutyRepo, userRepo)
+	wf := service.NewWorkflowService(workflowRepo, userGroupRepo, dutyRepo, userRepo, memberRepo)
 	return service.NewDbmgmtService(
 		dbmgmtRepo, serverRepo, projectRepo, memberRepo, userGroupRepo, userRepo, dutyRepo,
 		wf, resolveCfg, string(encryptionKey), sender, string(appName), cfg,
@@ -501,12 +502,13 @@ func provideLogIntelligenceService(
 	repo interfaces.LogIntelligenceRepository,
 	logSearch *service.LogSearchService,
 	projectRepo interfaces.ProjectRepository,
+	redisClient *redis.Client,
 ) *service.LogIntelligenceService {
-	return service.NewLogIntelligenceService(repo, logSearch, projectRepo)
+	return service.NewLogIntelligenceService(repo, logSearch, projectRepo, redisClient)
 }
 
-func provideLogRetentionService(es *service.ElasticsearchProvider, repo interfaces.LogRetentionRepository) *service.LogRetentionService {
-	return service.NewLogRetentionService(es, repo)
+func provideLogRetentionService(es *service.ElasticsearchProvider, repo interfaces.LogRetentionRepository, redisClient *redis.Client) *service.LogRetentionService {
+	return service.NewLogRetentionService(es, repo, redisClient)
 }
 
 func provideLoggieConfig(app *bootstrap.App) config.LoggieConfig {
@@ -522,12 +524,13 @@ func provideLoggieAgentService(
 	logSourceRepo interfaces.LogSourceRepository,
 	projectRepo interfaces.ProjectRepository,
 	serviceRepo interfaces.ServiceRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 	es *service.ElasticsearchProvider,
 	kafka *service.KafkaProvider,
 	encryptionKey SecurityEncryptionKey,
 	loggieCfg config.LoggieConfig,
 ) (*service.LoggieAgentService, error) {
-	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, es, kafka, string(encryptionKey), loggieCfg)
+	return service.NewLoggieAgentService(repo, serverRepo, logSourceRepo, projectRepo, serviceRepo, memberRepo, es, kafka, string(encryptionKey), loggieCfg)
 }
 
 func provideClusterLogService(

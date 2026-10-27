@@ -65,8 +65,16 @@ func (s *ClusterLogService) UpsertLogPipeline(ctx context.Context, projectID, id
 	}
 	kind := normalizePipelineKind(req.Kind)
 	yml := strings.TrimSpace(req.ContentYAML)
-	if yml != "" && !strings.Contains(yml, "pipelines:") {
-		return nil, constants.ErrBadRequestWithMsg("content_yml 须包含 pipelines: 根节点")
+	if yml != "" {
+		if err := validateLoggiePipelinesStructure(yml); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
+		}
+		if kind != "template" {
+			esCfg, kafkaCfg := s.resolveSinkConfigs(ctx)
+			if err := validateLoggiePipelinesSinks(yml, esCfg, kafkaCfg); err != nil {
+				return nil, constants.ErrBadRequestWithMsg(err.Error())
+			}
+		}
 	}
 	status := strings.TrimSpace(req.Status)
 	if status == "" {
@@ -221,6 +229,9 @@ func (s *ClusterLogService) ApplyLogPipeline(ctx context.Context, projectID, id,
 	if yml == "" {
 		return nil, constants.ErrBadRequestWithMsg("Pipeline 内容为空")
 	}
+	if err := validateLoggiePipelinesStructure(yml); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
 	switch row.Kind {
 	case "k8s":
 		if row.ClusterID == 0 {
@@ -330,8 +341,11 @@ func (s *ClusterLogService) SaveHostPipelineSnapshot(ctx context.Context, projec
 		return nil, constants.ErrBadRequestWithMsg("server_id 无效")
 	}
 	yml = strings.TrimSpace(yml)
-	if yml == "" || !strings.Contains(yml, "pipelines:") {
+	if yml == "" {
 		return nil, constants.ErrBadRequestWithMsg("pipelines.yml 无效")
+	}
+	if err := validateLoggiePipelinesStructure(yml); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
 	}
 	if strings.TrimSpace(name) == "" {
 		name = fmt.Sprintf("host-server-%d", serverID)

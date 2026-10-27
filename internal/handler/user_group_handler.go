@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -26,7 +27,7 @@ func (h *UserGroupHandler) Detail(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	data, err := h.svc.Detail(c.Request.Context(), id)
+	data, err := h.svc.Detail(auth.RequestContext(c), id)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -55,7 +56,7 @@ func (h *UserGroupHandler) Delete(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
-	if err := h.svc.Delete(c.Request.Context(), id); err != nil {
+	if err := h.svc.Delete(auth.RequestContext(c), id); err != nil {
 		response.Error(c, err)
 		return
 	}

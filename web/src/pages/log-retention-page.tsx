@@ -4,20 +4,17 @@ import {
   Button,
   Card,
   Col,
-  Popconfirm,
   Row,
-  Select,
   Space,
   Statistic,
-  Switch,
   Table,
   Tag,
   Tooltip,
-  Typography,
   message,
 } from "antd";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { DangerConfirmModal } from "../components/danger-confirm-modal";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import {
   deleteKafkaTopic,
@@ -36,17 +33,23 @@ export function LogRetentionPage() {
   const [kafkaLoading, setKafkaLoading] = useState(false);
   const [topicPage, setTopicPage] = useState(1);
   const [topicPageSize, setTopicPageSize] = useState(10);
+  const [deletingTopic, setDeletingTopic] = useState<string>();
+  const [deleteTopicTarget, setDeleteTopicTarget] = useState<string>();
+  const kafkaSeqRef = useRef(0);
 
   const reloadKafka = useCallback(async () => {
+    const seq = ++kafkaSeqRef.current;
     setKafkaLoading(true);
     try {
       const [s, c] = await Promise.all([getKafkaQueueStats(), getKafkaConfigPreview()]);
+      if (seq !== kafkaSeqRef.current) return;
       setKafkaStats(s);
       setKafkaCfg(c);
     } catch (e: unknown) {
+      if (seq !== kafkaSeqRef.current) return;
       message.error(extractApiErrorMessage(e));
     } finally {
-      setKafkaLoading(false);
+      if (seq === kafkaSeqRef.current) setKafkaLoading(false);
     }
   }, []);
 
@@ -77,13 +80,18 @@ export function LogRetentionPage() {
 
   const showEmptyTopicHint = !!kafkaStats?.sink_via_kafka && (kafkaStats?.topics || []).length === 0;
 
-  async function handleDeleteTopic(topic: string) {
+  async function handleDeleteTopic(topic: string, confirm: string, reason: string) {
+    if (deletingTopic) return;
+    setDeletingTopic(topic);
     try {
-      await deleteKafkaTopic(topic);
+      await deleteKafkaTopic(topic, { confirm, reason });
       message.success(`已删除 Topic：${topic}`);
+      setDeleteTopicTarget(undefined);
       await reloadKafka();
     } catch (e: unknown) {
       message.error(extractApiErrorMessage(e));
+    } finally {
+      setDeletingTopic(undefined);
     }
   }
 
@@ -238,17 +246,33 @@ export function LogRetentionPage() {
             {
               title: "操作",
               width: 100,
+              fixed: "right",
               render: (_, row) => (
-                <Popconfirm title={`删除 Topic ${row.topic}？`} onConfirm={() => void handleDeleteTopic(row.topic)}>
-                  <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
-                </Popconfirm>
+                <Button
+                  type="link"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  onClick={() => setDeleteTopicTarget(row.topic)}
+                  disabled={deletingTopic != null}
+                >
+                  删除
+                </Button>
               ),
             },
           ]}
         />
       </Card>
+      <DangerConfirmModal
+        open={!!deleteTopicTarget}
+        title={`删除 Topic ${deleteTopicTarget ?? ""}`}
+        targetLabel="Topic"
+        target={deleteTopicTarget ?? ""}
+        description="删除后该 Topic 的存量消息将不可恢复，Kafka→ES 链路会重建订阅。"
+        loading={deletingTopic != null}
+        onCancel={() => setDeleteTopicTarget(undefined)}
+        onConfirm={({ confirm, reason }) => handleDeleteTopic(deleteTopicTarget ?? "", confirm, reason)}
+      />
     </div>
   );
 }

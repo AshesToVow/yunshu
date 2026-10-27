@@ -1,6 +1,6 @@
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Select, Space, Table, Tag, Typography, message } from "antd";
-import { useEffect, useMemo, useState } from "react";
+import { Alert, Button, Card, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { executeAIApproval, listAIApprovals, reviewAIApproval, type AIApprovalItem } from "../services/ai";
 import { getClusters, type ClusterItem } from "../services/clusters";
@@ -15,6 +15,8 @@ export function AiApprovalsPage() {
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [clusters, setClusters] = useState<ClusterItem[]>([]);
+  const [actingId, setActingId] = useState<number | null>(null);
+  const loadSeqRef = useRef(0);
 
   const clusterNameById = useMemo(() => {
     const m = new Map<number, string>();
@@ -23,15 +25,18 @@ export function AiApprovalsPage() {
   }, [clusters]);
 
   async function load() {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const res = await listAIApprovals({ status: status || undefined, page, page_size: 10, all: true });
+      if (seq !== loadSeqRef.current) return; // 已被新请求取代，丢弃过期响应
       setList(res.list || []);
       setTotal(res.total || 0);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       message.error(extractApiErrorMessage(e, "加载审批失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }
 
@@ -55,22 +60,30 @@ export function AiApprovalsPage() {
   }, [highlightId, list]);
 
   async function review(id: number, approve: boolean, execute?: boolean) {
+    if (actingId !== null) return; // 已有审批操作进行中，防重复提交
+    setActingId(id);
     try {
       await reviewAIApproval(id, { approve, execute: !!execute, note: approve ? "同意" : "驳回" });
       message.success(approve ? "已批准" : "已驳回");
       void load();
     } catch (e) {
       message.error(extractApiErrorMessage(e, "审批失败"));
+    } finally {
+      setActingId(null);
     }
   }
 
   async function execute(id: number) {
+    if (actingId !== null) return;
+    setActingId(id);
     try {
       await executeAIApproval(id);
       message.success("已执行");
       void load();
     } catch (e) {
       message.error(extractApiErrorMessage(e, "执行失败"));
+    } finally {
+      setActingId(null);
     }
   }
 
@@ -156,15 +169,28 @@ export function AiApprovalsPage() {
                 <Space>
                   {row.status === "pending" ? (
                     <>
+                      <Popconfirm
+                        title="确认批准并立即执行该工具？"
+                        onConfirm={() => void review(row.id, true, true)}
+                        disabled={actingId !== null}
+                      >
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<CheckOutlined />}
+                          disabled={actingId !== null}
+                          loading={actingId === row.id}
+                        >
+                          批准并执行
+                        </Button>
+                      </Popconfirm>
                       <Button
                         type="link"
                         size="small"
-                        icon={<CheckOutlined />}
-                        onClick={() => void review(row.id, true, true)}
+                        disabled={actingId !== null}
+                        loading={actingId === row.id}
+                        onClick={() => void review(row.id, true, false)}
                       >
-                        批准并执行
-                      </Button>
-                      <Button type="link" size="small" onClick={() => void review(row.id, true, false)}>
                         仅批准
                       </Button>
                       <Button
@@ -172,6 +198,8 @@ export function AiApprovalsPage() {
                         size="small"
                         danger
                         icon={<CloseOutlined />}
+                        disabled={actingId !== null}
+                        loading={actingId === row.id}
                         onClick={() => void review(row.id, false)}
                       >
                         驳回
@@ -179,9 +207,21 @@ export function AiApprovalsPage() {
                     </>
                   ) : null}
                   {row.status === "approved" || row.status === "failed" ? (
-                    <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => void execute(row.id)}>
-                      执行
-                    </Button>
+                    <Popconfirm
+                      title="确认执行该审批对应的工具操作？"
+                      onConfirm={() => void execute(row.id)}
+                      disabled={actingId !== null}
+                    >
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<PlayCircleOutlined />}
+                        disabled={actingId !== null}
+                        loading={actingId === row.id}
+                      >
+                        执行
+                      </Button>
+                    </Popconfirm>
                   ) : null}
                 </Space>
               ) : null,

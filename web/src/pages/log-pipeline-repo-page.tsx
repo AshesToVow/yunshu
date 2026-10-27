@@ -1,6 +1,6 @@
 import { CloudSyncOutlined, PlusOutlined, RobotOutlined, SaveOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { getClusters, type ClusterItem } from "../services/clusters";
 import {
@@ -32,6 +32,10 @@ type LocationState = {
   goal?: string;
 };
 
+function isFormValidationError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "errorFields" in error;
+}
+
 /** Loggie Pipeline 仓库：版本化 YAML + 同步/下发 + AI 调整。 */
 export function LogPipelineRepoPage() {
   const [searchParams] = useSearchParams();
@@ -61,6 +65,10 @@ export function LogPipelineRepoPage() {
   const [versionLoading, setVersionLoading] = useState(false);
   const [versions, setVersions] = useState<LogPipelineVersionItem[]>([]);
   const [rollingBackId, setRollingBackId] = useState<number>();
+  const [deployingId, setDeployingId] = useState<number>();
+  const [deletingId, setDeletingId] = useState<number>();
+  const loadSeqRef = useRef(0);
+  const versionSeqRef = useRef(0);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -72,10 +80,10 @@ export function LogPipelineRepoPage() {
         const defaultProject = qPid || list[0]?.id;
         if (defaultProject) setProjectId(defaultProject);
       })
-      .catch(() => undefined);
+      .catch((e: unknown) => message.error(extractApiErrorMessage(e, "加载项目列表失败")));
     void getClusters({ page: 1, page_size: 1000 })
       .then((res) => setClusters(res?.list || []))
-      .catch(() => undefined);
+      .catch((e: unknown) => message.error(extractApiErrorMessage(e, "加载集群列表失败")));
   }, []);
 
   useEffect(() => {
@@ -103,7 +111,14 @@ export function LogPipelineRepoPage() {
   }, []);
 
   async function load() {
-    if (!projectId) return;
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setRows([]);
+      setProfiles([]);
+      setAgents([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [listRes, profileRes, statusRes] = await Promise.all([
@@ -111,19 +126,37 @@ export function LogPipelineRepoPage() {
         listLogParseProfiles(projectId).catch(() => ({ list: [] })),
         getLoggieStatus(projectId).catch(() => ({ list: [] as LoggieStatusItem[] })),
       ]);
+      if (seq !== loadSeqRef.current) return;
       setRows(listRes?.list || []);
       setProfiles(profileRes?.list || []);
       setAgents(statusRes?.list || []);
     } catch (e) {
+      if (seq !== loadSeqRef.current) return;
       message.error(extractApiErrorMessage(e, "加载 Pipeline 仓库失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }
 
   useEffect(() => {
     void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  function handleProjectChange(id: number) {
+    loadSeqRef.current += 1;
+    versionSeqRef.current += 1;
+    setProjectId(id);
+    setRows([]);
+    setProfiles([]);
+    setAgents([]);
+    setEditorOpen(false);
+    setEditing(null);
+    setSyncOpen(false);
+    setVersionOpen(false);
+    setAiOpen(false);
+    setLoading(false);
+  }
 
   function openCreate() {
     setEditing(null);
@@ -155,10 +188,10 @@ export function LogPipelineRepoPage() {
   }
 
   async function saveEditor() {
-    if (!projectId) return;
-    const values = await form.validateFields();
+    if (!projectId || saving) return;
     setSaving(true);
     try {
+      const values = await form.validateFields();
       const payload = {
         ...values,
         content_yml: yamlText,
@@ -173,6 +206,7 @@ export function LogPipelineRepoPage() {
       setEditorOpen(false);
       await load();
     } catch (e) {
+      if (isFormValidationError(e)) return;
       message.error(extractApiErrorMessage(e, "保存失败"));
     } finally {
       setSaving(false);
@@ -191,6 +225,7 @@ export function LogPipelineRepoPage() {
   }
 
   async function runSync() {
+    if (syncing) return;
     if (!projectId || !syncTargetId) {
       message.warning(syncKind === "k8s" ? "请选择集群" : "请选择主机");
       return;
@@ -236,20 +271,23 @@ export function LogPipelineRepoPage() {
 
   async function openVersionHistory() {
     if (!projectId || !editing) return;
+    const seq = ++versionSeqRef.current;
     setVersionOpen(true);
     setVersionLoading(true);
     try {
       const res = await listLogPipelineVersions(projectId, editing.id);
+      if (seq !== versionSeqRef.current) return;
       setVersions(res?.list || []);
     } catch (e) {
+      if (seq !== versionSeqRef.current) return;
       message.error(extractApiErrorMessage(e, "加载版本历史失败"));
     } finally {
-      setVersionLoading(false);
+      if (seq === versionSeqRef.current) setVersionLoading(false);
     }
   }
 
   async function runRollback(versionId: number) {
-    if (!projectId || !editing) return;
+    if (!projectId || !editing || rollingBackId != null) return;
     setRollingBackId(versionId);
     try {
       const updated = await rollbackLogPipelineVersion(projectId, editing.id, versionId);
@@ -276,7 +314,8 @@ export function LogPipelineRepoPage() {
   }
 
   async function runDeploy(row: LogPipelineItem) {
-    if (!projectId) return;
+    if (!projectId || deployingId != null) return;
+    setDeployingId(row.id);
     try {
       if (row.kind === "host") {
         if (!row.server_id) {
@@ -299,10 +338,27 @@ export function LogPipelineRepoPage() {
       await load();
     } catch (e) {
       message.error(extractApiErrorMessage(e, "下发失败"));
+    } finally {
+      setDeployingId(undefined);
+    }
+  }
+
+  async function handleDelete(row: LogPipelineItem) {
+    if (!projectId || deletingId != null) return;
+    setDeletingId(row.id);
+    try {
+      await deleteLogPipeline(projectId, row.id);
+      message.success("已删除");
+      await load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除失败"));
+    } finally {
+      setDeletingId(undefined);
     }
   }
 
   async function runAiAdjust() {
+    if (aiLoading) return;
     setAiLoading(true);
     try {
       const samples = aiSamples
@@ -348,15 +404,14 @@ export function LogPipelineRepoPage() {
 
   return (
     <div className="log-pipeline-repo-page">
-      <Card
-        title="Pipeline 仓库"
-        extra={
+      <Card className="table-card" title="Pipeline 仓库">
+        <div className="toolbar">
           <Space wrap>
             <Select
               style={{ width: 220 }}
               value={projectId}
               options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` }))}
-              onChange={setProjectId}
+              onChange={handleProjectChange}
             />
             <Button icon={<CloudSyncOutlined />} onClick={() => openSync("k8s")}>
               从集群同步
@@ -369,8 +424,7 @@ export function LogPipelineRepoPage() {
             </Button>
             <Link to={projectId ? `/project-logs?project_id=${projectId}` : "/project-logs"}>返回日志查看器</Link>
           </Space>
-        }
-      >
+        </div>
         <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
           管理 Loggie <Typography.Text code>pipelines.yml</Typography.Text>
           ：支持随时编辑、根据样例日志 AI 调整解析字段，下发到 K8s DaemonSet 或主机 Agent，并查看/回滚版本历史。
@@ -406,15 +460,17 @@ export function LogPipelineRepoPage() {
             {
               title: "操作",
               width: 300,
+              fixed: "right",
               render: (_: unknown, r: LogPipelineItem) => (
                 <Space wrap size={4}>
-                  <Button type="link" size="small" onClick={() => openEdit(r)}>
+                  <Button type="link" size="small" disabled={deployingId != null} onClick={() => openEdit(r)}>
                     编辑
                   </Button>
                   <Button
                     type="link"
                     size="small"
                     icon={<RobotOutlined />}
+                    disabled={deployingId != null}
                     onClick={() => {
                       openEdit(r);
                       setAiOpen(true);
@@ -426,23 +482,20 @@ export function LogPipelineRepoPage() {
                     type="link"
                     size="small"
                     icon={<ThunderboltOutlined />}
-                    disabled={r.kind !== "k8s" && r.kind !== "host"}
+                    disabled={(r.kind !== "k8s" && r.kind !== "host") || deployingId != null}
+                    loading={deployingId === r.id}
                     onClick={() => void runDeploy(r)}
                   >
                     下发
                   </Button>
                   <Popconfirm
                     title="确认删除？"
-                    onConfirm={() =>
-                      void (async () => {
-                        if (!projectId) return;
-                        await deleteLogPipeline(projectId, r.id);
-                        message.success("已删除");
-                        await load();
-                      })()
-                    }
+                    okText="删除"
+                    cancelText="取消"
+                    disabled={deletingId != null}
+                    onConfirm={() => handleDelete(r)}
                   >
-                    <Button type="link" size="small" danger>
+                    <Button type="link" size="small" danger loading={deletingId === r.id} disabled={deletingId != null}>
                       删除
                     </Button>
                   </Popconfirm>
@@ -456,17 +509,31 @@ export function LogPipelineRepoPage() {
       <Modal
         title={editing ? `编辑 Pipeline #${editing.id}` : "新建 Pipeline"}
         open={editorOpen}
-        onCancel={() => setEditorOpen(false)}
+        onCancel={() => {
+          if (!saving) setEditorOpen(false);
+        }}
         width={960}
         destroyOnClose
         footer={
           <Space>
-            {editing ? <Button onClick={() => void openVersionHistory()}>版本历史</Button> : null}
-            <Button icon={<RobotOutlined />} onClick={() => setAiOpen(true)}>
+            {editing ? (
+              <Button disabled={saving} onClick={() => void openVersionHistory()}>
+                版本历史
+              </Button>
+            ) : null}
+            <Button icon={<RobotOutlined />} disabled={saving} onClick={() => setAiOpen(true)}>
               AI 调整
             </Button>
-            <Button onClick={() => setEditorOpen(false)}>取消</Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void saveEditor()}>
+            <Button disabled={saving} onClick={() => setEditorOpen(false)}>
+              取消
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              disabled={saving}
+              onClick={() => void saveEditor()}
+            >
               保存
             </Button>
           </Space>

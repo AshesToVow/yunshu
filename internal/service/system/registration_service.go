@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
@@ -28,6 +29,8 @@ type RegistrationService struct {
 	authCfg       config.AuthConfig
 	mailer        mailer.Sender
 	appName       string
+	// writeMu 串行化提交申请，避免“先查后插”并发产生重复待审申请。
+	writeMu sync.Mutex
 }
 
 // NewRegistrationService 创建相关逻辑。
@@ -66,6 +69,8 @@ type ReviewRequest struct {
 
 // Apply 提交申请相关的业务逻辑。
 func (s *RegistrationService) Apply(ctx context.Context, req ApplyRegisterRequest) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	email := normalizeEmail(req.Email)
 	username := strings.TrimSpace(req.Username)
 	nickname := strings.TrimSpace(req.Nickname)
@@ -162,11 +167,6 @@ func (s *RegistrationService) Review(ctx context.Context, id uint, reviewerID ui
 	}
 
 	newStatus := model.RegistrationRequestStatus(req.Status)
-	err = s.regRepo.UpdateStatus(ctx, id, newStatus, reviewerID, req.Comment)
-	if err != nil {
-		return bizerrors.Pass(ctx, "registration", "Review", err)
-	}
-
 	if newStatus == model.RegistrationApproved {
 		now := time.Now()
 		user := model.User{
@@ -178,11 +178,22 @@ func (s *RegistrationService) Review(ctx context.Context, id uint, reviewerID ui
 			Status:            model.StatusEnabled,
 			Roles:             []model.Role{},
 		}
-		if err := s.userRepo.Create(ctx, &user); err != nil {
+		// 状态更新与建号同事务：建号失败则申请保持待审，避免“已通过却无账号”。
+		if err := s.regRepo.ApproveWithUser(ctx, id, reviewerID, req.Comment, &user); err != nil {
+			if errors.Is(err, repository.ErrRegistrationNotPending) {
+				return constants.ErrRegistrationAlreadyProcessed
+			}
 			return bizerrors.Pass(ctx, "registration", "Review", err)
 		}
+		return nil
 	}
 
+	if err := s.regRepo.UpdateStatus(ctx, id, newStatus, reviewerID, req.Comment); err != nil {
+		if errors.Is(err, repository.ErrRegistrationNotPending) {
+			return constants.ErrRegistrationAlreadyProcessed
+		}
+		return bizerrors.Pass(ctx, "registration", "Review", err)
+	}
 	return nil
 }
 
@@ -212,7 +223,8 @@ func (s *RegistrationService) ensureRegistrationDoesNotExist(ctx context.Context
 
 func (s *RegistrationService) validateEmailCode(ctx context.Context, scene, email, code string) error {
 	if s.redis == nil {
-		return nil
+		// 无 Redis 无法校验验证码，必须拒绝而不是放行任意验证码。
+		return bizerrors.InternalMsg(ctx, "registration", "api", constants.ErrMsgaf4823214b6e)
 	}
 	key := store.EmailCodeKey(scene, email)
 	val, err := s.redis.Get(ctx, key).Result()

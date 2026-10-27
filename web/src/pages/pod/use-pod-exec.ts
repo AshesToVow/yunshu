@@ -32,6 +32,9 @@ export function usePodExec({
   execCommandRef.current = execCommand;
   const preferredContainerRef = useRef(preferredContainer);
   preferredContainerRef.current = preferredContainer;
+  // detail 仅用于连接时选容器；用 ref 读取，避免详情轮询刷新导致终端反复重连。
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
 
   function closeExecSocket() {
     try {
@@ -84,8 +87,9 @@ export function usePodExec({
       };
 
       let container: string | undefined;
-      if (detail?.namespace === selected.namespace && detail.name === selected.name) {
-        container = pickContainer(detail);
+      const cached = detailRef.current;
+      if (cached?.namespace === selected.namespace && cached.name === selected.name) {
+        container = pickContainer(cached);
       } else {
         try {
           const d = await getPodDetail({
@@ -203,9 +207,6 @@ export function usePodExec({
     clusterId,
     selected?.namespace,
     selected?.name,
-    detail?.namespace,
-    detail?.name,
-    detail?.containers,
     execTermHostRef,
   ]);
 

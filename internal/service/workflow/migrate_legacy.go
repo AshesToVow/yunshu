@@ -30,7 +30,7 @@ func migrateDbmgmtStages(ctx context.Context, db *gorm.DB) error {
 	for _, row := range legacy {
 		byProject[row.ProjectID] = append(byProject[row.ProjectID], row)
 	}
-	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil)
+	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil, nil)
 	for projectID, rows := range byProject {
 		key := DefinitionKey{Domain: model.WorkflowDomainDbmgmt, ProjectID: projectID}
 		def, _, err := svc.loadDefinition(ctx, key)
@@ -64,7 +64,7 @@ func migrateCicdStages(ctx context.Context, db *gorm.DB) error {
 	for _, row := range legacy {
 		byProject[row.ProjectID] = append(byProject[row.ProjectID], row)
 	}
-	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil)
+	svc := NewService(repository.NewWorkflowRepository(db), nil, nil, nil, nil)
 	for projectID, rows := range byProject {
 		key := DefinitionKey{Domain: model.WorkflowDomainCicd, ProjectID: projectID}
 		def, _, err := svc.loadDefinition(ctx, key)
@@ -91,7 +91,7 @@ func migrateCicdStages(ctx context.Context, db *gorm.DB) error {
 
 // EnabledLegacyDbmgmtStages 供 dbmgmt 初始化审批步骤时读取统一引擎配置。
 func EnabledLegacyDbmgmtStages(ctx context.Context, db *gorm.DB, userGroupRepo interfaces.UserGroupRepository, projectID uint) ([]model.DbApprovalFlowStage, error) {
-	return EnabledLegacyDbmgmtStagesFrom(ctx, NewService(repository.NewWorkflowRepository(db), userGroupRepo, nil, nil), projectID)
+	return EnabledLegacyDbmgmtStagesFrom(ctx, NewService(repository.NewWorkflowRepository(db), userGroupRepo, nil, nil, nil), projectID)
 }
 
 // EnabledLegacyDbmgmtStagesFrom 使用已有引擎实例读取 dbmgmt 启用节点。
@@ -114,7 +114,7 @@ func EnabledLegacyDbmgmtStagesFrom(ctx context.Context, svc *Service, projectID 
 
 // EnabledLegacyCicdStages 供 cicd 初始化发布审批步骤。
 func EnabledLegacyCicdStages(ctx context.Context, db *gorm.DB, userGroupRepo interfaces.UserGroupRepository, projectID uint) ([]model.CicdApprovalFlowStage, error) {
-	return EnabledLegacyCicdStagesFrom(ctx, NewService(repository.NewWorkflowRepository(db), userGroupRepo, nil, nil), projectID)
+	return EnabledLegacyCicdStagesFrom(ctx, NewService(repository.NewWorkflowRepository(db), userGroupRepo, nil, nil, nil), projectID)
 }
 
 // EnabledLegacyCicdStagesFrom 使用已有引擎实例读取 cicd 启用节点。

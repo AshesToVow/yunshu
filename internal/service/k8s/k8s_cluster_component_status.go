@@ -6,7 +6,19 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+// isKubeControlPlanePod 识别控制面/核心组件 Pod：
+// 优先按标准标签（托管集群的组件带 tier=control-plane / component / k8s-app），
+// 无标签的自建集群再按名称前缀兜底，避免只认固定前缀而漏掉托管集群组件。
 func isKubeControlPlanePod(p corev1.Pod) bool {
+	if strings.TrimSpace(p.Labels["tier"]) == "control-plane" {
+		return true
+	}
+	if strings.TrimSpace(p.Labels["component"]) != "" {
+		return true
+	}
+	if _, ok := p.Labels["k8s-app"]; ok {
+		return true
+	}
 	name := strings.TrimSpace(p.Name)
 	if name == "" {
 		return false

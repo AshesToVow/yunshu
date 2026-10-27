@@ -32,7 +32,7 @@ func (s *Service) ListInstanceMySQLUsers(ctx context.Context, projectID, instanc
 	if err != nil {
 		return nil, err
 	}
-	if !perm.CanManage && !auth.IsSuperAdminRole(actor.RoleCodes) {
+	if !perm.CanManage && !isSuperAdmin(actor) {
 		return nil, constants.ErrForbidden
 	}
 
@@ -96,7 +96,7 @@ func (s *Service) ListInstanceAccounts(ctx context.Context, projectID, instanceI
 	if err != nil {
 		return nil, err
 	}
-	if !perm.CanManage && !auth.IsSuperAdminRole(actor.RoleCodes) {
+	if !perm.CanManage && !isSuperAdmin(actor) {
 		return nil, constants.ErrForbidden
 	}
 	list, err := s.repo.ListInstanceAccounts(ctx, projectID, instanceID)
@@ -200,5 +200,9 @@ func (s *Service) GetInstanceAccountPassword(ctx context.Context, projectID, ins
 	if err != nil {
 		return nil, err
 	}
+	iid := acc.InstanceID
+	_ = s.writeAudit(ctx, projectID, &iid, actor, "instance_account_password_reveal", map[string]any{
+		"account_id": acc.ID, "username": acc.Username, "host": acc.Host,
+	})
 	return &InstanceAccountPasswordResponse{Password: pw}, nil
 }

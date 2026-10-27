@@ -10,6 +10,7 @@ import (
 // AlertCurEventListFilter filters current alert list queries.
 type AlertCurEventListFilter struct {
 	ProjectID    uint
+	ProjectIDs   []uint
 	DatasourceID uint
 	Severity     string
 	Keyword      string
@@ -18,6 +19,7 @@ type AlertCurEventListFilter struct {
 // AlertHisEventListFilter filters historical alert list queries.
 type AlertHisEventListFilter struct {
 	ProjectID    uint
+	ProjectIDs   []uint
 	DatasourceID uint
 	Severity     string
 	Keyword      string

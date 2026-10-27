@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -123,7 +124,12 @@ func K8sScopeAuthorize(
 		needTier := tracked || forceTier || grantRequiredWrite ||
 			(strings.EqualFold(method, "GET") && service.IsK8sReadAPIPath(routePath))
 
-		clusterID, namespace := extractClusterNamespaceFromRequest(c)
+		clusterID, namespace, err := extractClusterNamespaceFromRequest(c, routePath)
+		if err != nil {
+			response.Error(c, err)
+			c.Abort()
+			return
+		}
 		concreteNS := strings.TrimSpace(namespace)
 		needNS := clusterID > 0 && concreteNS != "" && concreteNS != "_cluster"
 
@@ -183,9 +189,9 @@ func K8sScopeAuthorize(
 			return
 		}
 
-		if concreteNS == "" {
+		if concreteNS == "" || concreteNS == "_cluster" {
 			if forceTier && k8sRouteIsExecLike(routePath) {
-				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec / 文件操作须指定 namespace"))
+				response.Error(c, constants.ErrBadRequestWithMsg("Pod Exec / 文件操作须指定具体 namespace，不能使用 _cluster"))
 				c.Abort()
 				return
 			}
@@ -220,6 +226,22 @@ func K8sScopeAuthorize(
 			response.Error(c, constants.ErrForbiddenWithMsg(err.Error()))
 			c.Abort()
 			return
+		}
+		// WebSocket 长连接：除会话/账号状态外，还要周期性重查集群授权，撤销后立即生效。
+		if base, ok := auth.WSRevalidatorFromContext(c.Request.Context()); ok {
+			clusterRef := strconv.FormatUint(uint64(clusterID), 10)
+			username := scope.Username
+			revalidate := func(ctx context.Context) error {
+				if err := base(ctx); err != nil {
+					return err
+				}
+				latest, err := accessRepo.ListForPack(ctx, pack, clusterID)
+				if err != nil {
+					return fmt.Errorf("reload k8s grants: %w", err)
+				}
+				return k8srole.Check(latest, clusterRef, username, action, nsList)
+			}
+			c.Request = c.Request.WithContext(auth.WithWSRevalidator(c.Request.Context(), revalidate))
 		}
 		c.Next()
 	}
@@ -312,43 +334,109 @@ func extractConfirmFromRequest(c *gin.Context) bool {
 	}
 }
 
-func extractClusterNamespaceFromRequest(c *gin.Context) (uint, string) {
-	clusterID := parseUint(strings.TrimSpace(c.Query("cluster_id")))
-	namespace := strings.TrimSpace(c.Query("namespace"))
+func extractClusterNamespaceFromRequest(c *gin.Context, routePath string) (uint, string, error) {
+	params := collectK8sScopeParams(c, routePath)
+	return resolveK8sScopeParams(params)
+}
 
-	if clusterID == 0 {
-		clusterID = parseUint(strings.TrimSpace(c.Param("id")))
+type k8sScopeParams struct {
+	clusters   []uint
+	namespaces []string
+}
+
+func (p *k8sScopeParams) addCluster(v uint) {
+	if v > 0 {
+		p.clusters = append(p.clusters, v)
 	}
+}
 
-	if (clusterID == 0 || namespace == "") && c.Request.Body != nil {
+func (p *k8sScopeParams) addNamespace(v string) {
+	if v = strings.TrimSpace(v); v != "" {
+		p.namespaces = append(p.namespaces, v)
+	}
+}
+
+// collectK8sScopeParams 汇总查询参数、路径、JSON body 与表单中的目标，授权必须与 handler 实际执行的目标一致。
+func collectK8sScopeParams(c *gin.Context, routePath string) k8sScopeParams {
+	var p k8sScopeParams
+	p.addCluster(parseUint(c.Query("cluster_id")))
+	p.addNamespace(c.Query("namespace"))
+	// 只有集群管理路由的 :id 表示集群；资源路由的 :id 是资源标识，不能当作 cluster_id。
+	if isClusterManagementRoute(routePath) {
+		p.addCluster(parseUint(c.Param("id")))
+	}
+	if c.Request != nil && c.Request.Body != nil {
 		raw, _ := io.ReadAll(c.Request.Body)
 		c.Request.Body = io.NopCloser(bytes.NewReader(raw))
 		if len(raw) > 0 {
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err == nil {
-				if clusterID == 0 {
-					clusterID = toUint(m["cluster_id"])
-					if clusterID == 0 {
-						clusterID = toUint(m["clusterId"])
-					}
-				}
-				if namespace == "" {
-					if s, ok := m["namespace"].(string); ok {
-						namespace = strings.TrimSpace(s)
-					}
+				p.addCluster(toUint(m["cluster_id"]))
+				p.addCluster(toUint(m["clusterId"]))
+				if s, ok := m["namespace"].(string); ok {
+					p.addNamespace(s)
 				}
 			}
 		}
 	}
+	p.addCluster(parseUint(c.PostForm("cluster_id")))
+	p.addNamespace(c.PostForm("namespace"))
+	return p
+}
 
-	if clusterID == 0 {
-		clusterID = parseUint(strings.TrimSpace(c.PostForm("cluster_id")))
+func resolveK8sScopeParams(p k8sScopeParams) (uint, string, error) {
+	clusters := uniqueUints(p.clusters)
+	if len(clusters) > 1 {
+		return 0, "", constants.ErrBadRequestWithMsg("cluster_id 在查询参数、路径与请求体中不一致，已拒绝执行")
 	}
-	if namespace == "" {
-		namespace = strings.TrimSpace(c.PostForm("namespace"))
+	namespaces := uniqueNonEmptyStrings(p.namespaces)
+	if len(namespaces) > 1 {
+		return 0, "", constants.ErrBadRequestWithMsg("namespace 在查询参数与请求体中不一致，已拒绝执行")
 	}
+	var clusterID uint
+	if len(clusters) == 1 {
+		clusterID = clusters[0]
+	}
+	var namespace string
+	if len(namespaces) == 1 {
+		namespace = namespaces[0]
+	}
+	return clusterID, namespace, nil
+}
 
-	return clusterID, namespace
+func uniqueUints(values []uint) []uint {
+	seen := make(map[uint]struct{}, len(values))
+	out := make([]uint, 0, len(values))
+	for _, v := range values {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
+func isClusterManagementRoute(routePath string) bool {
+	p := strings.ToLower(strings.TrimSpace(routePath))
+	return p == "/api/v1/clusters" || strings.HasPrefix(p, "/api/v1/clusters/")
 }
 
 func parseUint(v string) uint {

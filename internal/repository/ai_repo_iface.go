@@ -156,6 +156,7 @@ type AiRepo interface {
 	GetApprovalByID(ctx context.Context, id uint) (*model.AiToolApproval, error)
 	SaveApproval(ctx context.Context, row *model.AiToolApproval) error
 	ClaimApprovalExecution(ctx context.Context, id uint, fromStatuses []string) (int64, error)
+	ClaimApprovalReview(ctx context.Context, id uint, fields map[string]any) (int64, error)
 	UpdateApprovalFields(ctx context.Context, id uint, fields map[string]any) error
 
 	// --- Chat Session / Message ---

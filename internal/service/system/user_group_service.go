@@ -9,10 +9,10 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/pkg/projectaccess"
 	"yunshu/internal/repository"
-	bizerrors "yunshu/internal/pkg/errors"
 
 	"gorm.io/gorm"
 )
@@ -109,7 +109,7 @@ func (s *UserGroupService) ensureVisibleScopedGroup(ctx context.Context, g *mode
 	}
 	u, ok := auth.RequestUserFromContext(ctx)
 	if !ok || u == nil {
-		return nil
+		return constants.ErrUnauthorized
 	}
 	if auth.IsSuperAdminRole(u.RoleCodes) {
 		return nil
@@ -124,19 +124,53 @@ func (s *UserGroupService) ensureVisibleScopedGroup(ctx context.Context, g *mode
 	return bizerrors.Pass(ctx, "user-group", "ensureVisibleScopedGroup", err)
 }
 
+// ensureGroupManageable 写操作需项目管理员权限；全局组仅受接口权限约束。
+func (s *UserGroupService) ensureGroupManageable(ctx context.Context, g *model.UserGroup) error {
+	if g == nil {
+		return constants.ErrUserGroupNotFound
+	}
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return constants.ErrUnauthorized
+	}
+	if auth.IsSuperAdminRole(u.RoleCodes) {
+		return nil
+	}
+	if g.ScopeProjectID == nil || *g.ScopeProjectID == 0 {
+		return nil
+	}
+	return s.ensureProjectAdmin(ctx, *g.ScopeProjectID)
+}
+
 func (s *UserGroupService) List(ctx context.Context, query UserGroupListQuery) (*pagination.Result[UserGroupItem], error) {
+	actor, ok := auth.RequestUserFromContext(ctx)
+	if !ok || actor == nil {
+		return nil, constants.ErrUnauthorized
+	}
 	page, pageSize := pagination.Normalize(query.Page, query.PageSize)
 	var scope *uint
 	if query.ScopeProjectID != nil && *query.ScopeProjectID > 0 {
 		v := *query.ScopeProjectID
 		scope = &v
 	}
-	list, total, err := s.repo.List(ctx, repository.UserGroupListParams{
+	params := repository.UserGroupListParams{
 		Keyword:        query.Keyword,
 		Page:           page,
 		PageSize:       pageSize,
 		ScopeProjectID: scope,
-	})
+	}
+	if !auth.IsSuperAdminRole(actor.RoleCodes) {
+		if s.memberRepo == nil {
+			return nil, constants.ErrInternal
+		}
+		projectIDs, err := s.memberRepo.ListProjectIDsByUser(ctx, actor.ID)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "user-group", "List", err)
+		}
+		params.RestrictToProjects = true
+		params.ProjectIDs = projectIDs
+	}
+	list, total, err := s.repo.List(ctx, params)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "user-group", "List", err)
 	}
@@ -246,7 +280,7 @@ func (s *UserGroupService) Update(ctx context.Context, id uint, req UserGroupUpd
 		}
 		return nil, bizerrors.Pass(ctx, "user-group", "Update", err)
 	}
-	if err := s.ensureVisibleScopedGroup(ctx, g); err != nil {
+	if err := s.ensureGroupManageable(ctx, g); err != nil {
 		return nil, bizerrors.Pass(ctx, "user-group", "Update", err)
 	}
 	if req.Name != nil {
@@ -298,7 +332,7 @@ func (s *UserGroupService) Delete(ctx context.Context, id uint) error {
 		}
 		return bizerrors.Pass(ctx, "user-group", "Delete", err)
 	}
-	if err := s.ensureVisibleScopedGroup(ctx, g); err != nil {
+	if err := s.ensureGroupManageable(ctx, g); err != nil {
 		return bizerrors.Pass(ctx, "user-group", "Delete", err)
 	}
 	if err := s.repo.ReplaceMemberUserIDs(ctx, id, nil); err != nil {
@@ -315,7 +349,7 @@ func (s *UserGroupService) AssignUsers(ctx context.Context, id uint, req UserGro
 		}
 		return bizerrors.Pass(ctx, "user-group", "AssignUsers", err)
 	}
-	if err := s.ensureVisibleScopedGroup(ctx, g); err != nil {
+	if err := s.ensureGroupManageable(ctx, g); err != nil {
 		return bizerrors.Pass(ctx, "user-group", "AssignUsers", err)
 	}
 	ids := dedupeUints(req.UserIDs)

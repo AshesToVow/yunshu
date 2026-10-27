@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"yunshu/internal/model"
@@ -9,6 +10,9 @@ import (
 
 	"gorm.io/gorm"
 )
+
+// ErrRegistrationNotPending 表示申请已被其他审核人处理，条件更新未命中。
+var ErrRegistrationNotPending = errors.New("registration request is not pending")
 
 // RegistrationRequestRepository 用户自助注册申请的持久化访问。
 type RegistrationRequestRepository struct {
@@ -61,13 +65,42 @@ func (r *RegistrationRequestRepository) List(ctx context.Context, params Registr
 }
 
 func (r *RegistrationRequestRepository) UpdateStatus(ctx context.Context, id uint, status model.RegistrationRequestStatus, reviewerID uint, comment string) error {
-	now := time.Now()
-	return r.db.WithContext(ctx).Model(&model.RegistrationRequest{}).Where("id = ?", id).Updates(map[string]interface{}{
+	res := r.db.WithContext(ctx).Model(&model.RegistrationRequest{}).
+		Where("id = ? AND status = ?", id, model.RegistrationPending).
+		Updates(reviewFields(status, reviewerID, comment))
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrRegistrationNotPending
+	}
+	return nil
+}
+
+// ApproveWithUser 在同一事务内把申请置为通过并创建用户，
+// 避免出现“申请已通过但用户未创建”或并发重复审核产生两个用户。
+func (r *RegistrationRequestRepository) ApproveWithUser(ctx context.Context, id uint, reviewerID uint, comment string, user *model.User) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&model.RegistrationRequest{}).
+			Where("id = ? AND status = ?", id, model.RegistrationPending).
+			Updates(reviewFields(model.RegistrationApproved, reviewerID, comment))
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return ErrRegistrationNotPending
+		}
+		return tx.Create(user).Error
+	})
+}
+
+func reviewFields(status model.RegistrationRequestStatus, reviewerID uint, comment string) map[string]interface{} {
+	return map[string]interface{}{
 		"status":         status,
 		"reviewer_id":    reviewerID,
 		"review_comment": comment,
-		"reviewed_at":    now,
-	}).Error
+		"reviewed_at":    time.Now(),
+	}
 }
 
 func (r *RegistrationRequestRepository) CountPending(ctx context.Context, username, email string) (int64, error) {

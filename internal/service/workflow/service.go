@@ -28,11 +28,12 @@ var stageKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
 
 // Service 统一工单引擎：流程定义 + 通用工单 + 排班派单。
 type Service struct {
-	repo           interfaces.WorkflowRepository
-	userGroupRepo  interfaces.UserGroupRepository
-	dutyRepo       interfaces.AlertDutyRepository
-	userRepo       interfaces.UserRepository
-	alertEventRepo interfaces.AlertEventRepository
+	repo              interfaces.WorkflowRepository
+	userGroupRepo     interfaces.UserGroupRepository
+	dutyRepo          interfaces.AlertDutyRepository
+	userRepo          interfaces.UserRepository
+	alertEventRepo    interfaces.AlertEventRepository
+	projectMemberRepo interfaces.ProjectMemberRepository
 }
 
 // NewService 创建工单引擎。
@@ -41,12 +42,14 @@ func NewService(
 	userGroupRepo interfaces.UserGroupRepository,
 	dutyRepo interfaces.AlertDutyRepository,
 	userRepo interfaces.UserRepository,
+	projectMemberRepo interfaces.ProjectMemberRepository,
 ) *Service {
 	return &Service{
-		repo:          repo,
-		userGroupRepo: userGroupRepo,
-		dutyRepo:      dutyRepo,
-		userRepo:      userRepo,
+		repo:              repo,
+		userGroupRepo:     userGroupRepo,
+		dutyRepo:          dutyRepo,
+		userRepo:          userRepo,
+		projectMemberRepo: projectMemberRepo,
 	}
 }
 
@@ -157,6 +160,17 @@ func (s *Service) UpsertDefinition(ctx context.Context, key DefinitionKey, req D
 			keys = append(keys, st.Key)
 			existing, err := tx.GetStageByKey(ctx, def.ID, st.Key)
 			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// 同名节点可能被软删（唯一键仍被占用）：优先复用旧行恢复，避免插入撞唯一索引
+				if soft, serr := tx.GetStageByKeyUnscoped(ctx, def.ID, st.Key); serr == nil && soft != nil && soft.DeletedAt.Valid {
+					if err := tx.RestoreStage(ctx, soft.ID, map[string]any{
+						"stage_name": st.Name, "sort_order": st.Sort, "enabled": st.Enabled,
+						"assignee_rule_type": st.RuleType, "user_group_id": st.UserGroupID,
+						"duty_monitor_rule_id": st.DutyRuleID, "deleted_at": nil,
+					}); err != nil {
+						return err
+					}
+					continue
+				}
 				row := model.WorkflowStage{
 					DefinitionID: def.ID, StageKey: st.Key, StageName: st.Name, SortOrder: st.Sort,
 					Enabled: st.Enabled, AssigneeRuleType: st.RuleType,
@@ -346,9 +360,10 @@ type TicketStepItem struct {
 // CreateTicket 创建通用工单并初始化审批步骤。
 func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, actor *auth.CurrentUser) (*TicketDetail, error) {
 	key := DefinitionKey{Domain: req.Domain, ProjectID: req.ProjectID, TicketType: req.TicketType}.normalize()
-	submitter := req.SubmitterUserID
-	if submitter == 0 && actor != nil {
-		submitter = actor.ID
+	// 提交人以登录态为准，忽略客户端传值（防止伪造提交人绕过禁止自审）
+	submitter := actorUserID(actor)
+	if submitter == 0 {
+		submitter = req.SubmitterUserID
 	}
 	if key.Domain == model.WorkflowDomainIncident {
 		if err := EnsureDefaultIncidentDefinition(ctx, s.repo); err != nil {
@@ -367,29 +382,34 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 		b, _ := json.Marshal(req.Payload)
 		payloadJSON = string(b)
 	}
+	// 事务外解析排班派单，避免长事务内跨连接查询
+	now := time.Now()
+	assigneeIDs := make([]*uint, len(stages))
+	for i, st := range stages {
+		assigneeID, err := s.resolveDutyAssignee(ctx, st, now)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "workflow", "CreateTicket.resolveDuty", err)
+		}
+		assigneeIDs[i] = assigneeID
+	}
 	var ticket model.WorkflowTicket
 	err = s.repo.Transaction(ctx, func(tx interfaces.WorkflowRepository) error {
 		ticket = model.WorkflowTicket{
 			DefinitionID: def.ID, Domain: key.Domain, TicketType: key.TicketType,
 			ProjectID: req.ProjectID, Title: strings.TrimSpace(req.Title),
 			Status: model.WorkflowTicketStatusPending, SubmitterUserID: submitter,
-			RefType: strings.TrimSpace(req.RefType), RefID: req.RefID,
+			RefType: strings.TrimSpace(req.RefType), RefID: req.RefID, RefTypeUQ: workflowRefTypeUQ(req.RefType, req.RefID),
 			PayloadJSON: payloadJSON, Remark: strings.TrimSpace(req.Remark),
 		}
 		if err := tx.CreateTicket(ctx, &ticket); err != nil {
 			return err
 		}
-		now := time.Now()
 		for i, st := range stages {
-			assigneeID, err := s.resolveDutyAssignee(ctx, st, now)
-			if err != nil {
-				return err
-			}
 			step := model.WorkflowTicketStep{
 				TicketID: ticket.ID, StageKey: st.StageKey, StageName: st.StageName,
 				SortOrder: st.SortOrder, Status: model.WorkflowStepPending,
 				AssigneeRuleType: st.AssigneeRuleType, UserGroupID: st.UserGroupID,
-				DutyMonitorRuleID: st.DutyMonitorRuleID, AssigneeUserID: assigneeID,
+				DutyMonitorRuleID: st.DutyMonitorRuleID, AssigneeUserID: assigneeIDs[i],
 			}
 			if i == 0 {
 				step.ActivatedAt = &now
@@ -403,7 +423,7 @@ func (s *Service) CreateTicket(ctx context.Context, req CreateTicketRequest, act
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "CreateTicket", err)
 	}
-	return s.TicketDetail(ctx, ticket.ID)
+	return s.TicketDetail(ctx, ticket.ID, actor)
 }
 
 // CreateIncidentFromAlert 告警转故障工单。
@@ -480,19 +500,55 @@ func (s *Service) CreateIncidentFromAlertRef(ctx context.Context, req CreateInci
 	}, actor)
 }
 
-func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*pagination.Result[TicketDetail], error) {
+var workflowTicketStatuses = map[string]struct{}{
+	model.WorkflowTicketStatusDraft:     {},
+	model.WorkflowTicketStatusPending:   {},
+	model.WorkflowTicketStatusApproved:  {},
+	model.WorkflowTicketStatusRejected:  {},
+	model.WorkflowTicketStatusCancelled: {},
+	model.WorkflowTicketStatusClosed:    {},
+}
+
+func (s *Service) ListTickets(ctx context.Context, q TicketListQuery, actor *auth.CurrentUser) (*pagination.Result[TicketDetail], error) {
+	status := strings.TrimSpace(q.Status)
+	if status != "" {
+		if _, ok := workflowTicketStatuses[status]; !ok {
+			return nil, constants.ErrBadRequestWithMsg("非法的工单状态: " + status)
+		}
+	}
 	page, pageSize := pagination.Normalize(q.Page, q.PageSize)
-	rows, total, err := s.repo.ListTickets(ctx, repository.WorkflowTicketListParams{
+	params := repository.WorkflowTicketListParams{
 		Domain: strings.TrimSpace(q.Domain), TicketType: strings.TrimSpace(q.TicketType),
-		ProjectID: q.ProjectID, Status: strings.TrimSpace(q.Status),
+		ProjectID: q.ProjectID, Status: status,
 		Offset: (page - 1) * pageSize, Limit: pageSize,
-	})
+	}
+	if actor != nil && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		uid := actorUserID(actor)
+		if uid == 0 {
+			return &pagination.Result[TicketDetail]{List: []TicketDetail{}, Total: 0, Page: page, PageSize: pageSize}, nil
+		}
+		params.VisibleUserID = &uid
+		params.MemberProjectIDs = s.memberProjectIDs(ctx, uid)
+	}
+	rows, total, err := s.repo.ListTickets(ctx, params)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "ListTickets", err)
 	}
+	ticketIDs := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		ticketIDs = append(ticketIDs, row.ID)
+	}
+	allSteps, err := s.repo.ListStepsByTicketIDs(ctx, ticketIDs)
+	if err != nil {
+		return nil, bizerrors.Pass(ctx, "workflow", "ListTickets", err)
+	}
+	stepsByTicket := make(map[uint][]model.WorkflowTicketStep, len(rows))
+	for _, st := range allSteps {
+		stepsByTicket[st.TicketID] = append(stepsByTicket[st.TicketID], st)
+	}
 	items := make([]TicketDetail, 0, len(rows))
 	for _, row := range rows {
-		detail, err := s.ticketDetailFromRow(ctx, row)
+		detail, err := s.ticketDetailFromSteps(ctx, row, stepsByTicket[row.ID])
 		if err != nil {
 			return nil, err
 		}
@@ -503,7 +559,18 @@ func (s *Service) ListTickets(ctx context.Context, q TicketListQuery) (*paginati
 	}, nil
 }
 
-func (s *Service) TicketDetail(ctx context.Context, id uint) (*TicketDetail, error) {
+func (s *Service) memberProjectIDs(ctx context.Context, uid uint) []uint {
+	if s.projectMemberRepo == nil {
+		return nil
+	}
+	ids, err := s.projectMemberRepo.ListProjectIDsByUser(ctx, uid)
+	if err != nil {
+		return nil // 保守降级：仅按提交人/参与人过滤
+	}
+	return ids
+}
+
+func (s *Service) TicketDetail(ctx context.Context, id uint, actor *auth.CurrentUser) (*TicketDetail, error) {
 	row, err := s.repo.GetTicket(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -511,7 +578,37 @@ func (s *Service) TicketDetail(ctx context.Context, id uint) (*TicketDetail, err
 		}
 		return nil, bizerrors.Pass(ctx, "workflow", "TicketDetail", err)
 	}
+	if actor != nil && !auth.IsSuperAdminRole(actor.RoleCodes) {
+		uid := actorUserID(actor)
+		if uid == 0 {
+			return nil, constants.ErrForbidden
+		}
+		ok, err := s.canViewTicket(ctx, *row, uid)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "workflow", "TicketDetail", err)
+		}
+		if !ok {
+			return nil, constants.ErrNotFoundWithMsg("工单不存在")
+		}
+	}
 	return s.ticketDetailFromRow(ctx, *row)
+}
+
+// canViewTicket 非超管可见性：提交人 / 工单所属项目成员 / 步骤参与人（审批人或指派人）。
+func (s *Service) canViewTicket(ctx context.Context, ticket model.WorkflowTicket, uid uint) (bool, error) {
+	if ticket.SubmitterUserID == uid {
+		return true, nil
+	}
+	if s.projectMemberRepo != nil {
+		ids, err := s.projectMemberRepo.ListProjectIDsByUser(ctx, uid)
+		if err != nil {
+			return false, err
+		}
+		if slices.Contains(ids, ticket.ProjectID) {
+			return true, nil
+		}
+	}
+	return s.repo.IsTicketParticipant(ctx, ticket.ID, uid)
 }
 
 type ReviewStepRequest struct {
@@ -584,10 +681,18 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 		if n == 0 {
 			return errStepConflict
 		}
+		// 终态更新以 pending 为前置条件，避免与业务侧并发关闭互相覆盖
 		if !req.Approve {
-			return tx.UpdateTicketFields(ctx, ticket.ID, map[string]any{
+			n2, err := tx.UpdateTicketFieldsIfStatus(ctx, ticket.ID, model.WorkflowTicketStatusPending, map[string]any{
 				"status": model.WorkflowTicketStatusRejected, "closed_at": now,
 			})
+			if err != nil {
+				return err
+			}
+			if n2 == 0 {
+				return errStepConflict
+			}
+			return nil
 		}
 		steps, err := tx.ListStepsByTicket(ctx, ticketID)
 		if err != nil {
@@ -601,11 +706,25 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 			}
 		}
 		if next != nil {
-			return tx.ActivateStep(ctx, next.ID, now)
+			n2, err := tx.ActivateStepIfTicketPending(ctx, next.ID, ticketID, now)
+			if err != nil {
+				return err
+			}
+			if n2 == 0 {
+				return errStepConflict
+			}
+			return nil
 		}
-		return tx.UpdateTicketFields(ctx, ticket.ID, map[string]any{
+		n2, err := tx.UpdateTicketFieldsIfStatus(ctx, ticket.ID, model.WorkflowTicketStatusPending, map[string]any{
 			"status": model.WorkflowTicketStatusApproved, "closed_at": now,
 		})
+		if err != nil {
+			return err
+		}
+		if n2 == 0 {
+			return errStepConflict
+		}
+		return nil
 	})
 	if err != nil {
 		if errors.Is(err, errStepConflict) {
@@ -613,7 +732,7 @@ func (s *Service) ReviewStep(ctx context.Context, ticketID, stepID uint, req Rev
 		}
 		return nil, bizerrors.Pass(ctx, "workflow", "ReviewStep", err)
 	}
-	return s.TicketDetail(ctx, ticketID)
+	return s.TicketDetail(ctx, ticketID, actor)
 }
 
 // errStepConflict 并发审批冲突：本节点已被他人处理。
@@ -629,6 +748,10 @@ func (s *Service) ticketDetailFromRow(ctx context.Context, row model.WorkflowTic
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "workflow", "ticketDetailFromRow", err)
 	}
+	return s.ticketDetailFromSteps(ctx, row, steps)
+}
+
+func (s *Service) ticketDetailFromSteps(ctx context.Context, row model.WorkflowTicket, steps []model.WorkflowTicketStep) (*TicketDetail, error) {
 	groupNames := map[uint]string{}
 	userNames := map[uint]string{}
 	for _, st := range steps {
@@ -660,7 +783,6 @@ func (s *Service) ticketDetailFromRow(ctx context.Context, row model.WorkflowTic
 	}
 	return &TicketDetail{WorkflowTicket: row, Steps: stepItems}, nil
 }
-
 
 func (s *Service) userCanReviewStep(ctx context.Context, actor *auth.CurrentUser, step model.WorkflowTicketStep) (bool, error) {
 	if actor != nil && auth.IsSuperAdminRole(actor.RoleCodes) {

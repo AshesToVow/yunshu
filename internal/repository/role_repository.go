@@ -31,7 +31,16 @@ func (r *RoleRepository) Save(ctx context.Context, role *model.Role) error {
 }
 
 func (r *RoleRepository) Delete(ctx context.Context, role *model.Role) error {
-	return r.db.WithContext(ctx).Delete(role).Error
+	if role == nil {
+		return nil
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 软删除角色不会触发外键级联，需显式清理 user_roles 绑定，避免残留孤儿行。
+		if err := tx.Exec("DELETE FROM user_roles WHERE role_id = ?", role.ID).Error; err != nil {
+			return err
+		}
+		return tx.Delete(role).Error
+	})
 }
 
 func (r *RoleRepository) GetByID(ctx context.Context, id uint) (*model.Role, error) {
@@ -53,6 +62,19 @@ func (r *RoleRepository) GetByIDs(ctx context.Context, ids []uint) ([]model.Role
 		return nil, err
 	}
 	return roles, nil
+}
+
+// ExistsByCode 软删除行的 deleted_at 为 NULL，复合唯一索引无法约束活跃行，需在服务层显式查重。
+func (r *RoleRepository) ExistsByCode(ctx context.Context, code string, excludeID uint) (bool, error) {
+	query := r.db.WithContext(ctx).Model(&model.Role{}).Where("code = ?", code)
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	var count int64
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func (r *RoleRepository) List(ctx context.Context, params RoleListParams) ([]model.Role, int64, error) {

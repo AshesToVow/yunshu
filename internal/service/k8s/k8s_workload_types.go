@@ -1,6 +1,9 @@
 package k8s
 
-import "yunshu/internal/repository"
+import (
+	"yunshu/internal/interfaces"
+	"yunshu/internal/repository"
+)
 
 type NamespacedListQuery struct {
 	ClusterNamespaceKeywordQuery
@@ -77,6 +80,7 @@ type K8sWorkloadService struct {
 	runtime    *K8sRuntimeService
 	dyn        *DynamicResourceService
 	snapRepo   repository.K8sWorkloadSnapshotRepo
+	memberRepo interfaces.ProjectMemberRepository
 }
 
 // NewK8sWorkloadService 创建相关逻辑。
@@ -97,8 +101,10 @@ type RelatedPodItem struct {
 func NewK8sWorkloadService(
 	runtime *K8sRuntimeService,
 	snapRepo repository.K8sWorkloadSnapshotRepo,
+	memberRepo interfaces.ProjectMemberRepository,
 ) *K8sWorkloadService {
 	return &K8sWorkloadService{
-		runtime: runtime, dyn: NewDynamicResourceService(runtime), snapRepo: snapRepo,
+		runtime: runtime, dyn: NewDynamicResourceService(runtime),
+		snapRepo: snapRepo, memberRepo: memberRepo,
 	}
 }

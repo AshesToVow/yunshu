@@ -16,7 +16,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   createDbInstance,
@@ -27,6 +27,7 @@ import {
   type DbInstance,
   type DbInstancePayload,
 } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjectServers, getProjects, type ProjectItem, type ServerItem } from "../services/projects";
 import { formatDateTime } from "../utils/format";
 import { envLabel, instanceRoleLabel } from "../utils/dbmgmt-labels";
@@ -54,6 +55,10 @@ export function DbmgmtInstancesPage() {
   const [servers, setServers] = useState<ServerItem[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<DbInstance | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [actingId, setActingId] = useState<number | null>(null);
+  const loadSeqRef = useRef(0);
+  const serversSeqRef = useRef(0);
   const [form] = Form.useForm<DbInstancePayload>();
   const driver = Form.useWatch("driver", form) ?? "mysql";
   const connectMode = Form.useWatch("connect_mode", form) ?? "direct";
@@ -61,29 +66,77 @@ export function DbmgmtInstancesPage() {
   const primaryOptions = rows.filter((r) => (r.role ?? "primary") === "primary" && r.id !== editing?.id);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch(() => undefined);
   }, []);
 
   const load = useCallback(async () => {
-    if (!projectId) return;
+    const seq = ++loadSeqRef.current;
+    if (!projectId) {
+      setRows([]);
+      return;
+    }
     setLoading(true);
     try {
       const res = await listDbInstances(projectId, { page: 1, page_size: 200 });
+      if (seq !== loadSeqRef.current) return;
       setRows(res.list ?? []);
+    } catch (e) {
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载实例列表失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [projectId]);
 
   useEffect(() => {
     void load();
+    const seq = ++serversSeqRef.current;
     if (projectId) {
-      void getProjectServers(projectId, { page: 1, page_size: 200 }).then((res) => setServers(res.list ?? []));
+      void getProjectServers(projectId, { page: 1, page_size: 200 })
+        .then((res) => {
+          if (seq !== serversSeqRef.current) return;
+          setServers(res.list ?? []);
+        })
+        .catch(() => {
+          if (seq === serversSeqRef.current) setServers([]);
+        });
+    } else {
+      setServers([]);
     }
   }, [load, projectId]);
+
+  const pingInstance = async (row: DbInstance) => {
+    if (!projectId || actingId !== null) return;
+    setActingId(row.id);
+    try {
+      await pingDbInstance(projectId, row.id);
+      message.success("探活完成");
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "探活失败"));
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const removeInstance = async (row: DbInstance) => {
+    if (!projectId || actingId !== null) return;
+    setActingId(row.id);
+    try {
+      await deleteDbInstance(projectId, row.id);
+      message.success("已删除");
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除实例失败"));
+    } finally {
+      setActingId(null);
+    }
+  };
 
   const columns: ColumnsType<DbInstance> = [
     {
@@ -96,7 +149,7 @@ export function DbmgmtInstancesPage() {
       title: "库角色",
       dataIndex: "role",
       width: 90,
-      render: (v: string | undefined, r) => (
+      render: (v: string | undefined, _r) => (
         <Tag color={(v ?? "primary") === "replica" ? "blue" : "green"}>{instanceRoleLabel(v)}</Tag>
       ),
     },
@@ -121,18 +174,23 @@ export function DbmgmtInstancesPage() {
     { title: "最近探活", dataIndex: "last_ping_at", render: (v) => (v ? formatDateTime(v) : "—") },
     {
       title: "操作",
+      width: 260,
+      fixed: "right",
       render: (_, r) => (
         <Space>
           <Button
             size="small"
             icon={<ThunderboltOutlined />}
-            onClick={() => void pingDbInstance(projectId!, r.id).then(load)}
+            loading={actingId === r.id}
+            disabled={actingId !== null}
+            onClick={() => void pingInstance(r)}
           >
             探活
           </Button>
           <Button
             size="small"
             icon={<EditOutlined />}
+            disabled={actingId !== null}
             onClick={() => {
               setEditing(r);
               form.setFieldsValue({ ...r, role: r.role ?? "primary" });
@@ -142,8 +200,18 @@ export function DbmgmtInstancesPage() {
             编辑
           </Button>
           {r.driver === "mysql" && r.backup_link ? <Link to={r.backup_link}>备份</Link> : null}
-          <Popconfirm title="确认删除？" onConfirm={() => void deleteDbInstance(projectId!, r.id).then(load)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
+          <Popconfirm
+            title="确认删除？"
+            onConfirm={() => void removeInstance(r)}
+            disabled={actingId !== null}
+          >
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={actingId === r.id}
+              disabled={actingId !== null}
+            />
           </Popconfirm>
         </Space>
       ),
@@ -151,8 +219,30 @@ export function DbmgmtInstancesPage() {
   ];
 
   const submit = async () => {
-    if (!projectId) return;
-    const values = await form.validateFields();
+    if (!projectId || submitting) return;
+    let values: DbInstancePayload;
+    try {
+      values = await form.validateFields();
+    } catch {
+      return;
+    }
+    values.name = (values.name ?? "").trim();
+    values.host = (values.host ?? "").trim();
+    values.username = (values.username ?? "").trim();
+    values.database = values.database?.trim() || undefined;
+    if (values.tags !== undefined) values.tags = values.tags.trim();
+    if (!values.name) {
+      message.warning("请填写实例名称");
+      return;
+    }
+    if (!values.host) {
+      message.warning("请填写主机地址");
+      return;
+    }
+    if (!values.username) {
+      message.warning("请填写用户名");
+      return;
+    }
     if (values.connect_mode !== "ssh_tunnel") {
       values.server_id = undefined;
     }
@@ -162,30 +252,37 @@ export function DbmgmtInstancesPage() {
     if (values.role === "replica") {
       values.read_only = true;
     }
-    if (editing) {
-      await updateDbInstance(projectId, editing.id, values);
-    } else {
-      await createDbInstance(projectId, values);
+    setSubmitting(true);
+    try {
+      if (editing) {
+        if (!values.password) delete values.password;
+        await updateDbInstance(projectId, editing.id, values);
+      } else {
+        await createDbInstance(projectId, values);
+      }
+      message.success("已保存");
+      setOpen(false);
+      setEditing(null);
+      form.resetFields();
+      void load();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "保存实例失败"));
+    } finally {
+      setSubmitting(false);
     }
-    message.success("已保存");
-    setOpen(false);
-    setEditing(null);
-    form.resetFields();
-    void load();
   };
 
   return (
-    <Card
-      title="数据库实例"
-      extra={
-        <Space>
+    <Card className="table-card" title="数据库实例">
+      <div className="toolbar">
+        <Space wrap>
           <Select
             style={{ width: 200 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
             onChange={setProjectId}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()} />
+          <Button icon={<ReloadOutlined />} loading={loading} disabled={loading} onClick={() => void load()} />
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -198,14 +295,25 @@ export function DbmgmtInstancesPage() {
             新建
           </Button>
         </Space>
-      }
-    >
-      <Table rowKey="id" loading={loading} columns={columns} dataSource={rows} pagination={false} />
+      </div>
+      <Table
+        rowKey="id"
+        loading={loading}
+        columns={columns}
+        dataSource={rows}
+        pagination={false}
+        scroll={{ x: 1200 }}
+      />
       <Modal
         title={editing ? "编辑实例" : "新建实例"}
         open={open}
-        onCancel={() => setOpen(false)}
+        onCancel={() => {
+          if (!submitting) setOpen(false);
+        }}
         onOk={() => void submit()}
+        confirmLoading={submitting}
+        cancelButtonProps={{ disabled: submitting }}
+        maskClosable={!submitting}
         width={720}
       >
         <Form

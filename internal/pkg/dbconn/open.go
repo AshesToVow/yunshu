@@ -3,6 +3,7 @@ package dbconn
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -250,9 +251,10 @@ type SSHTunnel struct {
 	RemoteHost string
 	RemotePort int
 
-	listener net.Listener
-	wg       sync.WaitGroup
-	closed   chan struct{}
+	listener  net.Listener
+	wg        sync.WaitGroup
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 // StartSSHTunnel 在本地监听并转发到远端 host:port。
@@ -298,6 +300,12 @@ func (t *SSHTunnel) acceptLoop() {
 				return
 			default:
 			}
+			// 临时错误（EMFILE 等）不应终止隧道，否则后续连接会一直失败。
+			var ne net.Error
+			if errors.As(err, &ne) && (ne.Timeout() || ne.Temporary()) {
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
 			return
 		}
 		t.wg.Go(func() { t.handleConn(conn) })
@@ -325,9 +333,9 @@ func copyAndClose(done chan struct{}, dst io.ReadWriter, src io.Reader) {
 	}
 }
 
-// Close 关闭隧道。
+// Close 关闭隧道（可重复调用）。
 func (t *SSHTunnel) Close() error {
-	close(t.closed)
+	t.closeOnce.Do(func() { close(t.closed) })
 	if t.listener != nil {
 		_ = t.listener.Close()
 	}

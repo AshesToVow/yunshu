@@ -94,6 +94,14 @@ func (r *AiRepository) ClaimApprovalExecution(ctx context.Context, id uint, from
 	return res.RowsAffected, res.Error
 }
 
+// ClaimApprovalReview 以 pending 为条件的原子状态抢占，防止并发审批相互覆盖。
+func (r *AiRepository) ClaimApprovalReview(ctx context.Context, id uint, fields map[string]any) (int64, error) {
+	res := r.dbq(ctx).Model(&model.AiToolApproval{}).
+		Where("id = ? AND status = ?", id, "pending").
+		Updates(fields)
+	return res.RowsAffected, res.Error
+}
+
 func (r *AiRepository) UpdateApprovalFields(ctx context.Context, id uint, fields map[string]any) error {
 	return r.dbq(ctx).Model(&model.AiToolApproval{}).Where("id = ?", id).Updates(fields).Error
 }

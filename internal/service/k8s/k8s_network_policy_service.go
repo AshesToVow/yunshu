@@ -120,7 +120,7 @@ func (s *K8sNetworkPolicyService) Apply(ctx context.Context, req NetworkPolicyAp
 	if strings.TrimSpace(req.Manifest) == "" {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg01433598170d)
 	}
-	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest, nil); err != nil {
+	if err := s.dyn.ApplyManifest(ctx, k, req.Manifest); err != nil {
 		return k8sFail(ctx, "k8s.network.policy", "api", err)
 	}
 	return nil

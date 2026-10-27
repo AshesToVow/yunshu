@@ -142,6 +142,10 @@ export function AlertConfigCenterPanel({
   const [subTree, setSubTree] = useState<AlertSubscriptionNode[]>([]);
   const [subSelectedID, setSubSelectedID] = useState<number>(0);
   const [subLoading, setSubLoading] = useState(false);
+  const [subCreating, setSubCreating] = useState(false);
+  const [subSaving, setSubSaving] = useState(false);
+  const [subRemoving, setSubRemoving] = useState(false);
+  const subMutatingRef = useRef(false);
   const [receiverGroups, setReceiverGroups] = useState<AlertReceiverGroup[]>([]);
   const [projectDatasources, setProjectDatasources] = useState<AlertDatasourceItem[]>([]);
   const [subForm] = Form.useForm();
@@ -203,6 +207,7 @@ export function AlertConfigCenterPanel({
   eventsPageSizeRef.current = eventsPageSize;
   const loadEventsSeqRef = useRef(0);
   const loadSubscriptionsSeqRef = useRef(0);
+  const loadBaseSeqRef = useRef(0);
   const [webhookSending, setWebhookSending] = useState(false);
   const [routingDebugLoading, setRoutingDebugLoading] = useState(false);
   const [routingDebugResult, setRoutingDebugResult] = useState<AlertRoutingDebugResult | null>(null);
@@ -285,18 +290,21 @@ export function AlertConfigCenterPanel({
   }
 
   async function loadBase(projectId?: number) {
+    const seq = ++loadBaseSeqRef.current;
     setBaseLoading(true);
     try {
       const [statsRes, channelRes] = await Promise.all([
         getAlertHistoryStats({ project_id: projectId && projectId > 0 ? projectId : undefined }),
         listAlertChannels(),
       ]);
+      if (seq !== loadBaseSeqRef.current) return;
       setStats(statsRes);
       setChannels((channelRes.list ?? []).map((c) => ({ id: c.id, name: c.name })));
-    } catch {
-      // http 拦截器已 toast；保留上次成功的 stats，避免失败时整页变 0
+    } catch (e) {
+      if (seq !== loadBaseSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载告警概览失败"));
     } finally {
-      setBaseLoading(false);
+      if (seq === loadBaseSeqRef.current) setBaseLoading(false);
     }
   }
 
@@ -308,8 +316,8 @@ export function AlertConfigCenterPanel({
         .map((it) => ({ id: Number((it as any).id), name: String((it as any).name || "") }))
         .filter((it) => it.id > 0);
       setProjects(normalized);
-    } catch {
-      // http 拦截器已 toast
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "加载项目列表失败"));
     }
   }
 
@@ -390,8 +398,9 @@ export function AlertConfigCenterPanel({
       if (seq !== loadSubscriptionsSeqRef.current) return;
       setSubTree(tree ?? []);
       setReceiverGroups(groups.list ?? groups.items ?? []);
-    } catch {
+    } catch (e) {
       if (seq !== loadSubscriptionsSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载路由树失败"));
     } finally {
       if (seq === loadSubscriptionsSeqRef.current) setSubLoading(false);
     }
@@ -425,8 +434,24 @@ export function AlertConfigCenterPanel({
   }
 
   async function saveReceiverGroup() {
+    if (rgSaving) return;
     const pid = GLOBAL_ROUTING_PROJECT_ID;
-    const values = await rgForm.validateFields();
+    let values: {
+      name: string;
+      description?: string;
+      channel_ids?: number[];
+      email_recipients?: string[];
+      enabled?: boolean;
+      escalation_level?: number;
+      escalation_delay_seconds?: number;
+    };
+    try {
+      values = await rgForm.validateFields();
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "接收组表单校验失败"));
+      return;
+    }
     const level = Number(values.escalation_level ?? 0);
     const payload = {
       project_id: pid,
@@ -448,15 +473,21 @@ export function AlertConfigCenterPanel({
       message.success("接收组已保存");
       setRgModalOpen(false);
       await loadSubscriptions();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "保存接收组失败"));
     } finally {
       setRgSaving(false);
     }
   }
 
   async function removeReceiverGroup(id: number) {
-    await deleteReceiverGroup(id);
-    message.success("已删除");
-    await loadSubscriptions();
+    try {
+      await deleteReceiverGroup(id);
+      message.success("已删除");
+      await loadSubscriptions();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除接收组失败"));
+    }
   }
 
   async function onSelectSubscriptionNode(id: number) {
@@ -496,28 +527,67 @@ export function AlertConfigCenterPanel({
   }
 
   async function createSubscription(parentID?: number | null) {
-    const payload: any = {
-      project_id: GLOBAL_ROUTING_PROJECT_ID,
-      parent_id: parentID ?? null,
-      name: !parentID ? ALERT_ROUTING_TERMS.rootPolicyName : "新路由节点",
-      code: "",
-      enabled: true,
-      continue: false,
-      match_labels_json: "{}",
-      match_regex_json: "{}",
-      match_severity: "",
-      receiver_group_ids_json: "[]",
-      silence_seconds: 0,
-      notify_resolved: true,
-    };
-    const created = await createSubscriptionNode(payload);
-    message.success("已创建");
-    await loadSubscriptions();
-    await onSelectSubscriptionNode(created.id);
+    if (subMutatingRef.current) return;
+    subMutatingRef.current = true;
+    setSubCreating(true);
+    try {
+      const payload: any = {
+        project_id: GLOBAL_ROUTING_PROJECT_ID,
+        parent_id: parentID ?? null,
+        name: !parentID ? ALERT_ROUTING_TERMS.rootPolicyName : "新路由节点",
+        code: "",
+        enabled: true,
+        continue: false,
+        match_labels_json: "{}",
+        match_regex_json: "{}",
+        match_severity: "",
+        receiver_group_ids_json: "[]",
+        silence_seconds: 0,
+        notify_resolved: true,
+      };
+      const created = await createSubscriptionNode(payload);
+      message.success("已创建");
+      await loadSubscriptions();
+      await onSelectSubscriptionNode(created.id);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "新增路由节点失败"));
+    } finally {
+      subMutatingRef.current = false;
+      setSubCreating(false);
+    }
+  }
+
+  function parseJSONField(raw: unknown, fieldLabel: string): Record<string, unknown> | null {
+    const text = String(raw ?? "").trim() || "{}";
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        message.warning(`${fieldLabel} 必须是 JSON 对象`);
+        return null;
+      }
+      return parsed as Record<string, unknown>;
+    } catch {
+      message.warning(`${fieldLabel} 不是合法 JSON`);
+      return null;
+    }
   }
 
   async function saveSubscription() {
-    const v = await subForm.validateFields();
+    if (subMutatingRef.current) return;
+    let v: any;
+    try {
+      v = await subForm.validateFields();
+    } catch (e) {
+      if (e && typeof e === "object" && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "路由节点表单校验失败"));
+      return;
+    }
+    if (
+      parseJSONField(v.match_labels_json, "match_labels_json") === null ||
+      parseJSONField(v.match_regex_json, "match_regex_json") === null
+    ) {
+      return;
+    }
     const id = Number(v.id || 0);
     const payload: any = {
       project_id: GLOBAL_ROUTING_PROJECT_ID,
@@ -545,25 +615,43 @@ export function AlertConfigCenterPanel({
       silence_seconds: Number(v.silence_seconds || 0),
       notify_resolved: !!v.notify_resolved,
     };
-    if (!id) {
-      const created = await createSubscriptionNode(payload);
+    subMutatingRef.current = true;
+    setSubSaving(true);
+    try {
+      if (!id) {
+        const created = await createSubscriptionNode(payload);
+        message.success("已保存");
+        await loadSubscriptions();
+        await onSelectSubscriptionNode(created.id);
+        return;
+      }
+      await updateSubscriptionNode(id, payload);
       message.success("已保存");
       await loadSubscriptions();
-      await onSelectSubscriptionNode(created.id);
-      return;
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "保存路由节点失败"));
+    } finally {
+      subMutatingRef.current = false;
+      setSubSaving(false);
     }
-    await updateSubscriptionNode(id, payload);
-    message.success("已保存");
-    await loadSubscriptions();
   }
 
   async function removeSubscription() {
-    if (!subSelectedID) return;
-    await deleteSubscriptionNode(subSelectedID);
-    message.success("已删除");
-    setSubSelectedID(0);
-    subForm.resetFields();
-    await loadSubscriptions();
+    if (!subSelectedID || subMutatingRef.current) return;
+    subMutatingRef.current = true;
+    setSubRemoving(true);
+    try {
+      await deleteSubscriptionNode(subSelectedID);
+      message.success("已删除");
+      setSubSelectedID(0);
+      subForm.resetFields();
+      await loadSubscriptions();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "删除路由节点失败"));
+    } finally {
+      subMutatingRef.current = false;
+      setSubRemoving(false);
+    }
   }
 
   const effectiveProjectId = projectContextId && projectContextId > 0 ? projectContextId : subProjectID;
@@ -601,8 +689,9 @@ export function AlertConfigCenterPanel({
         setEventsTotal(res.total ?? 0);
         setEventsPage(res.page ?? page);
         setEventsPageSize(res.page_size ?? pageSize);
-      } catch {
+      } catch (e) {
         if (seq !== loadEventsSeqRef.current) return;
+        message.error(extractApiErrorMessage(e, "加载告警事件失败"));
       } finally {
         if (seq === loadEventsSeqRef.current) setEventsLoading(false);
       }
@@ -624,10 +713,27 @@ export function AlertConfigCenterPanel({
       const seq = ++loadEventsSeqRef.current;
       setEventsLoading(true);
       try {
+        const src = String(eventSourceFilter || "").trim();
+        let datasourceId: number | undefined;
+        let monitorPipeline: string | undefined;
+        if (src.startsWith("ds:")) {
+          const id = Number(src.slice(3));
+          if (Number.isFinite(id) && id > 0) datasourceId = id;
+        } else if (src.startsWith("mp:")) {
+          const slug = src.slice(3).trim();
+          if (slug) monitorPipeline = slug;
+        }
         const res = await listAlertEventsGrouped({
           page,
           page_size: pageSize,
           keyword: eventKeyword.trim() || undefined,
+          alertIP: eventAlertIP.trim() || undefined,
+          status: eventStatus.trim() || undefined,
+          monitorPipeline,
+          datasourceId,
+          groupKey: eventGroupKey.trim() || undefined,
+          fingerprint: eventFingerprint.trim() || undefined,
+          category: eventCategory || undefined,
           projectId: effectiveProjectId > 0 ? effectiveProjectId : undefined,
         });
         if (seq !== loadEventsSeqRef.current) return;
@@ -635,13 +741,23 @@ export function AlertConfigCenterPanel({
         setEventsTotal(res.total ?? 0);
         setEventsPage(res.page ?? page);
         setEventsPageSize(res.page_size ?? pageSize);
-      } catch {
+      } catch (e) {
         if (seq !== loadEventsSeqRef.current) return;
+        message.error(extractApiErrorMessage(e, "加载分组告警事件失败"));
       } finally {
         if (seq === loadEventsSeqRef.current) setEventsLoading(false);
       }
     },
-    [eventKeyword, effectiveProjectId],
+    [
+      eventKeyword,
+      eventAlertIP,
+      eventStatus,
+      eventSourceFilter,
+      eventGroupKey,
+      eventFingerprint,
+      eventCategory,
+      effectiveProjectId,
+    ],
   );
 
   const reloadEvents = useCallback(
@@ -746,6 +862,8 @@ export function AlertConfigCenterPanel({
       message.success("Webhook 已发送，告警链路已触发");
       await reloadEvents(1, eventsPageSize);
       await loadBase();
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "Webhook 发送失败"));
     } finally {
       setWebhookSending(false);
     }
@@ -771,6 +889,9 @@ export function AlertConfigCenterPanel({
           subSelectedID={subSelectedID}
           removeSubscription={removeSubscription}
           saveSubscription={saveSubscription}
+          subCreating={subCreating}
+          subSaving={subSaving}
+          subRemoving={subRemoving}
           subscriptionTreeData={subscriptionTreeData}
           onSelectSubscriptionNode={onSelectSubscriptionNode}
           selectedSubscriptionNode={selectedSubscriptionNode}
@@ -939,10 +1060,11 @@ export function AlertConfigCenterPanel({
                 （不写 cur_events，勿与本按钮混用）。
               </Typography.Paragraph>
               <Space wrap>
-                <Input
+                <Input.Password
                   style={{ width: 360 }}
                   value={webhookToken}
                   placeholder="Webhook Token（可为空）"
+                  autoComplete="new-password"
                   onChange={(e) => {
                     setWebhookTokenSensitivePickId(undefined);
                     setWebhookToken(e.target.value);
@@ -1095,6 +1217,7 @@ export function AlertConfigCenterPanel({
             {
               title: "操作",
               width: 160,
+              fixed: "right",
               className: "yunshu-table-actions-cell",
               render: (_: unknown, r: AlertReceiverGroup) => (
                 <Space size={0} wrap className="yunshu-table-actions">
@@ -1231,6 +1354,8 @@ export function AlertConfigCenterPanel({
                     if (res.node?.id) {
                       void onSelectSubscriptionNode(res.node.id);
                     }
+                  } catch (e) {
+                    message.error(extractApiErrorMessage(e, "路由向导创建失败"));
                   } finally {
                     setWizardSubmitting(false);
                   }
@@ -1335,6 +1460,8 @@ export function AlertConfigCenterPanel({
             }
             setCloneModalOpen(false);
             await loadSubscriptions();
+          } catch (e) {
+            message.error(extractApiErrorMessage(e, "复制路由模板失败"));
           } finally {
             setCloneSubmitting(false);
           }

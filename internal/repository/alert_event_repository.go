@@ -66,22 +66,22 @@ func (r *AlertEventRepository) UpdateStatus(ctx context.Context, fingerprint, st
 func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFilter) *gorm.DB {
 	tx := r.db.WithContext(ctx).Model(&model.AlertEvent{})
 	if kw := strings.TrimSpace(f.Keyword); kw != "" {
-		like := "%" + kw + "%"
-		tx = tx.Where("title LIKE ? OR error_message LIKE ? OR channel_name LIKE ?", like, like, like)
+		like := likeContains(kw)
+		tx = tx.Where("title LIKE ? ESCAPE '!' OR error_message LIKE ? ESCAPE '!' OR channel_name LIKE ? ESCAPE '!'", like, like, like)
 	}
 	if v := strings.TrimSpace(f.Cluster); v != "" {
 		tx = tx.Where("cluster = ?", v)
 	}
 	if v := strings.TrimSpace(f.AlertIP); v != "" {
-		like := "%" + v + "%"
+		esc := escapeLikePattern(v)
 		tx = tx.Where(
-			"cluster = ? OR request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ? OR request_payload LIKE ?",
+			"cluster = ? OR request_payload LIKE ? ESCAPE '!' OR request_payload LIKE ? ESCAPE '!' OR request_payload LIKE ? ESCAPE '!' OR request_payload LIKE ? ESCAPE '!' OR request_payload LIKE ? ESCAPE '!'",
 			v,
-			"%\"instance\":\""+v+"\"%",
-			"%\"pod_ip\":\""+v+"\"%",
-			"%\"node\":\""+v+"\"%",
-			"%\"ip\":\""+v+"\"%",
-			like,
+			"%\"instance\":\""+esc+"\"%",
+			"%\"pod_ip\":\""+esc+"\"%",
+			"%\"node\":\""+esc+"\"%",
+			"%\"ip\":\""+esc+"\"%",
+			"%"+esc+"%",
 		)
 	}
 	if v := strings.ToLower(strings.TrimSpace(f.Status)); v != "" {
@@ -98,14 +98,16 @@ func (r *AlertEventRepository) listQuery(ctx context.Context, f AlertEventListFi
 	}
 	if f.ProjectID > 0 {
 		tx = applyAlertEventProjectFilter(tx, r.db, f.ProjectID)
+	} else if len(f.ProjectIDs) > 0 {
+		tx = tx.Where("project_id IN ?", f.ProjectIDs)
 	}
 	if v := strings.TrimSpace(f.GroupKey); v != "" {
 		tx = tx.Where("group_key = ?", v)
 	}
 	if v := strings.TrimSpace(f.Fingerprint); v != "" {
-		like := "%\"fingerprint\":\"" + v + "\"%"
+		like := "%\"fingerprint\":\"" + escapeLikePattern(v) + "\"%"
 		tx = tx.Where(
-			"fingerprint = ? OR group_key = ? OR request_payload LIKE ?",
+			"fingerprint = ? OR group_key = ? OR request_payload LIKE ? ESCAPE '!'",
 			v, v, like,
 		)
 	}

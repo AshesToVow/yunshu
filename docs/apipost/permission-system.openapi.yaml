@@ -29993,12 +29993,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorBody"
   /api/v1/projects/{id}/dbmgmt/instances/{instanceId}/accounts/{accountId}/password:
-    get:
+    post:
       tags: ["Projects"]
-      summary: "查询 instances/accounts/password"
-      operationId: get_api_v1_projects_id__dbmgmt_instances_instanceId__accounts_accountId__password
+      summary: "查看实例账号密码（审计留痕）"
+      operationId: post_api_v1_projects_id__dbmgmt_instances_instanceId__accounts_accountId__password
       description: |
-        权限：JWT + Casbin Enforce(user, /api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password, GET)。
+        权限：JWT + Casbin Enforce(user, /api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password, POST)。
+        敏感接口：使用 POST 防止缓存，响应头携带 Cache-Control: no-store；每次调用写入 instance_account_password_reveal 审计日志。
       security:
         - bearerAuth: []
       parameters:

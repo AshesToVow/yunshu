@@ -1,24 +1,29 @@
 package middleware
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"yunshu/internal/pkg/constants"
 
+	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/response"
-	"yunshu/internal/interfaces"
 	"yunshu/internal/store"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 // WSAuth authenticates websocket handshake requests.
 // Browsers can't set custom headers for WebSocket; use a one-time ticket from POST /api/v1/auth/ws-ticket:
-//   GET .../ws?ticket=<uuid>
-func WSAuth(redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger) gin.HandlerFunc {
+//
+//	GET .../ws?ticket=<uuid>
+func WSAuth(redisClient *redis.Client, userRepo interfaces.UserRepository, logger *logx.Logger, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ticket := strings.TrimSpace(c.Query("ticket"))
 		if ticket == "" {
@@ -26,13 +31,13 @@ func WSAuth(redisClient *redis.Client, userRepo interfaces.UserRepository, logge
 			c.Abort()
 			return
 		}
-		if authenticateWSTicket(c, redisClient, userRepo, ticket) {
+		if authenticateWSTicket(c, redisClient, userRepo, ticket, db) {
 			c.Next()
 		}
 	}
 }
 
-func authenticateWSTicket(c *gin.Context, redisClient *redis.Client, userRepo interfaces.UserRepository, ticket string) bool {
+func authenticateWSTicket(c *gin.Context, redisClient *redis.Client, userRepo interfaces.UserRepository, ticket string, db *gorm.DB) bool {
 	userID, tokenID, err := store.ConsumeWSTicket(c.Request.Context(), redisClient, ticket)
 	if err != nil {
 		logx.With(c.Request.Context(), "component", "http.ws_auth").Warn("consume ws ticket failed", "error", err)
@@ -40,14 +45,52 @@ func authenticateWSTicket(c *gin.Context, redisClient *redis.Client, userRepo in
 		c.Abort()
 		return false
 	}
-	if !authenticateWSSession(c, redisClient, userRepo, userID, tokenID) {
+	if !authenticateWSSession(c, redisClient, userRepo, userID, tokenID, db) {
 		return false
 	}
 	c.Set(auth.ContextClaimsKey, &auth.Claims{UserID: userID, TokenID: tokenID})
+	// 长连接期间由 Handler 周期性调用，检测登出/会话过期/账号禁用/密码过期。
+	c.Request = c.Request.WithContext(auth.WithWSRevalidator(
+		c.Request.Context(),
+		wsSessionRevalidator(redisClient, userRepo, userID, tokenID, db),
+	))
 	return true
 }
 
-func authenticateWSSession(c *gin.Context, redisClient *redis.Client, userRepo interfaces.UserRepository, userID uint, tokenID string) bool {
+// wsUserLoader 仅依赖账号查询，便于单测替换。
+type wsUserLoader interface {
+	GetByID(ctx context.Context, id uint) (*model.User, error)
+}
+
+func wsSessionRevalidator(redisClient *redis.Client, users wsUserLoader, userID uint, tokenID string, db *gorm.DB) auth.WSRevalidator {
+	return func(ctx context.Context) error {
+		if err := store.ValidateAccessTokenSession(ctx, redisClient, tokenID); err != nil {
+			if errors.Is(err, store.ErrSessionNotFound) {
+				return auth.ErrWSSessionExpired
+			}
+			return fmt.Errorf("validate ws session: %w", err)
+		}
+		if users == nil {
+			return nil
+		}
+		user, err := users.GetByID(ctx, userID)
+		if err != nil {
+			return fmt.Errorf("load ws account: %w", err)
+		}
+		if user == nil {
+			return auth.ErrWSSessionExpired
+		}
+		if user.Status != model.StatusEnabled {
+			return auth.ErrWSAccountDisabled
+		}
+		if mustChangePassword(ctx, db, user) {
+			return auth.ErrWSPasswordExpired
+		}
+		return nil
+	}
+}
+
+func authenticateWSSession(c *gin.Context, redisClient *redis.Client, userRepo interfaces.UserRepository, userID uint, tokenID string, db *gorm.DB) bool {
 	if err := store.ValidateAccessTokenSession(c.Request.Context(), redisClient, tokenID); err != nil {
 		respondSessionStoreError(c, loggerFromGin(c), err)
 		c.Abort()
@@ -62,6 +105,11 @@ func authenticateWSSession(c *gin.Context, redisClient *redis.Client, userRepo i
 	}
 	if user.Status != model.StatusEnabled {
 		response.Error(c, constants.ErrAccountDisabled)
+		c.Abort()
+		return false
+	}
+	if mustChangePassword(c.Request.Context(), db, user) {
+		response.Error(c, constants.ErrBadRequestWithMsg("密码已过期或需强制修改，请先修改密码后再继续操作"))
 		c.Abort()
 		return false
 	}

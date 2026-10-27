@@ -6,11 +6,16 @@ import (
 	"unicode"
 
 	"yunshu/internal/model"
+	"yunshu/internal/repository"
 )
 
 // rechunkDocument 按 Markdown 标题切片。
 func (s *Service) rechunkDocument(ctx context.Context, doc *model.AiKbDocument) error {
-	_ = s.repo.DeleteChunksByDocumentID(ctx, doc.ID)
+	return rechunkDocumentWith(s.repo, ctx, doc)
+}
+
+func rechunkDocumentWith(repo repository.AiRepo, ctx context.Context, doc *model.AiKbDocument) error {
+	_ = repo.DeleteChunksByDocumentID(ctx, doc.ID)
 	parts := splitMarkdownChunks(doc.Content)
 	for i, p := range parts {
 		ch := model.AiKbChunk{
@@ -20,7 +25,7 @@ func (s *Service) rechunkDocument(ctx context.Context, doc *model.AiKbDocument) 
 			HeadingPath: p.heading,
 			Content:     p.body,
 		}
-		if err := s.repo.CreateChunk(ctx, &ch); err != nil {
+		if err := repo.CreateChunk(ctx, &ch); err != nil {
 			return err
 		}
 	}

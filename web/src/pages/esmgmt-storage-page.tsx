@@ -7,7 +7,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Popconfirm,
   Row,
   Select,
   Space,
@@ -20,6 +19,7 @@ import {
 } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { DangerConfirmModal } from "../components/danger-confirm-modal";
 import { OpsPageHeader } from "../components/ops/ops-page-header";
 import { listEsmgmtConnections, type EsmgmtConnection } from "../services/esmgmt";
 import {
@@ -65,6 +65,10 @@ export function EsmgmtStoragePage() {
   const [projectId, setProjectId] = useState<number>();
   const [projectDays, setProjectDays] = useState(30);
   const [projectEnabled, setProjectEnabled] = useState(true);
+  const [deleteIndexTarget, setDeleteIndexTarget] = useState<string>();
+  const [deletingIndex, setDeletingIndex] = useState<string>();
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -154,13 +158,33 @@ export function EsmgmtStoragePage() {
     return (n.startsWith("yunshu-agent-") || n.startsWith("yunshu-k8s-")) && !n.startsWith(".");
   }
 
-  async function handleDeleteIndex(index: string) {
+  async function handleDeleteIndex(index: string, confirm: string, reason: string) {
+    if (deletingIndex) return;
+    setDeletingIndex(index);
     try {
-      await deleteESIndex(index);
+      await deleteESIndex(index, { confirm, reason });
       message.success(`已删除索引：${index}`);
+      setDeleteIndexTarget(undefined);
       await reload();
     } catch (e: unknown) {
       message.error(extractApiErrorMessage(e));
+    } finally {
+      setDeletingIndex(undefined);
+    }
+  }
+
+  async function handleRunCleanup(reason: string) {
+    if (cleanupLoading) return;
+    setCleanupLoading(true);
+    try {
+      const res = await runLogRetentionCleanup({ confirm: "cleanup", reason });
+      message.success(res.message || "清理完成");
+      setCleanupOpen(false);
+      await reload();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "清理失败"));
+    } finally {
+      setCleanupLoading(false);
     }
   }
 
@@ -298,11 +322,16 @@ export function EsmgmtStoragePage() {
                   className: "yunshu-table-actions-cell",
                   render: (_, r) =>
                     canManageESIndex(r.name, r.matched_pattern) ? (
-                      <Popconfirm title={`确认删除 ${r.name}？`} onConfirm={() => void handleDeleteIndex(r.name)}>
-                        <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                          删除
-                        </Button>
-                      </Popconfirm>
+                      <Button
+                        type="link"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => setDeleteIndexTarget(r.name)}
+                        disabled={deletingIndex != null}
+                      >
+                        删除
+                      </Button>
                     ) : (
                       <span style={{ color: "#999" }}>-</span>
                     ),
@@ -325,13 +354,8 @@ export function EsmgmtStoragePage() {
                 <Button
                   size="small"
                   icon={<PlayCircleOutlined />}
-                  onClick={() =>
-                    void (async () => {
-                      const res = await runLogRetentionCleanup();
-                      message.success(res.message || "清理完成");
-                      await reload();
-                    })()
-                  }
+                  loading={cleanupLoading}
+                  onClick={() => setCleanupOpen(true)}
                 >
                   立即清理
                 </Button>
@@ -418,6 +442,29 @@ export function EsmgmtStoragePage() {
           </Card>
         </Col>
       </Row>
+      <DangerConfirmModal
+        open={!!deleteIndexTarget}
+        title={`删除索引 ${deleteIndexTarget ?? ""}`}
+        targetLabel="索引名"
+        target={deleteIndexTarget ?? ""}
+        description="索引及其全部日志文档将被永久删除，无法恢复。"
+        loading={deletingIndex != null}
+        onCancel={() => setDeleteIndexTarget(undefined)}
+        onConfirm={({ confirm, reason }) => handleDeleteIndex(deleteIndexTarget ?? "", confirm, reason)}
+      />
+      <DangerConfirmModal
+        open={cleanupOpen}
+        title="立即清理过期日志"
+        targetLabel="cleanup"
+        target="cleanup"
+        requireTyping={false}
+        confirmText="执行清理"
+        reasonLabel="清理原因（必填）"
+        description="将按全局与项目保留策略删除超期的日志索引/文档，删除后无法恢复。"
+        loading={cleanupLoading}
+        onCancel={() => setCleanupOpen(false)}
+        onConfirm={({ reason }) => handleRunCleanup(reason)}
+      />
     </div>
   );
 }

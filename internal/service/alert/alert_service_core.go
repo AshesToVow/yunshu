@@ -108,11 +108,13 @@ type AlertService struct {
 	monitorEvalMu     sync.Mutex
 	aead              cipher.AEAD
 	cloudExpiryState  map[string]bool
-	cloudExpiryEvalMu sync.Mutex
+	// 无 Redis 时记录云到期实例上次外发时间，用于 repeat_interval 节流
+	cloudExpiryLastEmit map[string]time.Time
+	cloudExpiryEvalMu   sync.Mutex
 	// 无 Redis 时云到期规则按 synthetic rule id 记录上次「按 Cron 触发评估」时间
 	cloudExpiryNoRedisLastEval map[uint]time.Time
-	// 无 Redis 时内置监控规则 firing 状态（key=monitor_rule_{id}）
-	monitorNoRedisActive map[string]bool
+	// 无 Redis 时内置监控规则 firing 状态（key=monitor_rule_{id}，value=最近一次 firing 评估时间）
+	monitorNoRedisActive map[string]time.Time
 
 	// 可选依赖：告警抑制、订阅树路由
 	inhibitionSvc      *AlertInhibitionService   // 告警抑制服务
@@ -122,6 +124,7 @@ type AlertService struct {
 	metrics           *AlertMetrics // Prometheus自监控指标
 	metricsUpdater    *AlertMetricsUpdater
 	timingLeaderToken string
+	webhookWorkerID   string
 
 	eventRepo            interfaces.AlertEventRepository
 	channelRepo          interfaces.AlertChannelRepository
@@ -132,6 +135,7 @@ type AlertService struct {
 	cloudExpiryRepo      interfaces.CloudExpiryRuleRepository
 	cloudAccountRepo     interfaces.CloudAccountRepository
 	ackRepo              interfaces.AlertAckRepository
+	memberRepo           interfaces.ProjectMemberRepository
 	progressNoteRepo     interfaces.AlertProgressNoteRepository
 	curHisRepo           interfaces.AlertCurHisRepository
 	promqlSavedQueryRepo interfaces.PromqlSavedQueryRepository
@@ -211,11 +215,13 @@ func NewAlertService(redisClient *redis.Client, sender mailer.Sender, cfg config
 		mailer:               sender,
 		cfg:                  cfg,
 		cloudExpiryState:     make(map[string]bool),
-		inhibitionSvc:        NewAlertInhibitionServiceWithRepo(opts.InhibitionRuleRepo, redisClient),
+		cloudExpiryLastEmit:  make(map[string]time.Time),
+		inhibitionSvc:        NewAlertInhibitionServiceWithRepo(opts.InhibitionRuleRepo, redisClient, opts.MemberRepo),
 		subscriptionSvc:      NewAlertSubscriptionService(opts.SubscriptionRepo),
 		receiverGroupCache:   receiverCache,
 		metrics:              NewAlertMetrics(),
 		timingLeaderToken:    fmt.Sprintf("%d-%d", os.Getpid(), time.Now().UnixNano()),
+		webhookWorkerID:      newAlertWebhookItemID(),
 		silenceSvc:           opts.SilenceSvc,
 		maintenanceSvc:       opts.MaintenanceSvc,
 		assigneeSvc:          opts.AssigneeSvc,
@@ -229,6 +235,7 @@ func NewAlertService(redisClient *redis.Client, sender mailer.Sender, cfg config
 		cloudExpiryRepo:      opts.CloudExpiryRepo,
 		cloudAccountRepo:     opts.CloudAccountRepo,
 		ackRepo:              opts.AckRepo,
+		memberRepo:           opts.MemberRepo,
 		progressNoteRepo:     opts.ProgressNoteRepo,
 		curHisRepo:           opts.CurHisRepo,
 		promqlSavedQueryRepo: opts.PromqlSavedQueryRepo,
@@ -248,9 +255,8 @@ func NewAlertService(redisClient *redis.Client, sender mailer.Sender, cfg config
 		))
 	}
 
-	// 初始化指标更新器并启动
+	// 指标更新器随 RunBackgroundWorkers 的 ctx 启停
 	svc.metricsUpdater = NewAlertMetricsUpdater(svc.metrics, svc.inhibitionSvc)
-	svc.metricsUpdater.Start()
 
 	if key := strings.TrimSpace(opts.EncryptionKey); key != "" {
 		if aead, err := cryptox.NewAESGCMFromKeyString(key); err == nil {
@@ -267,6 +273,9 @@ func (s *AlertService) RunBackgroundWorkers(ctx context.Context) {
 	}
 	s.startPrometheusEnrichWorkers(ctx)
 	s.startInhibitionPruner(ctx)
+	if s.metricsUpdater != nil {
+		s.metricsUpdater.Start(ctx)
+	}
 	evalCtx, cancel := context.WithCancel(ctx)
 	s.monitorEvalCancel = cancel
 	lifecycle.Go("alert.monitor-rule-evaluator", func() { s.runMonitorRuleEvaluator(evalCtx) })

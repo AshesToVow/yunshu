@@ -23,7 +23,7 @@ func (s *DynamicResourceService) ServerSideDryRunApply(ctx context.Context, clus
 	if s.runtime == nil {
 		return fmt.Errorf("runtime nil")
 	}
-	if err := s.ensureManifestNamespacesAllowed(ctx, manifest); err != nil {
+	if err := s.ensureManifestScopesAllowed(ctx, nil, manifest); err != nil {
 		return err
 	}
 	_, cfg, err := s.runtime.GetClusterRestConfig(ctx, clusterID)

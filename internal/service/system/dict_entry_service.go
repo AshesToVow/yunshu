@@ -7,14 +7,14 @@ import (
 	"yunshu/internal/dictcategory"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
-	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/dictmask"
+	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/pagination"
 
 	"gorm.io/gorm"
 )
 
-func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (*pagination.Result[model.DictEntry], error) {
+func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (*pagination.Result[DictEntryListItem], error) {
 	s.ensureBuiltins(ctx)
 	query.DictType = canonicalDictType(query.DictType)
 	page, pageSize := pagination.Normalize(query.Page, query.PageSize)
@@ -22,8 +22,12 @@ func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "dict", "List", err)
 	}
-	return &pagination.Result[model.DictEntry]{
-		List:     list,
+	items := make([]DictEntryListItem, 0, len(list))
+	for _, item := range list {
+		items = append(items, maskDictEntryListItem(item))
+	}
+	return &pagination.Result[DictEntryListItem]{
+		List:     items,
 		Total:    total,
 		Page:     page,
 		PageSize: pageSize,
@@ -31,6 +35,8 @@ func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (
 }
 
 func (s *DictEntryService) Create(ctx context.Context, req DictEntryCreateRequest) (*model.DictEntry, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	s.ensureBuiltins(ctx)
 	rawVal := req.Value
 	if err := validateDictEntryValueBytes(rawVal); err != nil {
@@ -47,6 +53,11 @@ func (s *DictEntryService) Create(ctx context.Context, req DictEntryCreateReques
 	if item.DictType == "" || item.Label == "" || item.Value == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg0adab830348f)
 	}
+	if isSingletonDictType(item.DictType) {
+		if exists, err := s.repo.ExistsByType(ctx, item.DictType, 0); err == nil && exists {
+			return nil, constants.ErrBadRequestWithMsg("该字典类型为单值型，仅允许一条记录")
+		}
+	}
 	if exists, err := s.repo.ExistsByTypeLabel(ctx, item.DictType, item.Label, 0); err == nil && exists {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg7e043b9a81af)
 	}
@@ -60,6 +71,8 @@ func (s *DictEntryService) Create(ctx context.Context, req DictEntryCreateReques
 }
 
 func (s *DictEntryService) Update(ctx context.Context, id uint, req DictEntryUpdateRequest) (*model.DictEntry, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
 	item, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -71,15 +84,29 @@ func (s *DictEntryService) Update(ctx context.Context, id uint, req DictEntryUpd
 	if err := validateDictEntryValueBytes(rawVal); err != nil {
 		return nil, bizerrors.Pass(ctx, "dict", "Update", err)
 	}
+	oldValue := strings.TrimSpace(item.Value)
+	oldType := canonicalDictType(item.DictType)
+	oldLabel := strings.TrimSpace(item.Label)
+	oldSensitive := dictmask.SensitiveDictType(item.DictType)
 	item.DictType = strings.TrimSpace(req.DictType)
 	item.DictType = canonicalDictType(item.DictType)
 	item.Label = strings.TrimSpace(req.Label)
-	item.Value = strings.TrimSpace(rawVal)
+	// 列表返回的是脱敏预览：前端原样回传时视为“值未修改”，保留库中明文。
+	// 若需要真正改成与预览相同的字面量，需通过新建条目完成。
+	item.Value = resolveDictEntrySubmittedValue(rawVal, oldValue, oldSensitive, dictmask.SensitiveDictType(item.DictType))
 	item.Sort = dictEntrySort(req.Sort)
 	item.Status = req.Status
 	item.Remark = strings.TrimSpace(req.Remark)
 	if item.DictType == "" || item.Label == "" || item.Value == "" {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg0adab830348f)
+	}
+	if isBuiltinDictEntry(oldType, oldLabel) && (item.DictType != oldType || item.Label != oldLabel) {
+		return nil, constants.ErrBadRequestWithMsg("内置字典项不允许修改字典类型或标签，可调整值、状态或备注")
+	}
+	if item.DictType != oldType && isSingletonDictType(item.DictType) {
+		if exists, err2 := s.repo.ExistsByType(ctx, item.DictType, item.ID); err2 == nil && exists {
+			return nil, constants.ErrBadRequestWithMsg("该字典类型为单值型，仅允许一条记录")
+		}
 	}
 	if exists, err2 := s.repo.ExistsByTypeLabel(ctx, item.DictType, item.Label, item.ID); err2 == nil && exists {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg47f29b52ac8f)
@@ -94,12 +121,17 @@ func (s *DictEntryService) Update(ctx context.Context, id uint, req DictEntryUpd
 }
 
 func (s *DictEntryService) Delete(ctx context.Context, id uint) error {
-	_, err := s.repo.GetByID(ctx, id)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	item, err := s.repo.GetByID(ctx, id)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return constants.ErrNotFoundWithMsg(constants.ErrMsg094b285159a4)
 		}
 		return bizerrors.Pass(ctx, "dict", "Delete", err)
+	}
+	if isBuiltinDictEntry(item.DictType, item.Label) {
+		return constants.ErrBadRequestWithMsg("内置字典项不允许删除，可停用或修改值")
 	}
 	return s.repo.Delete(ctx, id)
 }
@@ -143,4 +175,26 @@ func (s *DictEntryService) RevealValue(ctx context.Context, id uint) (string, er
 		return "", constants.ErrBadRequestWithMsg("该字典类型不支持通过此接口获取明文")
 	}
 	return item.Value, nil
+}
+
+// maskDictEntryListItem 敏感类型的 value 仅返回脱敏预览，避免列表/审计链路泄漏明文。
+func maskDictEntryListItem(item model.DictEntry) DictEntryListItem {
+	sensitive := dictmask.SensitiveDictType(item.DictType)
+	if sensitive {
+		item.Value = dictmask.Preview(item.Value)
+	}
+	return DictEntryListItem{
+		DictEntry: item,
+		Sensitive: sensitive,
+		Builtin:   isBuiltinDictEntry(item.DictType, item.Label),
+	}
+}
+
+// resolveDictEntrySubmittedValue 前端原样回传脱敏预览时视为“值未修改”，保留库中明文。
+func resolveDictEntrySubmittedValue(rawVal, oldValue string, oldSensitive, newSensitive bool) string {
+	trimmed := strings.TrimSpace(rawVal)
+	if trimmed != "" && (oldSensitive || newSensitive) && trimmed == dictmask.Preview(oldValue) {
+		return oldValue
+	}
+	return trimmed
 }

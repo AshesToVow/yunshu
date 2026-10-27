@@ -22,9 +22,9 @@ type AlertRoutingWizardRequest struct {
 }
 
 type AlertRoutingWizardResult struct {
-	ReceiverGroup *model.AlertReceiverGroup  `json:"receiver_group"`
+	ReceiverGroup *model.AlertReceiverGroup    `json:"receiver_group"`
 	Node          *model.AlertSubscriptionNode `json:"node"`
-	RootCreated   bool                       `json:"root_created"`
+	RootCreated   bool                         `json:"root_created"`
 }
 
 func (s *AlertSubscriptionService) ApplyRoutingWizard(ctx context.Context, req AlertRoutingWizardRequest) (*AlertRoutingWizardResult, error) {

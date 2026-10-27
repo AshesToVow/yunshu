@@ -14,6 +14,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Popconfirm,
   Progress,
   Space,
   Table,
@@ -138,6 +139,7 @@ export function DaemonsetsPage() {
   );
   const [revisionRows, setRevisionRows] = useState<DeploymentRevisionItem[]>([]);
   const [revisionLoading, setRevisionLoading] = useState(false);
+  const revisionSeqRef = useRef(0);
   const [verticalForm] = Form.useForm<{
     container_name?: string;
     requests_cpu?: string;
@@ -352,11 +354,26 @@ spec:
                     label: "重启",
                     icon: <ReloadOutlined />,
                     onClick: () => {
-                      void (async () => {
-                        await restartDaemonSet(ctx.clusterId, ctx.namespace ?? "default", record.name);
-                        message.success("已触发滚动重启");
-                        ctx.reload();
-                      })();
+                      if (!ctx.clusterId) {
+                        message.error("请先选择集群");
+                        return;
+                      }
+                      const ns = ctx.namespace ?? "default";
+                      Modal.confirm({
+                        title: `确认重启 ${record.name}？`,
+                        content: "将触发 DaemonSet 滚动重启，每个节点上的 Pod 会重建。",
+                        okText: "重启",
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          try {
+                            await restartDaemonSet(ctx.clusterId, ns, record.name);
+                            message.success("已触发滚动重启");
+                            ctx.reload();
+                          } catch {
+                            /* interceptor */
+                          }
+                        },
+                      });
                     },
                   },
                   {
@@ -365,14 +382,24 @@ spec:
                     icon: <FileTextOutlined />,
                     onClick: () => {
                       const ns = ctx.namespace ?? "default";
+                      const seq = ++revisionSeqRef.current;
                       setRevisionTarget({ clusterId: ctx.clusterId, namespace: ns, name: record.name });
                       setRevisionOpen(true);
                       setRevisionLoading(true);
                       setRevisionRows([]);
                       void listDaemonSetRevisions(ctx.clusterId, ns, record.name)
-                        .then((rows) => setRevisionRows(rows || []))
-                        .catch(() => message.error("加载历史版本失败"))
-                        .finally(() => setRevisionLoading(false));
+                        .then((rows) => {
+                          if (seq !== revisionSeqRef.current) return;
+                          setRevisionRows(rows || []);
+                        })
+                        .catch(() => {
+                          if (seq !== revisionSeqRef.current) return;
+                          message.error("加载历史版本失败");
+                          setRevisionOpen(false);
+                        })
+                        .finally(() => {
+                          if (seq === revisionSeqRef.current) setRevisionLoading(false);
+                        });
                     },
                   },
                 ],
@@ -477,10 +504,11 @@ spec:
               width: 120,
               render: (_, row) =>
                 row.current ? null : (
-                  <Button
-                    type="link"
-                    size="small"
-                    onClick={() => {
+                  <Popconfirm
+                    title={`确认回滚到 revision ${row.revision}？`}
+                    okText="回滚"
+                    okButtonProps={{ danger: true }}
+                    onConfirm={() => {
                       if (!revisionTarget) return;
                       void (async () => {
                         try {
@@ -499,15 +527,20 @@ spec:
                       })();
                     }}
                   >
-                    回滚到此版
-                  </Button>
+                    <Button type="link" size="small">
+                      回滚到此版
+                    </Button>
+                  </Popconfirm>
                 ),
             },
           ]}
         />
         <Space style={{ marginTop: 12 }}>
-          <Button
-            onClick={() => {
+          <Popconfirm
+            title="确认回滚到上一版本？"
+            okText="回滚"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => {
               if (!revisionTarget) return;
               void (async () => {
                 try {
@@ -521,8 +554,8 @@ spec:
               })();
             }}
           >
-            回滚到上一版
-          </Button>
+            <Button>回滚到上一版</Button>
+          </Popconfirm>
         </Space>
       </Modal>
 

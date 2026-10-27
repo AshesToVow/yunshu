@@ -270,14 +270,29 @@ func (s *K8sClusterService) List(ctx context.Context, query K8sClusterListQuery)
 		params.ProjectMemberFilter = true
 		params.ProjectMemberIDs = ids
 	}
-	// 非超管需按档位过滤：先取足量再内存过滤，保证 total/分页正确。
+	var (
+		clusters []model.K8sCluster
+		total    int64
+		err      error
+	)
 	if needGrantFilter {
-		params.Page = 1
-		params.PageSize = 1000
-	}
-	clusters, total, err := s.repo.List(ctx, params)
-	if err != nil {
-		return nil, err
+		// 档位过滤只能在内存进行：分页拉全量（单页上限 100），避免固定截断导致可见集群缺失。
+		params.PageSize = pagination.MaxPageSize
+		for params.Page = 1; ; params.Page++ {
+			batch, _, listErr := s.repo.List(ctx, params)
+			if listErr != nil {
+				return nil, listErr
+			}
+			clusters = append(clusters, batch...)
+			if len(batch) < params.PageSize {
+				break
+			}
+		}
+	} else {
+		clusters, total, err = s.repo.List(ctx, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var tiersIdx repository.EffectiveTierIndex
@@ -391,6 +406,9 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 		}
 		c.Kubeconfig = sealedKC
 	} else {
+		if err := validateKubeconfigServerURLs(req.Kubeconfig); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
+		}
 		sealedKC, err := s.runtime.SealCredential(req.Kubeconfig)
 		if err != nil {
 			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
@@ -399,6 +417,9 @@ func (s *K8sClusterService) Create(ctx context.Context, req K8sClusterCreateRequ
 	}
 
 	if ro := strings.TrimSpace(req.KubeconfigReadonly); ro != "" {
+		if err := validateKubeconfigServerURLs(ro); err != nil {
+			return nil, constants.ErrBadRequestWithMsg("只读 kubeconfig 无效：" + err.Error())
+		}
 		sealedRO, err := s.runtime.SealCredential(ro)
 		if err != nil {
 			return nil, constants.ErrInternalWithMsg("加密只读 kubeconfig 失败")
@@ -506,6 +527,9 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 		cluster.Kubeconfig = sealedKC
 		s.runtime.DeleteRegisterCache(cluster.ID)
 	} else if req.Kubeconfig != nil {
+		if err := validateKubeconfigServerURLs(*req.Kubeconfig); err != nil {
+			return nil, constants.ErrBadRequestWithMsg(err.Error())
+		}
 		sealedKC, err := s.runtime.SealCredential(*req.Kubeconfig)
 		if err != nil {
 			return nil, constants.ErrInternalWithMsg("加密 kubeconfig 失败")
@@ -519,6 +543,9 @@ func (s *K8sClusterService) Update(ctx context.Context, id uint, req K8sClusterU
 		if ro == "" {
 			cluster.KubeconfigReadonly = ""
 		} else {
+			if err := validateKubeconfigServerURLs(ro); err != nil {
+				return nil, constants.ErrBadRequestWithMsg("只读 kubeconfig 无效：" + err.Error())
+			}
 			sealedRO, err := s.runtime.SealCredential(ro)
 			if err != nil {
 				return nil, constants.ErrInternalWithMsg("加密只读 kubeconfig 失败")
@@ -734,6 +761,16 @@ func (s *K8sClusterService) ListComponentStatuses(ctx context.Context, id uint) 
 				out = append(out, podToComponentStatusItem(p, probedAt))
 			}
 		}
+	} else {
+		// 组件列表失败不返回空结果：以异常项显式暴露，避免被误读为“无组件”。
+		out = append(out, ComponentStatusItem{
+			Name:        "pod/kube-system",
+			Status:      "Unknown",
+			Healthy:     false,
+			Message:     "读取 kube-system 组件 Pod 失败",
+			Error:       err.Error(),
+			LastProbeAt: probedAt,
+		})
 	}
 
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

@@ -18,14 +18,14 @@ import (
 
 // DatasourceHealthResult 数据源采集健康探测结果。
 type DatasourceHealthResult struct {
-	DatasourceID uint       `json:"datasource_id"`
-	Status       string     `json:"status"` // ok|degraded|down|unknown
-	Message      string     `json:"message"`
-	LatencyMs    int64      `json:"latency_ms"`
-	UpTotal      int64      `json:"up_total"`
-	UpDown       int64      `json:"up_down"`
-	CheckedAt    time.Time  `json:"checked_at"`
-	StaleSeconds int64      `json:"stale_seconds,omitempty"`
+	DatasourceID uint      `json:"datasource_id"`
+	Status       string    `json:"status"` // ok|degraded|down|unknown
+	Message      string    `json:"message"`
+	LatencyMs    int64     `json:"latency_ms"`
+	UpTotal      int64     `json:"up_total"`
+	UpDown       int64     `json:"up_down"`
+	CheckedAt    time.Time `json:"checked_at"`
+	StaleSeconds int64     `json:"stale_seconds,omitempty"`
 }
 
 // datasourceHealthBlockTTL 评测闸门：近期探测为 down 则跳过规则评测。
@@ -38,6 +38,9 @@ func (s *AlertDatasourceService) GetHealth(ctx context.Context, id uint) (*Datas
 			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
 		}
 		return nil, bizerrors.Pass(ctx, "alert.datasource", "GetHealth", err)
+	}
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
 	}
 	return healthFromDatasource(row), nil
 }
@@ -69,6 +72,9 @@ func (s *AlertDatasourceService) CheckHealth(ctx context.Context, id uint) (*Dat
 			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg2f3e2fbecdc5)
 		}
 		return nil, bizerrors.Pass(ctx, "alert.datasource", "CheckHealth", err)
+	}
+	if err := assertAlertProjectVisible(ctx, s.memberRepo, row.ProjectID); err != nil {
+		return nil, err
 	}
 	res := probeDatasourceHealth(ctx, row)
 	now := res.CheckedAt
@@ -149,13 +155,7 @@ func probeDatasourceHealth(ctx context.Context, row *model.AlertDatasource) *Dat
 		out.Message = "base_url 为空"
 		return out
 	}
-	cli := &promapi.Client{
-		BaseURL:       row.BaseURL,
-		BearerToken:   row.BearerToken,
-		BasicUser:     row.BasicUser,
-		BasicPassword: row.BasicPassword,
-		SkipTLSVerify: row.SkipTLSVerify,
-	}
+	cli := newPromClient(row)
 	qctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	start := time.Now()

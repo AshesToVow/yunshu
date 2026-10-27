@@ -66,6 +66,10 @@ func (s *Service) runScriptTool(ctx context.Context, def toolDefRow, argsJSON st
 		return "", fmt.Errorf("不支持的 script_lang: %s", def.ScriptLang)
 	}
 	cmd.Dir = filepath.Dir(absFull)
+	// 环境变量白名单：防止脚本继承 DB DSN、encryptionKey、LLM Key 等敏感配置。
+	// 确需透传的变量经 YUNSHU_AI_SCRIPT_ENV（逗号分隔）显式放行。
+	cmd.Env = buildScriptEnv()
+	applyScriptLimits(cmd, timeout, lang)
 	cmd.Stdin = strings.NewReader(argsJSON)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -91,8 +95,32 @@ func (s *Service) runScriptTool(ctx context.Context, def toolDefRow, argsJSON st
 	return truncateStr(out, 24_000), nil
 }
 
-func (s *Service) pythonBin() string {
-	if v := strings.TrimSpace(os.Getenv("YUNSHU_AI_PYTHON")); v != "" {
+// scriptEnvWhitelist 允许脚本进程继承的环境变量白名单。
+var scriptEnvWhitelist = []string{"PATH", "HOME", "TMPDIR", "TMP", "TEMP", "LANG", "LC_ALL", "LC_CTYPE", "TERM"}
+
+func buildScriptEnv() []string {
+	allow := make(map[string]struct{}, len(scriptEnvWhitelist))
+	for _, k := range scriptEnvWhitelist {
+		allow[strings.ToLower(k)] = struct{}{}
+	}
+	if extra := strings.TrimSpace(os.Getenv("YUNSHU_AI_SCRIPT_ENV")); extra != "" {
+		for _, k := range strings.Split(extra, ",") {
+			if k = strings.TrimSpace(k); k != "" {
+				allow[strings.ToLower(k)] = struct{}{}
+			}
+		}
+	}
+	var env []string
+	for _, kv := range os.Environ() {
+		k, _, _ := strings.Cut(kv, "=")
+		if _, ok := allow[strings.ToLower(k)]; ok {
+			env = append(env, kv)
+		}
+	}
+	return env
+}
+
+func (s *Service) pythonBin() string {	if v := strings.TrimSpace(os.Getenv("YUNSHU_AI_PYTHON")); v != "" {
 		return v
 	}
 	for _, c := range []string{"python2.7", "python2", "python3", "python"} {

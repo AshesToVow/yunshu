@@ -9,11 +9,12 @@ import (
 )
 
 type OperationLogListParams struct {
-	Method     string
-	Path       string
-	StatusCode *int
-	Page       int
-	PageSize   int
+	Method        string
+	Path          string
+	UsernameExact string // 精确匹配（普通管理员仅能查看自己的日志）
+	StatusCode    *int
+	Page          int
+	PageSize      int
 }
 
 type OperationLogRepository struct {
@@ -35,6 +36,9 @@ func (r *OperationLogRepository) List(ctx context.Context, p OperationLogListPar
 	}
 	if p.Path != "" {
 		q = q.Where("path LIKE ?", "%"+p.Path+"%")
+	}
+	if p.UsernameExact != "" {
+		q = q.Where("username = ?", p.UsernameExact)
 	}
 	if p.StatusCode != nil {
 		q = q.Where("status_code = ?", *p.StatusCode)

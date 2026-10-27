@@ -35,24 +35,6 @@ func monitorEvalLockKey(ruleID uint) string {
 	return fmt.Sprintf("alert:mon:lock:%d", ruleID)
 }
 
-func (s *AlertService) monitorEvalLockAcquire(ctx context.Context, ruleID uint, ttlSec int) bool {
-	if s.redis == nil {
-		return true
-	}
-	if ttlSec < 10 {
-		ttlSec = 10
-	}
-	ok, err := s.redis.SetNX(ctx, monitorEvalLockKey(ruleID), "1", time.Duration(ttlSec)*time.Second).Result()
-	return err == nil && ok
-}
-
-func (s *AlertService) monitorEvalLockRelease(ctx context.Context, ruleID uint) {
-	if s.redis == nil {
-		return
-	}
-	_ = s.redis.Del(ctx, monitorEvalLockKey(ruleID)).Err()
-}
-
 // redisLastEvalTime 读取上次评估时间（RFC3339Nano），无记录或解析失败时 has=false。
 func (s *AlertService) redisLastEvalTime(ctx context.Context, ruleID uint) (t time.Time, has bool) {
 	if s.redis == nil {

@@ -6,10 +6,24 @@ import {
   ReloadOutlined,
   SaveOutlined,
 } from "@ant-design/icons";
-import { Alert, Button, Card, Input, Popconfirm, Select, Space, Switch, Table, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Input,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Switch,
+  Table,
+  Typography,
+  message,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getDbApprovalFlow, saveDbApprovalFlow, type DbApprovalStage } from "../services/dbmgmt";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { listUserGroups, type UserGroupItem } from "../services/user-groups";
 
@@ -42,30 +56,47 @@ export function DbmgmtApprovalFlowPage() {
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState<StageRow[]>([]);
   const [groups, setGroups] = useState<UserGroupItem[]>([]);
+  const [dirty, setDirty] = useState(false);
+  const loadSeqRef = useRef(0);
+  const savingRef = useRef(false);
 
   useEffect(() => {
-    void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
-    });
-  }, []);
-
-  const loadGroups = useCallback(async (pid: number) => {
-    const res = await listUserGroups({ page: 1, page_size: 500, scope_project_id: pid });
-    setGroups(res.list ?? []);
+    void getProjects({ page: 1, page_size: 200 })
+      .then((res) => {
+        setProjects(res.list ?? []);
+        if (res.list?.length) setProjectId(res.list[0].id);
+      })
+      .catch((e) => message.error(extractApiErrorMessage(e, "加载项目列表失败")));
   }, []);
 
   const load = useCallback(async () => {
     if (!projectId) return;
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
-      await loadGroups(projectId);
-      const res = await getDbApprovalFlow(projectId);
-      setRows(toRows(res.stages ?? []));
+      // 用户组与审批流并行获取，整体做序号守卫，避免慢响应覆盖当前项目
+      const [groupsRes, flowRes] = await Promise.all([
+        listUserGroups({ page: 1, page_size: 500, scope_project_id: projectId }),
+        getDbApprovalFlow(projectId),
+      ]);
+      if (seq !== loadSeqRef.current) return; // 已有更新的请求，丢弃过期响应
+      setGroups(groupsRes.list ?? []);
+      setRows(toRows(flowRes.stages ?? []));
+      setDirty(false);
+    } catch (e) {
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载审批流失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
-  }, [projectId, loadGroups]);
+  }, [projectId]);
+
+  useEffect(() => {
+    // 切换项目先清空旧项目数据，避免误编辑
+    setRows([]);
+    setGroups([]);
+    setDirty(false);
+  }, [projectId]);
 
   useEffect(() => {
     void load();
@@ -76,11 +107,13 @@ export function DbmgmtApprovalFlowPage() {
     [groups],
   );
 
+  const editingDisabled = saving || loading;
+
   function renumber(list: StageRow[]) {
     return list.map((row, index) => ({ ...row, sort_order: index + 1 }));
   }
 
-  function moveRow(clientKey: string, delta: number) {
+  const moveRow = useCallback((clientKey: string, delta: number) => {
     setRows((prev) => {
       const idx = prev.findIndex((r) => r.clientKey === clientKey);
       const nextIdx = idx + delta;
@@ -90,7 +123,8 @@ export function DbmgmtApprovalFlowPage() {
       next.splice(nextIdx, 0, item);
       return renumber(next);
     });
-  }
+    setDirty(true);
+  }, []);
 
   function addRow() {
     const key = newStageKey();
@@ -108,6 +142,7 @@ export function DbmgmtApprovalFlowPage() {
         },
       ]),
     );
+    setDirty(true);
   }
 
   const columns = useMemo<ColumnsType<StageRow>>(
@@ -120,9 +155,11 @@ export function DbmgmtApprovalFlowPage() {
           <Input
             value={row.draftName}
             maxLength={64}
+            disabled={editingDisabled}
             onChange={(e) => {
               const value = e.target.value;
               setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftName: value } : r)));
+              setDirty(true);
             }}
           />
         ),
@@ -134,8 +171,10 @@ export function DbmgmtApprovalFlowPage() {
         render: (_, row) => (
           <Switch
             checked={row.draftEnabled}
+            disabled={editingDisabled}
             onChange={(checked) => {
               setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftEnabled: checked } : r)));
+              setDirty(true);
             }}
           />
         ),
@@ -149,11 +188,12 @@ export function DbmgmtApprovalFlowPage() {
             optionFilterProp="label"
             style={{ width: 260 }}
             placeholder={row.draftEnabled ? "请选择用户组" : "未启用"}
-            disabled={!row.draftEnabled}
+            disabled={!row.draftEnabled || editingDisabled}
             value={row.draftUserGroupId}
             options={groupOptions}
             onChange={(v) => {
               setRows((prev) => prev.map((r) => (r.clientKey === row.clientKey ? { ...r, draftUserGroupId: v } : r)));
+              setDirty(true);
             }}
           />
         ),
@@ -161,46 +201,47 @@ export function DbmgmtApprovalFlowPage() {
       {
         title: "操作",
         width: 150,
+        fixed: "right",
         render: (_, row, index) => (
           <Space size={4}>
             <Button
               type="text"
               size="small"
               icon={<ArrowUpOutlined />}
-              disabled={index === 0}
+              disabled={index === 0 || editingDisabled}
               onClick={() => moveRow(row.clientKey, -1)}
             />
             <Button
               type="text"
               size="small"
               icon={<ArrowDownOutlined />}
-              disabled={index === rows.length - 1}
+              disabled={index === rows.length - 1 || editingDisabled}
               onClick={() => moveRow(row.clientKey, 1)}
             />
             <Popconfirm
               title="删除该审批节点？"
               description="仅影响新建工单，在途工单步骤不变。"
+              disabled={editingDisabled}
               onConfirm={() => {
-                setRows((prev) => {
-                  if (prev.length <= 1) {
-                    message.warning("至少保留一个审批节点");
-                    return prev;
-                  }
-                  return renumber(prev.filter((r) => r.clientKey !== row.clientKey));
-                });
+                if (rows.length <= 1) {
+                  message.warning("至少保留一个审批节点");
+                  return;
+                }
+                setRows((prev) => renumber(prev.filter((r) => r.clientKey !== row.clientKey)));
+                setDirty(true);
               }}
             >
-              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={editingDisabled} />
             </Popconfirm>
           </Space>
         ),
       },
     ],
-    [groupOptions, rows.length],
+    [editingDisabled, groupOptions, moveRow, rows.length],
   );
 
   const save = async () => {
-    if (!projectId) return;
+    if (!projectId || savingRef.current) return;
     for (const row of rows) {
       if (!row.draftName.trim()) {
         message.warning("审批节点名称不能为空");
@@ -211,6 +252,7 @@ export function DbmgmtApprovalFlowPage() {
         return;
       }
     }
+    savingRef.current = true;
     setSaving(true);
     try {
       const saved = await saveDbApprovalFlow(
@@ -224,35 +266,60 @@ export function DbmgmtApprovalFlowPage() {
         })),
       );
       setRows(toRows(saved.stages ?? []));
+      setDirty(false);
       message.success("已保存");
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, "保存审批流失败"));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
+  const onProjectChange = (next: number) => {
+    if (next === projectId) return;
+    if (!dirty) {
+      setProjectId(next);
+      return;
+    }
+    Modal.confirm({
+      title: "有未保存的修改",
+      content: "切换项目将丢失当前未保存的审批流配置，确认切换？",
+      okText: "放弃修改并切换",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: () => setProjectId(next),
+    });
+  };
+
   return (
-    <Card
-      title="审批流配置"
-      extra={
-        <Space>
+    <Card className="table-card" title="审批流配置">
+      <div className="toolbar">
+        <Space wrap>
           <Select
             style={{ width: 200 }}
             value={projectId}
             options={projects.map((p) => ({ value: p.id, label: p.name }))}
-            onChange={setProjectId}
+            onChange={onProjectChange}
+            disabled={saving || loading}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void load()}>
+          <Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={saving || loading}>
             刷新
           </Button>
-          <Button icon={<PlusOutlined />} onClick={addRow}>
+          <Button icon={<PlusOutlined />} onClick={addRow} disabled={saving || loading}>
             新增节点
           </Button>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void save()}>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            loading={saving}
+            disabled={saving || loading}
+            onClick={() => void save()}
+          >
             保存
           </Button>
         </Space>
-      }
-    >
+      </div>
       <Alert
         type="info"
         showIcon
@@ -266,7 +333,14 @@ export function DbmgmtApprovalFlowPage() {
           </Typography.Paragraph>
         }
       />
-      <Table rowKey="clientKey" loading={loading} pagination={false} dataSource={rows} columns={columns} />
+      <Table
+        rowKey="clientKey"
+        loading={loading}
+        pagination={false}
+        dataSource={rows}
+        columns={columns}
+        scroll={{ x: 900 }}
+      />
     </Card>
   );
 }

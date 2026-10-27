@@ -66,10 +66,17 @@ export async function getESStorageStats() {
   return await getData(http.get<any, ApiResponse<ESStorageStats>>("/log-platform/es-storage"));
 }
 
-export async function deleteESIndex(index: string) {
+export interface DestructiveConfirmPayload {
+  /** 必须与目标名完全一致 */
+  confirm: string;
+  reason: string;
+}
+
+export async function deleteESIndex(index: string, payload: DestructiveConfirmPayload) {
   return await getData(
     http.delete<any, ApiResponse<{ message: string; index: string }>>(
       `/log-platform/es-indices/${encodeURIComponent(index)}`,
+      { data: payload },
     ),
   );
 }
@@ -126,16 +133,19 @@ export async function getKafkaConfigPreview() {
   return await getData(http.get<any, ApiResponse<KafkaConfigPreview>>("/log-platform/kafka-config"));
 }
 
-export async function deleteKafkaTopic(topic: string) {
+export async function deleteKafkaTopic(topic: string, payload: DestructiveConfirmPayload) {
   return await getData(
     http.delete<any, ApiResponse<{ message: string; topic: string }>>(
       `/log-platform/kafka-topics/${encodeURIComponent(topic)}`,
+      { data: payload },
     ),
   );
 }
 
-export async function runLogRetentionCleanup() {
-  return await getData(http.post<any, ApiResponse<LogRetentionCleanupResult>>("/log-platform/retention/cleanup"));
+export async function runLogRetentionCleanup(payload: DestructiveConfirmPayload) {
+  return await getData(
+    http.post<any, ApiResponse<LogRetentionCleanupResult>>("/log-platform/retention/cleanup", payload),
+  );
 }
 
 export async function upsertProjectLogRetention(

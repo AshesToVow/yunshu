@@ -19,8 +19,29 @@ func ParseRuleFilter(rule model.K8sEventForwardRule) RuleFilter {
 	_ = json.Unmarshal([]byte(rule.RuleNamespaces), &rf.Namespaces)
 	_ = json.Unmarshal([]byte(rule.RuleNames), &rf.Names)
 	_ = json.Unmarshal([]byte(rule.RuleReasons), &rf.Reasons)
+	// 前端多行输入常见首尾空白与空项；空项会让「正选」永远不命中。
+	rf.Namespaces = normalizeFilterValues(rf.Namespaces)
+	rf.Names = normalizeFilterValues(rf.Names)
+	rf.Reasons = normalizeFilterValues(rf.Reasons)
 	rf.Reverse = rule.RuleReverse
 	return rf
+}
+
+func normalizeFilterValues(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 func ParseClusterIDSet(clusterIDs string) map[string]struct{} {
@@ -44,9 +65,10 @@ func (f RuleFilter) Match(ev *model.K8sForwardedEvent) bool {
 
 func (f RuleFilter) matchPositive(ev *model.K8sForwardedEvent) bool {
 	if len(f.Namespaces) > 0 {
+		nsEvent := strings.TrimSpace(ev.Namespace)
 		ok := false
 		for _, ns := range f.Namespaces {
-			if strings.TrimSpace(ns) == ev.Namespace {
+			if ns == nsEvent {
 				ok = true
 				break
 			}

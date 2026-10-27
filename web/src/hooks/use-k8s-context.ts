@@ -75,12 +75,14 @@ export function useK8sContext(options?: UseK8sContextOptions) {
         const list = res.list ?? [];
         setClusters(list);
         const active = list.filter((c) => c.status === 1);
-        if (!clusterId && active[0]) {
+        // 用 store 当前值判断，避免深链/持久化的 clusterId 在首屏被默认集群覆盖
+        const current = useK8sContextStore.getState().clusterId;
+        if (!current && active[0]) {
           setStoreClusterId(active[0].id);
           syncUrlParams(active[0].id, namespace);
           return;
         }
-        if (clusterId && !active.some((c) => c.id === clusterId) && active[0]) {
+        if (current && !active.some((c) => c.id === current) && active[0]) {
           setStoreClusterId(active[0].id);
           syncUrlParams(active[0].id, namespace);
         }

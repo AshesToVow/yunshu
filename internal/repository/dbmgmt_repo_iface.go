@@ -12,9 +12,11 @@ type DbmgmtRepo interface {
 	CreateInstance(ctx context.Context, inst *model.DbInstance) error
 	UpdateInstance(ctx context.Context, inst *model.DbInstance) error
 	DeleteInstance(ctx context.Context, id uint) error
+	ListInstanceLinkedRefIDs(ctx context.Context, instanceID uint) (sqlTicketIDs, accessRequestIDs, appUserRequestIDs []uint, err error)
 	GetInstance(ctx context.Context, id uint) (*model.DbInstance, error)
 	GetInstanceInProject(ctx context.Context, projectID, id uint) (*model.DbInstance, error)
 	ListInstances(ctx context.Context, p DbInstanceListParams) ([]model.DbInstance, int64, error)
+	ListInstancesForVisibility(ctx context.Context, p DbInstanceListParams) ([]model.DbInstance, error)
 	ListAllInstances(ctx context.Context) ([]model.DbInstance, error)
 	CountReplicasByPrimary(ctx context.Context, projectID, primaryID uint) (int64, error)
 
@@ -22,6 +24,7 @@ type DbmgmtRepo interface {
 	UpdateGrant(ctx context.Context, g *model.DbAccessGrant) error
 	DeleteGrant(ctx context.Context, id uint) error
 	GetGrantInProject(ctx context.Context, projectID, id uint) (*model.DbAccessGrant, error)
+	GetGrantBySourceRequest(ctx context.Context, projectID, requestID uint) (*model.DbAccessGrant, error)
 	ListGrants(ctx context.Context, projectID, instanceID uint) ([]model.DbAccessGrant, error)
 	ListGrantsForPrincipal(ctx context.Context, projectID, instanceID uint, kind, ref string) ([]model.DbAccessGrant, error)
 
@@ -32,6 +35,9 @@ type DbmgmtRepo interface {
 	CreateAccessRequestStep(ctx context.Context, step *model.DbAccessRequestStep) error
 	ListAccessRequestSteps(ctx context.Context, requestID uint) ([]model.DbAccessRequestStep, error)
 	UpdateAccessRequestStep(ctx context.Context, step *model.DbAccessRequestStep) error
+	ClaimAccessRequestStep(ctx context.Context, stepID, requestID uint, fields map[string]any) (int64, error)
+	UpdateAccessRequestFieldsIfStatus(ctx context.Context, requestID uint, status string, fields map[string]any) (int64, error)
+	UpdateAccessRequestFields(ctx context.Context, requestID uint, fields map[string]any) error
 
 	CreateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error
 	UpdateSqlTicket(ctx context.Context, t *model.DbSqlTicket) error
@@ -40,6 +46,9 @@ type DbmgmtRepo interface {
 	CreateSqlTicketStep(ctx context.Context, step *model.DbSqlTicketStep) error
 	ListSqlTicketSteps(ctx context.Context, ticketID uint) ([]model.DbSqlTicketStep, error)
 	UpdateSqlTicketStep(ctx context.Context, step *model.DbSqlTicketStep) error
+	ClaimSqlTicketStep(ctx context.Context, stepID, ticketID uint, fields map[string]any) (int64, error)
+	UpdateSqlTicketFieldsIfStatus(ctx context.Context, ticketID uint, status string, fields map[string]any) (int64, error)
+	FailStaleExecutingSqlTickets(ctx context.Context, olderThan time.Time) (int64, error)
 
 	CreateSqlExecution(ctx context.Context, ex *model.DbSqlExecution) error
 	ListSqlExecutions(ctx context.Context, p DbSqlExecutionListParams) ([]model.DbSqlExecution, int64, error)
@@ -59,6 +68,9 @@ type DbmgmtRepo interface {
 	CreateAppUserRequestStep(ctx context.Context, step *model.DbAppUserRequestStep) error
 	ListAppUserRequestSteps(ctx context.Context, requestID uint) ([]model.DbAppUserRequestStep, error)
 	UpdateAppUserRequestStep(ctx context.Context, step *model.DbAppUserRequestStep) error
+	ClaimAppUserRequestStep(ctx context.Context, stepID, requestID uint, fields map[string]any) (int64, error)
+	UpdateAppUserRequestFieldsIfStatus(ctx context.Context, requestID uint, status string, fields map[string]any) (int64, error)
+	UpdateAppUserRequestFields(ctx context.Context, requestID uint, fields map[string]any) error
 
 	CreateInstanceAccount(ctx context.Context, acc *model.DbInstanceAccount) error
 	ListInstanceAccounts(ctx context.Context, projectID, instanceID uint) ([]model.DbInstanceAccount, error)

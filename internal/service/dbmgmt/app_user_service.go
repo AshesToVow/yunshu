@@ -3,8 +3,10 @@ package dbmgmt
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -129,7 +131,9 @@ func (s *Service) CreateAppUserRequest(ctx context.Context, projectID uint, body
 	}
 	if err := s.initAppUserRequestSteps(ctx, req); err != nil {
 		req.Status = model.DbAccessRequestStatusRejected
-		_ = s.repo.UpdateAppUserRequest(ctx, req)
+		if uerr := s.repo.UpdateAppUserRequest(ctx, req); uerr != nil {
+			slog.Default().With("component", "dbmgmt").Error("mark app user request rejected failed", "request_id", req.ID, "error", uerr)
+		}
 		return nil, err
 	}
 	iid := body.InstanceID
@@ -232,14 +236,22 @@ func (s *Service) ApproveAppUserRequest(ctx context.Context, projectID, id uint,
 	}
 	now := time.Now()
 	uid := actorUserID(actor)
+	claimed, err := s.repo.ClaimAppUserRequestStep(ctx, cur.ID, req.ID, map[string]any{
+		"status": model.DbApprovalStepApproved, "reviewer_user_id": uid,
+		"reviewer_name": actorUsername(actor), "review_comment": strings.TrimSpace(comment),
+		"reviewed_at": now, "updated_at": now,
+	})
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		return constants.ErrBadRequestWithMsg("该审批节点已被处理，请刷新后重试")
+	}
 	cur.Status = model.DbApprovalStepApproved
 	cur.ReviewerUserID = &uid
 	cur.ReviewerName = actorUsername(actor)
 	cur.ReviewComment = strings.TrimSpace(comment)
 	cur.ReviewedAt = &now
-	if err := s.repo.UpdateAppUserRequestStep(ctx, cur); err != nil {
-		return err
-	}
 	if err := s.advanceAppUserRequestAfterApproval(ctx, req, cur); err != nil {
 		return err
 	}
@@ -271,7 +283,10 @@ func (s *Service) RejectAppUserRequest(ctx context.Context, projectID, id uint, 
 		})
 		return nil
 	}
-	steps, _ := s.repo.ListAppUserRequestSteps(ctx, id)
+	steps, err := s.repo.ListAppUserRequestSteps(ctx, id)
+	if err != nil {
+		return err
+	}
 	var cur *model.DbAppUserRequestStep
 	for i := range steps {
 		if steps[i].Status == model.DbApprovalStepPending {
@@ -280,23 +295,37 @@ func (s *Service) RejectAppUserRequest(ctx context.Context, projectID, id uint, 
 		}
 	}
 	if cur != nil {
-		ok, _ := s.userCanApproveStep(ctx, actor, cur.UserGroupID)
+		ok, okErr := s.userCanApproveStep(ctx, actor, cur.UserGroupID)
+		if okErr != nil {
+			return okErr
+		}
 		if !ok {
 			return constants.ErrForbidden
 		}
 		now := time.Now()
 		uid := actorUserID(actor)
-		cur.Status = model.DbApprovalStepRejected
-		cur.ReviewerUserID = &uid
-		cur.ReviewerName = actorUsername(actor)
-		cur.ReviewComment = strings.TrimSpace(comment)
-		cur.ReviewedAt = &now
-		_ = s.repo.UpdateAppUserRequestStep(ctx, cur)
+		claimed, claimErr := s.repo.ClaimAppUserRequestStep(ctx, cur.ID, req.ID, map[string]any{
+			"status": model.DbApprovalStepRejected, "reviewer_user_id": uid,
+			"reviewer_name": actorUsername(actor), "review_comment": strings.TrimSpace(comment),
+			"reviewed_at": now, "updated_at": now,
+		})
+		if claimErr != nil {
+			return claimErr
+		}
+		if claimed == 0 {
+			return constants.ErrBadRequestWithMsg("该审批节点已被处理，请刷新后重试")
+		}
 	}
-	req.Status = model.DbAccessRequestStatusRejected
-	if err := s.repo.UpdateAppUserRequest(ctx, req); err != nil {
+	n, err := s.repo.UpdateAppUserRequestFieldsIfStatus(ctx, req.ID, model.DbAccessRequestStatusPending, map[string]any{
+		"status": model.DbAccessRequestStatusRejected, "updated_at": time.Now(),
+	})
+	if err != nil {
 		return err
 	}
+	if n == 0 {
+		return constants.ErrBadRequestWithMsg("申请状态已变更，请刷新后重试")
+	}
+	req.Status = model.DbAccessRequestStatusRejected
 	iid := req.InstanceID
 	_ = s.writeAudit(ctx, projectID, &iid, actor, "app_user_request_reject", map[string]any{
 		"request_id": req.ID, "apply_type": req.ApplyType, "mysql_user": req.MySQLUser,
@@ -331,11 +360,29 @@ func (s *Service) advanceAppUserRequestAfterApproval(ctx context.Context, req *m
 		next.ActivatedAt = &now
 		return s.repo.UpdateAppUserRequestStep(ctx, next)
 	}
-	req.Status = model.DbAccessRequestStatusApproved
-	if err := s.repo.UpdateAppUserRequest(ctx, req); err != nil {
+	n, err := s.repo.UpdateAppUserRequestFieldsIfStatus(ctx, req.ID, model.DbAccessRequestStatusPending, map[string]any{
+		"status": model.DbAccessRequestStatusApproved, "updated_at": time.Now(),
+	})
+	if err != nil {
 		return err
 	}
+	if n == 0 {
+		return constants.ErrBadRequestWithMsg("申请状态已变更，请刷新后重试")
+	}
+	req.Status = model.DbAccessRequestStatusApproved
 	return s.executeAppUserRequest(ctx, req)
+}
+
+type appUserSQLStmt struct {
+	SQL         string
+	Host        string
+	CreatesUser bool
+}
+
+// appUserExistence 记录执行前账号是否存在；Known=false 表示查询 mysql.user 失败，无法确认。
+type appUserExistence struct {
+	Known  bool
+	Exists bool
 }
 
 func (s *Service) executeAppUserRequest(ctx context.Context, req *model.DbAppUserRequest) error {
@@ -343,11 +390,15 @@ func (s *Service) executeAppUserRequest(ctx context.Context, req *model.DbAppUse
 	if err != nil {
 		return err
 	}
-	sqlStmts, password, err := buildAppUserSQL(req)
+	stmts, password, err := buildAppUserSQL(req)
 	if err != nil {
 		req.ExecuteError = err.Error()
 		req.Status = model.DbAccessRequestStatusRejected
-		_ = s.repo.UpdateAppUserRequest(ctx, req)
+		if uerr := s.repo.UpdateAppUserRequestFields(ctx, req.ID, map[string]any{
+			"status": req.Status, "execute_error": req.ExecuteError, "updated_at": time.Now(),
+		}); uerr != nil {
+			slog.Default().With("component", "dbmgmt").Warn("persist app user request failure failed", "request_id", req.ID, "error", uerr)
+		}
 		return err
 	}
 	release := s.acquireInstance(inst.ID)
@@ -357,45 +408,194 @@ func (s *Service) executeAppUserRequest(ctx context.Context, req *model.DbAppUse
 		return err
 	}
 	defer sess.Close()
-	for i, sqlText := range sqlStmts {
-		if _, err := sess.DB.ExecContext(ctx, sqlText); err != nil {
-			req.ExecuteError = err.Error()
-			req.Status = model.DbAccessRequestStatusRejected
-			_ = s.repo.UpdateAppUserRequest(ctx, req)
-			return constants.ErrBadRequestWithMsg(formatMySQLGrantExecError(err, inst, req, i+1, sqlText))
-		}
-	}
-	if password != "" {
-		enc, encErr := cryptox.EncryptString(s.aead, password)
-		if encErr == nil {
-			hosts := splitGrantHosts(req.GrantHosts, req.MySQLHost)
-			rid := req.ID
-			for _, h := range hosts {
-				if req.ApplyType != model.DbAppUserApplyNewUser &&
-					req.ApplyType != model.DbAppUserApplyAddIP &&
-					!needsCreateUserForHost(req, h) {
-					continue
-				}
-				_ = s.repo.CreateInstanceAccount(ctx, &model.DbInstanceAccount{
-					ProjectID: req.ProjectID, InstanceID: req.InstanceID, AppUserRequestID: &rid,
-					Username: req.MySQLUser, Host: h, EncPassword: enc,
-					GrantsSummary: strings.Join(sqlStmts, "\n"), Remark: fmt.Sprintf("来自应用用户申请 #%d", req.ID),
-				})
+
+	// 预检账号存在性：只有确认执行前不存在、且回滚时 DROP 成功的账号才能认为已清理；
+	// 预检不可用时无法判断 CREATE USER IF NOT EXISTS 是否真的新建了账号。
+	existence := precheckAppUserExistence(ctx, sess.DB, req.MySQLUser, stmts)
+	if req.ApplyType == model.DbAppUserApplyNewUser {
+		for _, st := range stmts {
+			if ex, ok := existence[st.Host]; ok && st.CreatesUser && ex.Known && ex.Exists {
+				return s.failAppUserRequest(ctx, req, fmt.Sprintf(
+					"用户 '%s'@'%s' 已存在，请改用「新增权限」或「新增授权IP」重新申请", req.MySQLUser, st.Host))
 			}
 		}
 	}
-	req.Status = model.DbAccessRequestStatusApproved
-	req.ExecuteError = ""
-	return s.repo.UpdateAppUserRequest(ctx, req)
+
+	executed := make([]appUserSQLStmt, 0, len(stmts))
+	for i, st := range stmts {
+		if _, execErr := sess.DB.ExecContext(ctx, st.SQL); execErr != nil {
+			return s.handleAppUserExecFailure(ctx, sess.DB, req, executed, st, i+1, password, existence, inst, execErr)
+		}
+		executed = append(executed, st)
+	}
+	return s.finishAppUserRequest(ctx, req, password, executed, existence)
 }
 
-func buildAppUserSQL(req *model.DbAppUserRequest) (stmts []string, password string, err error) {
+func precheckAppUserExistence(ctx context.Context, db *sql.DB, user string, stmts []appUserSQLStmt) map[string]appUserExistence {
+	out := make(map[string]appUserExistence)
+	for _, st := range stmts {
+		if !st.CreatesUser {
+			continue
+		}
+		if _, done := out[st.Host]; done {
+			continue
+		}
+		var n int
+		err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mysql.user WHERE user = ? AND host = ?", user, st.Host).Scan(&n)
+		if err != nil {
+			out[st.Host] = appUserExistence{}
+			continue
+		}
+		out[st.Host] = appUserExistence{Known: true, Exists: n > 0}
+	}
+	return out
+}
+
+func (s *Service) failAppUserRequest(ctx context.Context, req *model.DbAppUserRequest, msg string) error {
+	req.Status = model.DbAccessRequestStatusRejected
+	req.ExecuteError = msg
+	if err := s.repo.UpdateAppUserRequestFields(ctx, req.ID, map[string]any{
+		"status": req.Status, "execute_error": msg, "updated_at": time.Now(),
+	}); err != nil {
+		slog.Default().With("component", "dbmgmt").Error("persist app user request failure failed", "request_id", req.ID, "error", err)
+	}
+	return constants.ErrBadRequestWithMsg(msg)
+}
+
+func (s *Service) handleAppUserExecFailure(ctx context.Context, db *sql.DB, req *model.DbAppUserRequest,
+	executed []appUserSQLStmt, failed appUserSQLStmt, stmtIndex int, password string,
+	existence map[string]appUserExistence, inst *model.DbInstance, execErr error) error {
+	msg := formatMySQLGrantExecError(execErr, inst, req, stmtIndex, failed.SQL)
+
+	// DDL 无法事务回滚：逐 host 撤销失败前已成功的 CREATE USER，仅限确认原本不存在的账号。
+	var keptHosts []string
+	for _, st := range executed {
+		if !st.CreatesUser {
+			continue
+		}
+		ex := existence[st.Host]
+		switch {
+		case ex.Known && ex.Exists:
+			// 账号原本就存在，CREATE USER IF NOT EXISTS 未改密码，无需处理。
+		case ex.Known && !ex.Exists:
+			drop := fmt.Sprintf("DROP USER IF EXISTS '%s'@'%s'",
+				escapeMySQLString(req.MySQLUser), escapeMySQLString(st.Host))
+			if _, dropErr := db.ExecContext(ctx, drop); dropErr != nil {
+				keptHosts = append(keptHosts, st.Host)
+				msg += fmt.Sprintf("；回滚账号 '%s'@'%s' 失败：%v", req.MySQLUser, st.Host, dropErr)
+			}
+		default:
+			// 预检不可用：账号可能已被创建，保留凭据供人工核实。
+			keptHosts = append(keptHosts, st.Host)
+		}
+	}
+	if failed.CreatesUser && isExecutionResultUnknown(execErr) {
+		ex := existence[failed.Host]
+		if !ex.Known || !ex.Exists {
+			keptHosts = append(keptHosts, failed.Host)
+			msg += fmt.Sprintf("；账号 '%s'@'%s' 的创建结果未知，可能已生效", req.MySQLUser, failed.Host)
+		}
+	}
+	if len(keptHosts) > 0 && password != "" {
+		remark := fmt.Sprintf("申请 #%d 执行部分失败，账号可能已创建，请核实", req.ID)
+		if saveErr := s.saveAppUserAccounts(ctx, req, password, keptHosts, executed, remark); saveErr != nil {
+			msg += "；保存已创建账号凭据失败：" + saveErr.Error()
+		} else {
+			msg += "；已保留账号凭据，请到实例账号列表核实"
+		}
+	}
+	var applied []string
+	for _, st := range executed {
+		if !st.CreatesUser {
+			applied = append(applied, st.SQL)
+		}
+	}
+	if len(applied) > 0 {
+		msg += "；已执行的授权语句：" + truncateSQL(strings.Join(applied, "; "), 1500)
+	}
+	return s.failAppUserRequest(ctx, req, msg)
+}
+
+func (s *Service) finishAppUserRequest(ctx context.Context, req *model.DbAppUserRequest, password string,
+	executed []appUserSQLStmt, existence map[string]appUserExistence) error {
+	var createdHosts []string
+	for _, st := range executed {
+		if !st.CreatesUser {
+			continue
+		}
+		if ex := existence[st.Host]; ex.Known && ex.Exists {
+			continue
+		}
+		createdHosts = append(createdHosts, st.Host)
+	}
+	var warning string
+	if password != "" && len(createdHosts) > 0 {
+		if err := s.saveAppUserAccounts(ctx, req, password, createdHosts, executed,
+			fmt.Sprintf("来自应用用户申请 #%d", req.ID)); err != nil {
+			// 授权已生效，不能把申请判失败；把凭据问题暴露给审批人，由管理员重置密码。
+			slog.Default().With("component", "dbmgmt").Error("save app user account credentials failed",
+				"request_id", req.ID, "error", err)
+			warning = "授权已生效，但账号凭据保存失败，请管理员重置密码：" + err.Error()
+		}
+	}
+	if err := s.repo.UpdateAppUserRequestFields(ctx, req.ID, map[string]any{
+		"status": model.DbAccessRequestStatusApproved, "execute_error": warning, "updated_at": time.Now(),
+	}); err != nil {
+		return err
+	}
+	req.Status = model.DbAccessRequestStatusApproved
+	req.ExecuteError = warning
+	return nil
+}
+
+func (s *Service) saveAppUserAccounts(ctx context.Context, req *model.DbAppUserRequest, password string,
+	hosts []string, executed []appUserSQLStmt, remark string) error {
+	enc, err := cryptox.EncryptString(s.aead, password)
+	if err != nil {
+		return fmt.Errorf("密码加密失败: %w", err)
+	}
+	lines := make([]string, 0, len(executed))
+	for _, st := range executed {
+		lines = append(lines, st.SQL)
+	}
+	grantsSummary := strings.Join(lines, "\n")
+	rid := req.ID
+	seen := make(map[string]struct{}, len(hosts))
+	for _, h := range hosts {
+		if _, ok := seen[h]; ok {
+			continue
+		}
+		seen[h] = struct{}{}
+		if err := s.repo.CreateInstanceAccount(ctx, &model.DbInstanceAccount{
+			ProjectID: req.ProjectID, InstanceID: req.InstanceID, AppUserRequestID: &rid,
+			Username: req.MySQLUser, Host: h, EncPassword: enc,
+			GrantsSummary: grantsSummary, Remark: remark,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func buildAppUserSQL(req *model.DbAppUserRequest) (stmts []appUserSQLStmt, password string, err error) {
 	privs := parsePrivilegesJSON(req.PrivilegesJSON)
 	if len(privs) == 0 && req.ApplyType != model.DbAppUserApplyRevoke {
 		return nil, "", fmt.Errorf("权限列表为空")
 	}
 	hosts := splitGrantHosts(req.GrantHosts, req.MySQLHost)
-	var parts []string
+	var parts []appUserSQLStmt
+	appendGrants := func(h string) {
+		for _, s := range buildGrantStmtsForHost(req, h, privs) {
+			parts = append(parts, appUserSQLStmt{SQL: s, Host: h})
+		}
+	}
+	appendCreate := func(h string) {
+		parts = append(parts, appUserSQLStmt{
+			SQL: fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
+				escapeMySQLString(req.MySQLUser), escapeMySQLString(h), escapeMySQLString(password)),
+			Host: h, CreatesUser: true,
+		})
+	}
 	switch req.ApplyType {
 	case model.DbAppUserApplyNewUser:
 		password, err = randomMySQLPassword(16)
@@ -403,9 +603,8 @@ func buildAppUserSQL(req *model.DbAppUserRequest) (stmts []string, password stri
 			return nil, "", err
 		}
 		for _, h := range hosts {
-			parts = append(parts, fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
-				escapeMySQLString(req.MySQLUser), escapeMySQLString(h), escapeMySQLString(password)))
-			parts = append(parts, buildGrantStmtsForHost(req, h, privs)...)
+			appendCreate(h)
+			appendGrants(h)
 		}
 	case model.DbAppUserApplyAddPriv, model.DbAppUserApplyAddIP:
 		for _, h := range hosts {
@@ -416,14 +615,15 @@ func buildAppUserSQL(req *model.DbAppUserRequest) (stmts []string, password stri
 						return nil, "", err
 					}
 				}
-				parts = append(parts, fmt.Sprintf("CREATE USER IF NOT EXISTS '%s'@'%s' IDENTIFIED BY '%s'",
-					escapeMySQLString(req.MySQLUser), escapeMySQLString(h), escapeMySQLString(password)))
+				appendCreate(h)
 			}
-			parts = append(parts, buildGrantStmtsForHost(req, h, privs)...)
+			appendGrants(h)
 		}
 	case model.DbAppUserApplyRevoke:
 		for _, h := range hosts {
-			parts = append(parts, buildRevokeStmtsForHost(req, h, privs)...)
+			for _, s := range buildRevokeStmtsForHost(req, h, privs) {
+				parts = append(parts, appUserSQLStmt{SQL: s, Host: h})
+			}
 		}
 	default:
 		return nil, "", fmt.Errorf("unsupported apply type")
@@ -533,13 +733,16 @@ func randomMySQLPassword(n int) (string, error) {
 }
 
 func (s *Service) RevealInstanceAccountPassword(ctx context.Context, projectID, accountID uint, actor *auth.CurrentUser) (string, error) {
+	if actor == nil {
+		return "", constants.ErrForbidden
+	}
 	acc, err := s.repo.GetInstanceAccount(ctx, projectID, accountID)
 	if err != nil {
 		return "", err
 	}
-	if !auth.IsSuperAdminRole(actor.RoleCodes) {
+	if !isSuperAdmin(actor) {
 		perm, err := s.GetEffectivePermission(ctx, projectID, acc.InstanceID, actor)
-		if err != nil || !perm.CanManage {
+		if err != nil || perm == nil || !perm.CanManage {
 			return "", constants.ErrForbidden
 		}
 	}

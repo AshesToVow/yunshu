@@ -33,6 +33,7 @@ type CicdDictTypes struct {
 	HarborProjectGroup     string
 	HarborUsername         string
 	HarborPassword         string
+	HarborTLSVerify        string
 	MinIOEndpoint          string
 	MinIOBucketFrontend    string
 	MinIOBucketBackend     string
@@ -75,6 +76,7 @@ func DefaultCicdDictTypes() CicdDictTypes {
 		HarborProjectGroup:     "cicd_harbor_project_group",
 		HarborUsername:         "cicd_harbor_username",
 		HarborPassword:         "cicd_harbor_password",
+		HarborTLSVerify:        "cicd_harbor_tls_verify",
 		MinIOEndpoint:          "cicd_minio_endpoint",
 		MinIOBucketFrontend:    "cicd_minio_bucket_frontend",
 		MinIOBucketBackend:     "cicd_minio_bucket_backend",
@@ -163,6 +165,11 @@ func ResolveCicdConfig(ctx context.Context, db *gorm.DB, yamlBase config.CicdCon
 	}
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.HarborPassword); ok {
 		cfg.Harbor.Password = v
+	}
+	if v, ok := fetchEnabledDictValue(ctx, db, types.HarborTLSVerify); ok {
+		if bv, ok2 := parseBoolLoose(v); ok2 {
+			cfg.Harbor.TLSVerify = bv
+		}
 	}
 	if v, ok := fetchEnabledDictValueNonEmpty(ctx, db, types.MinIOEndpoint); ok {
 		cfg.MinIO.Endpoint = v

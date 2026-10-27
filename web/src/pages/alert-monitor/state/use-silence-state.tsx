@@ -15,7 +15,9 @@ import { Badge, Button, Form, Popconfirm, Space, Tag, Typography, message } from
 import type { ColumnsType } from "antd/es/table";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+
+import { extractApiErrorMessage } from "../../../services/http";
 
 import {
   createAlertSilence,
@@ -101,13 +103,22 @@ export function useAlertMonitorSilenceState(params: {
   }, [dsList]);
   const silenceDatasourceId = silenceDatasource?.id;
 
+  const loadSilencesSeqRef = useRef(0);
+
   const loadSilences = useCallback(async () => {
-    const r = await listAlertSilences({
-      page: 1,
-      page_size: 200,
-      project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
-    });
-    setSilenceList(r.list ?? []);
+    const seq = ++loadSilencesSeqRef.current;
+    try {
+      const r = await listAlertSilences({
+        page: 1,
+        page_size: 200,
+        project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
+      });
+      if (seq !== loadSilencesSeqRef.current) return;
+      setSilenceList(r.list ?? []);
+    } catch (e: unknown) {
+      if (seq !== loadSilencesSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载平台静默失败"));
+    }
   }, [projectContextId]);
 
   const silenceDisplayList = useMemo((): SilenceDisplayRow[] => {
@@ -351,10 +362,25 @@ export function useAlertMonitorSilenceState(params: {
     setSilModalOpen(true);
   }
 
+  const silSubmittingRef = useRef(false);
+
   async function submitSil() {
+    if (silSubmittingRef.current) return;
+    let v: Record<string, unknown>;
+    try {
+      v = (await silForm.validateFields()) as Record<string, unknown>;
+    } catch {
+      return;
+    }
+    const startsAt = v.starts_at as Dayjs;
+    const endsAt = v.ends_at as Dayjs;
+    if (!endsAt.isAfter(startsAt)) {
+      message.error("结束时间必须晚于开始时间");
+      return;
+    }
+    silSubmittingRef.current = true;
     setSilSubmitting(true);
     try {
-      const v = await silForm.validateFields();
       const rawMatchers = (v.matchers ?? []) as SilenceMatcherForm[];
       const matchers = rawMatchers
         .map((m) => ({
@@ -372,8 +398,8 @@ export function useAlertMonitorSilenceState(params: {
         matchers_json: JSON.stringify(matchers),
         comment: v.comment,
         enabled: v.enabled,
-        starts_at: (v.starts_at as Dayjs).toISOString(),
-        ends_at: (v.ends_at as Dayjs).toISOString(),
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
         project_id: projectContextId && projectContextId > 0 ? projectContextId : undefined,
       };
       if (silCurrent) {
@@ -385,15 +411,22 @@ export function useAlertMonitorSilenceState(params: {
       }
       setSilModalOpen(false);
       await loadSilences();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "保存静默失败"));
     } finally {
+      silSubmittingRef.current = false;
       setSilSubmitting(false);
     }
   }
 
   async function removeSil(id: number) {
-    await deleteAlertSilence(id);
-    message.success("已删除");
-    await loadSilences();
+    try {
+      await deleteAlertSilence(id);
+      message.success("已删除");
+      await loadSilences();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除静默失败"));
+    }
   }
 
   async function releaseSilenceNow(row: AlertSilenceItem) {

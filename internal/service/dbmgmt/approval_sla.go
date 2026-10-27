@@ -22,7 +22,10 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 	interval := time.Duration(intervalHours) * time.Hour
 	now := time.Now()
 
-	accessSteps, _ := s.repo.ListPendingAccessStepsForReminder(ctx, sla)
+	accessSteps, err := s.repo.ListPendingAccessStepsForReminder(ctx, sla)
+	if err != nil {
+		slog.Default().With("component", "dbmgmt").Warn("list access approval steps failed", "error", err)
+	}
 	for _, step := range accessSteps {
 		if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, step.AccessRequestID) {
 			continue
@@ -36,10 +39,15 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 		}
 		ts := now
 		step.LastRemindedAt = &ts
-		_ = s.repo.UpdateAccessRequestStep(ctx, &step)
+		if err := s.repo.UpdateAccessRequestStep(ctx, &step); err != nil {
+			slog.Default().With("component", "dbmgmt").Warn("update access step reminder time failed", "step_id", step.ID, "error", err)
+		}
 	}
 
-	ticketSteps, _ := s.repo.ListPendingTicketStepsForReminder(ctx, sla)
+	ticketSteps, err := s.repo.ListPendingTicketStepsForReminder(ctx, sla)
+	if err != nil {
+		slog.Default().With("component", "dbmgmt").Warn("list ticket approval steps failed", "error", err)
+	}
 	for _, step := range ticketSteps {
 		if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbSqlTicket, step.TicketID) {
 			continue
@@ -53,7 +61,9 @@ func (s *Service) syncApprovalReminders(ctx context.Context) {
 		}
 		ts := now
 		step.LastRemindedAt = &ts
-		_ = s.repo.UpdateSqlTicketStep(ctx, &step)
+		if err := s.repo.UpdateSqlTicketStep(ctx, &step); err != nil {
+			slog.Default().With("component", "dbmgmt").Warn("update ticket step reminder time failed", "step_id", step.ID, "error", err)
+		}
 	}
 	s.syncWorkflowApprovalReminders(ctx, sla, interval, now)
 }
@@ -100,7 +110,9 @@ func (s *Service) syncWorkflowApprovalReminders(ctx context.Context, sla, interv
 			slog.Default().With("component", "dbmgmt").Warn("workflow SLA reminder failed", "step_id", it.StepID, "error", err)
 			continue
 		}
-		_ = s.repo.UpdateWorkflowStepLastRemindedAt(ctx, it.StepID, now)
+		if err := s.repo.UpdateWorkflowStepLastRemindedAt(ctx, it.StepID, now); err != nil {
+			slog.Default().With("component", "dbmgmt").Warn("update workflow step reminder time failed", "step_id", it.StepID, "error", err)
+		}
 	}
 }
 
@@ -147,7 +159,7 @@ func (s *Service) platformRoleApproverUserIDs(ctx context.Context) []uint {
 }
 
 func (s *Service) sendAccessReminderEmail(ctx context.Context, step model.DbAccessRequestStep) error {
-	if step.UserGroupID == nil {
+	if step.UserGroupID == nil || s.userGroupRepo == nil {
 		return nil
 	}
 	ids, err := s.userGroupRepo.ListMemberUserIDs(ctx, *step.UserGroupID)
@@ -160,7 +172,7 @@ func (s *Service) sendAccessReminderEmail(ctx context.Context, step model.DbAcce
 }
 
 func (s *Service) sendTicketReminderEmail(ctx context.Context, step model.DbSqlTicketStep) error {
-	if step.UserGroupID == nil {
+	if step.UserGroupID == nil || s.userGroupRepo == nil {
 		return nil
 	}
 	ids, err := s.userGroupRepo.ListMemberUserIDs(ctx, *step.UserGroupID)
@@ -173,6 +185,9 @@ func (s *Service) sendTicketReminderEmail(ctx context.Context, step model.DbSqlT
 }
 
 func (s *Service) sendMailToUsers(ctx context.Context, userIDs []uint, subject, body string) error {
+	if s.userRepo == nil || s.mailer == nil {
+		return nil
+	}
 	for _, id := range userIDs {
 		u, err := s.userRepo.GetByID(ctx, id)
 		if err != nil || u == nil || u.Email == nil || *u.Email == "" {

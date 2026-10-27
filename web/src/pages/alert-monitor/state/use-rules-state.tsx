@@ -92,6 +92,7 @@ export function useAlertMonitorRulesState(params: {
     filter: "all" as "all" | "enabled" | "disabled",
   });
   ruleQueryRef.current = { page: rulePage, pageSize: rulePageSize, filter: ruleEnabledFilter };
+  const loadRulesSeqRef = useRef(0);
   const [blockList, setBlockList] = useState<AlertDutyBlockItem[]>([]);
   const [dutyRuleId, setDutyRuleId] = useState<number | null>(null);
   const [dutyModalOpen, setDutyModalOpen] = useState(false);
@@ -418,6 +419,7 @@ export function useAlertMonitorRulesState(params: {
       const base = {
         project_id: projectID && projectID > 0 ? projectID : undefined,
       };
+      const seq = ++loadRulesSeqRef.current;
       setRulesLoading(true);
       try {
         const [r, allR, enR, disR] = await Promise.all([
@@ -426,6 +428,7 @@ export function useAlertMonitorRulesState(params: {
           listAlertMonitorRules({ ...base, page: 1, page_size: 1, enabled: true }),
           listAlertMonitorRules({ ...base, page: 1, page_size: 1, enabled: false }),
         ]);
+        if (seq !== loadRulesSeqRef.current) return;
         setRuleList(r.list ?? r.items ?? []);
         setRuleTotal(Number(r.total) || 0);
         setRulePage(page);
@@ -435,8 +438,11 @@ export function useAlertMonitorRulesState(params: {
           enabled: Number(enR.total) || 0,
           disabled: Number(disR.total) || 0,
         });
+      } catch (e: unknown) {
+        if (seq !== loadRulesSeqRef.current) return;
+        message.error(extractApiErrorMessage(e, "加载告警规则失败"));
       } finally {
-        setRulesLoading(false);
+        if (seq === loadRulesSeqRef.current) setRulesLoading(false);
       }
     },
     [],

@@ -10,6 +10,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -148,23 +149,15 @@ func (s *K8sRuntimeService) StreamResourceWatch(ctx context.Context, cfg *rest.C
 		return bizerrors.Internalf(ctx, "k8s.watch", "dynamic_client", err, "dynamic client: %v")
 	}
 
-	ri := dyn.Resource(def.GVR)
-	opts := metav1.ListOptions{
-		LabelSelector:   strings.TrimSpace(q.LabelSelector),
-		FieldSelector:   strings.TrimSpace(q.FieldSelector),
-		ResourceVersion: strings.TrimSpace(q.ResourceVersion),
-	}
-
-	var watcher watch.Interface
+	nri := dyn.Resource(def.GVR)
+	var ri dynamic.ResourceInterface = nri
 	if def.Namespaced {
-		watcher, err = ri.Namespace(ns).Watch(wctx, opts)
-	} else {
-		watcher, err = ri.Watch(wctx, opts)
+		ri = nri.Namespace(ns)
 	}
-	if err != nil {
-		return bizerrors.Internalf(ctx, "k8s.watch", "watch", err, "watch: %v")
+	selectors := metav1.ListOptions{
+		LabelSelector: strings.TrimSpace(q.LabelSelector),
+		FieldSelector: strings.TrimSpace(q.FieldSelector),
 	}
-	defer watcher.Stop()
 
 	hb := q.HeartbeatSeconds
 	if hb <= 0 {
@@ -188,50 +181,202 @@ func (s *K8sRuntimeService) StreamResourceWatch(ctx context.Context, cfg *rest.C
 		return nil
 	}
 
+	// 断线续传：LIST 取最新 resourceVersion → 发送 resync（前端据此重新拉取列表）→ 从该版本 Watch。
+	// Watch 关闭 / 410 过期 / 短暂网络抖动时自动重建，直到超时或客户端断开。
+	const maxConsecutiveFailures = 5
+	rv := strings.TrimSpace(q.ResourceVersion)
+	failures := 0
 	for {
-		select {
-		case <-wctx.Done():
+		if wctx.Err() != nil {
 			return nil
-		case <-tick.C:
-			if _, err := io.WriteString(out, ":heartbeat\n\n"); err != nil {
-				return nil
-			}
-			if flush != nil {
-				flush()
-			}
-		case ev, ok := <-watcher.ResultChan():
-			if !ok {
+		}
+		if rv == "" {
+			listOpts := selectors
+			listOpts.Limit = 1
+			list, lerr := ri.List(wctx, listOpts)
+			if lerr != nil {
+				if wctx.Err() != nil {
+					return nil
+				}
+				if !watchFailureFatal(lerr) {
+					failures++
+				}
 				_ = writeFrame("error", map[string]any{
 					"cluster_id": q.ClusterID,
-					"reason":     "watch_closed",
-					"terminal":   true,
+					"reason":     "watch_list_failed",
+					"message":    lerr.Error(),
+					"terminal":   watchFailureFatal(lerr) || failures >= maxConsecutiveFailures,
 				})
-				return nil
-			}
-			if ev.Type == watch.Error {
-				st := statusFromObject(ev.Object)
-				_ = writeFrame("error", map[string]any{
-					"cluster_id": q.ClusterID,
-					"reason":     "watch_error",
-					"status":     st,
-					"terminal":   true,
-				})
-				return nil
-			}
-			u, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(ev.Object)
-			if convErr != nil {
-				_ = writeFrame("error", map[string]any{"cluster_id": q.ClusterID, "reason": convErr.Error()})
+				if watchFailureFatal(lerr) || failures >= maxConsecutiveFailures {
+					return nil
+				}
+				if !sleepCtx(wctx, watchBackoff(failures)) {
+					return nil
+				}
 				continue
 			}
-			_ = writeFrame("watch", map[string]any{
-				"cluster_id":    q.ClusterID,
-				"resource":      WatchResourceLabel(def, &q),
-				"group_version": def.GVR.Group + "/" + def.GVR.Version,
-				"gvr":           def.GVR.Group + "/" + def.GVR.Version + "/" + def.GVR.Resource,
-				"type":          string(ev.Type),
-				"object":        u,
-			})
+			rv = strings.TrimSpace(list.GetResourceVersion())
+			failures = 0
+			if err := writeFrame("resync", map[string]any{
+				"cluster_id":       q.ClusterID,
+				"resource":         WatchResourceLabel(def, &q),
+				"resource_version": rv,
+			}); err != nil {
+				return nil
+			}
 		}
+
+		watchOpts := selectors
+		watchOpts.ResourceVersion = rv
+		watchOpts.AllowWatchBookmarks = true
+		watcher, werr := ri.Watch(wctx, watchOpts)
+		if werr != nil {
+			if wctx.Err() != nil {
+				return nil
+			}
+			if !watchFailureFatal(werr) {
+				failures++
+			}
+			_ = writeFrame("error", map[string]any{
+				"cluster_id": q.ClusterID,
+				"reason":     "watch_failed",
+				"message":    werr.Error(),
+				"terminal":   watchFailureFatal(werr) || failures >= maxConsecutiveFailures,
+			})
+			if watchFailureFatal(werr) || failures >= maxConsecutiveFailures {
+				return nil
+			}
+			rv = ""
+			if !sleepCtx(wctx, watchBackoff(failures)) {
+				return nil
+			}
+			continue
+		}
+		failures = 0
+
+		closedNormally := false
+	pump:
+		for {
+			select {
+			case <-wctx.Done():
+				watcher.Stop()
+				return nil
+			case <-tick.C:
+				if _, err := io.WriteString(out, ":heartbeat\n\n"); err != nil {
+					watcher.Stop()
+					return nil
+				}
+				if flush != nil {
+					flush()
+				}
+			case ev, ok := <-watcher.ResultChan():
+				if !ok {
+					closedNormally = true
+					break pump
+				}
+				if ev.Type == watch.Error {
+					st := statusFromObject(ev.Object)
+					if watchStatusFatal(ev.Object) {
+						_ = writeFrame("error", map[string]any{
+							"cluster_id": q.ClusterID,
+							"reason":     "watch_error",
+							"status":     st,
+							"terminal":   true,
+						})
+						watcher.Stop()
+						return nil
+					}
+					break pump
+				}
+				u, convErr := runtime.DefaultUnstructuredConverter.ToUnstructured(ev.Object)
+				if convErr != nil {
+					_ = writeFrame("error", map[string]any{"cluster_id": q.ClusterID, "reason": convErr.Error()})
+					continue
+				}
+				if next := objectResourceVersion(ev.Object); next != "" {
+					rv = next
+				}
+				if err := writeFrame("watch", map[string]any{
+					"cluster_id":    q.ClusterID,
+					"resource":      WatchResourceLabel(def, &q),
+					"group_version": def.GVR.Group + "/" + def.GVR.Version,
+					"gvr":           def.GVR.Group + "/" + def.GVR.Version + "/" + def.GVR.Resource,
+					"type":          string(ev.Type),
+					"object":        u,
+				}); err != nil {
+					watcher.Stop()
+					return nil
+				}
+			}
+		}
+		watcher.Stop()
+		if wctx.Err() != nil {
+			return nil
+		}
+		if closedNormally {
+			// apiserver 正常关闭长连接（常见于超时），立即从上次 RV 续传即可。
+			_ = writeFrame("error", map[string]any{
+				"cluster_id": q.ClusterID,
+				"reason":     "watch_closed",
+				"terminal":   false,
+			})
+			rv = ""
+			if !sleepCtx(wctx, time.Second) {
+				return nil
+			}
+			continue
+		}
+		// Watch 返回错误（如 410 resourceVersion 过期）：重新 LIST 取新版本后续传。
+		_ = writeFrame("error", map[string]any{
+			"cluster_id": q.ClusterID,
+			"reason":     "watch_expired",
+			"terminal":   false,
+		})
+		rv = ""
+		if !sleepCtx(wctx, time.Second) {
+			return nil
+		}
+	}
+}
+
+func objectResourceVersion(obj any) string {
+	if acc, err := apimeta.Accessor(obj); err == nil {
+		return strings.TrimSpace(acc.GetResourceVersion())
+	}
+	return ""
+}
+
+func watchStatusFatal(obj any) bool {
+	st, ok := obj.(*metav1.Status)
+	if !ok || st == nil {
+		return false
+	}
+	return st.Code == 401 || st.Code == 403
+}
+
+func watchFailureFatal(err error) bool {
+	return apierrors.IsUnauthorized(err) || apierrors.IsForbidden(err)
+}
+
+func watchBackoff(failures int) time.Duration {
+	if failures <= 0 {
+		return time.Second
+	}
+	d := time.Duration(1<<min(failures-1, 4)) * time.Second
+	if d > 30*time.Second {
+		d = 30 * time.Second
+	}
+	return d
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
 	}
 }
 

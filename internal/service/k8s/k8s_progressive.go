@@ -105,6 +105,9 @@ func (s *K8sWorkloadService) ProgressiveEnsureCanaryDeployment(ctx context.Conte
 	if stableName == "" || canaryName == "" {
 		return nil, constants.ErrBadRequestWithMsg("稳定版/金丝雀工作负载名不能为空")
 	}
+	if stableName == canaryName {
+		return nil, constants.ErrBadRequestWithMsg("金丝雀工作负载名不能与稳定版相同")
+	}
 	var stable appsv1.Deployment
 	if err := k.WithContext(ctx).Resource(&appsv1.Deployment{}).Namespace(req.Namespace).Name(stableName).Get(&stable).Error; err != nil {
 		if apierrors.IsNotFound(err) {
@@ -112,16 +115,31 @@ func (s *K8sWorkloadService) ProgressiveEnsureCanaryDeployment(ctx context.Conte
 		}
 		return nil, k8sFail(ctx, "k8s.progressive", "get_stable", err)
 	}
+	if deploymentTracks(&stable, "canary") {
+		return nil, constants.ErrBadRequestWithMsg("稳定版 Deployment 被标记为 canary，拒绝作为金丝雀基线")
+	}
 	replicas := max(req.CanaryReplicas, 1)
 	image := strings.TrimSpace(req.Image)
 
 	var existing appsv1.Deployment
 	err = k.WithContext(ctx).Resource(&appsv1.Deployment{}).Namespace(req.Namespace).Name(canaryName).Get(&existing).Error
 	if err == nil {
+		if deploymentTracks(&existing, "stable") {
+			return nil, constants.ErrBadRequestWithMsg("同名 Deployment 被标记为 stable，拒绝覆盖")
+		}
+		if !deploymentTracks(&existing, "canary") {
+			return nil, constants.ErrBadRequestWithMsg("同名 Deployment 的 selector 不是金丝雀（缺少 " + progressiveTrackLabel + "=canary），拒绝覆盖")
+		}
 		copyObj := existing.DeepCopy()
 		copyObj.Spec.Replicas = &replicas
 		if image != "" && len(copyObj.Spec.Template.Spec.Containers) > 0 {
 			copyObj.Spec.Template.Spec.Containers[0].Image = image
+		}
+		if copyObj.Labels == nil {
+			copyObj.Labels = map[string]string{}
+		}
+		if copyObj.Spec.Template.Labels == nil {
+			copyObj.Spec.Template.Labels = map[string]string{}
 		}
 		ensureProgressiveLabels(copyObj.Labels, "canary")
 		ensureProgressiveLabels(copyObj.Spec.Template.Labels, "canary")
@@ -198,6 +216,10 @@ func (s *K8sWorkloadService) ProgressiveSwitchServiceColor(ctx context.Context, 
 }
 
 func (s *K8sWorkloadService) ProgressiveEnsureColorDeployment(ctx context.Context, clusterID uint, namespace, baseName, color, image string, replicas int32) (map[string]any, error) {
+	color = strings.ToLower(strings.TrimSpace(color))
+	if color != "blue" && color != "green" {
+		return nil, constants.ErrBadRequestWithMsg("color 仅支持 blue 或 green")
+	}
 	name := fmt.Sprintf("%s-%s", strings.TrimSpace(baseName), color)
 	_, k, err := s.runtime.GetClusterKubectl(ctx, clusterID)
 	if err != nil {
@@ -215,16 +237,38 @@ func (s *K8sWorkloadService) ProgressiveEnsureColorDeployment(ctx context.Contex
 			return nil, k8sFail(ctx, "k8s.progressive", "get_base", err)
 		}
 	}
+	if name == stable.Name {
+		return nil, constants.ErrBadRequestWithMsg("目标 color 工作负载与基线同名，拒绝覆盖基线: " + stable.Name)
+	}
 	if replicas < 1 {
 		replicas = 1
 	}
 	var existing appsv1.Deployment
 	err = k.WithContext(ctx).Resource(&appsv1.Deployment{}).Namespace(namespace).Name(name).Get(&existing).Error
 	if err == nil {
+		existingColor := ""
+		if existing.Labels != nil {
+			existingColor = existing.Labels[progressiveColorLabel]
+		}
+		if existingColor == "" && existing.Spec.Selector != nil {
+			existingColor = existing.Spec.Selector.MatchLabels[progressiveColorLabel]
+		}
+		if existingColor != "" && existingColor != color {
+			return nil, constants.ErrBadRequestWithMsg("同名 Deployment 已属于 color=" + existingColor + "，拒绝覆盖")
+		}
+		if !deploymentLabeled(&existing, progressiveColorLabel, color) {
+			return nil, constants.ErrBadRequestWithMsg("同名 Deployment 的 selector 不是 color=" + color + "，拒绝覆盖")
+		}
 		copyObj := existing.DeepCopy()
 		copyObj.Spec.Replicas = &replicas
 		if image != "" && len(copyObj.Spec.Template.Spec.Containers) > 0 {
 			copyObj.Spec.Template.Spec.Containers[0].Image = image
+		}
+		if copyObj.Labels == nil {
+			copyObj.Labels = map[string]string{}
+		}
+		if copyObj.Spec.Template.Labels == nil {
+			copyObj.Spec.Template.Labels = map[string]string{}
 		}
 		ensureColorLabels(copyObj.Labels, color)
 		ensureColorLabels(copyObj.Spec.Template.Labels, color)
@@ -269,6 +313,20 @@ func ensureProgressiveLabels(m map[string]string, track string) {
 		return
 	}
 	m[progressiveTrackLabel] = track
+}
+
+func deploymentLabeled(d *appsv1.Deployment, key, value string) bool {
+	if d == nil || value == "" {
+		return false
+	}
+	if d.Labels[key] == value {
+		return true
+	}
+	return d.Spec.Selector != nil && d.Spec.Selector.MatchLabels[key] == value
+}
+
+func deploymentTracks(d *appsv1.Deployment, track string) bool {
+	return deploymentLabeled(d, progressiveTrackLabel, track)
 }
 
 func ensureColorLabels(m map[string]string, color string) {

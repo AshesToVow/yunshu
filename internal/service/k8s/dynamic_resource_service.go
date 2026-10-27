@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/k8sauth"
+	"yunshu/internal/pkg/k8srole"
 	"yunshu/internal/pkg/k8sutil"
 
 	kom "github.com/weibaohui/kom/kom"
@@ -291,12 +292,37 @@ func (s *DynamicResourceService) DeleteByGVK(ctx context.Context, k *kom.Kubectl
 		if err := s.ensureNamespaceAllowed(ctx, ns); err != nil {
 			return err
 		}
+	} else if err := ensureClusterScopedAllowed(ctx, gvk.Kind); err != nil {
+		return err
 	}
 	dc := k.DynamicClient()
 	if namespaced {
 		return dc.Resource(gvr).Namespace(ns).Delete(ctx, name, deleteOptions)
 	}
 	return dc.Resource(gvr).Delete(ctx, name, deleteOptions)
+}
+
+// ensureClusterScopedAllowed 集群级资源（CRD/Namespace/PV/ClusterRole 等）影响整个集群，
+// 删除与变更都只允许无命名空间白/黑名单限制的 cluster_admin。
+func ensureClusterScopedAllowed(ctx context.Context, kind string) error {
+	if k8sauth.SkipNamespacePolicy(ctx) {
+		return nil
+	}
+	scope, ok := k8sauth.RequestScopeFromContext(ctx)
+	if !ok || scope.BypassAuth {
+		return nil
+	}
+	if _, ok := auth.RequestUserFromContext(ctx); !ok {
+		return nil
+	}
+	if k8srole.HasUnrestrictedAdmin(scope.Grants) {
+		return nil
+	}
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = "该资源"
+	}
+	return constants.ErrForbiddenWithMsg("集群级资源「" + kind + "」仅允许无命名空间限制的集群管理员操作")
 }
 
 // ResolveCRKindFromCRD 执行对应的业务逻辑。
@@ -401,16 +427,13 @@ func (s *DynamicResourceService) DeleteCR(ctx context.Context, k *kom.Kubectl, g
 	return s.DeleteByGVK(ctx, k, gvk, namespace, name, opts)
 }
 
-// ApplyManifest 提交申请相关的业务逻辑；Apply 前校验 YAML 中各命名空间是否允许。
-func (s *DynamicResourceService) ApplyManifest(ctx context.Context, k *kom.Kubectl, manifest string, exists func(context.Context) bool) error {
-	if err := s.ensureManifestNamespacesAllowed(ctx, manifest); err != nil {
+// ApplyManifest 提交申请相关的业务逻辑；Apply 前校验清单的命名空间与集群级资源权限。
+func (s *DynamicResourceService) ApplyManifest(ctx context.Context, k *kom.Kubectl, manifest string) error {
+	if err := s.ensureManifestScopesAllowed(ctx, k, manifest); err != nil {
 		return err
 	}
 	if err := k.WithContext(ctx).Applier().Apply(manifest); err != nil {
 		if k8sutil.IsLikelySuccessfulApplyError(err) {
-			return nil
-		}
-		if exists != nil && exists(ctx) {
 			return nil
 		}
 		return fmt.Errorf("%v", err)
@@ -425,6 +448,85 @@ func (s *DynamicResourceService) ensureManifestNamespacesAllowed(ctx context.Con
 		}
 	}
 	return nil
+}
+
+// manifestClusterScoped 纯函数兜底：按 GVK（含 API group）判断内置集群级资源，
+// 避免自定义组里同名 Kind（如 example.com/v1 Kind=ClusterRole）被误判。
+func manifestClusterScoped(gvk schema.GroupVersionKind) bool {
+	group := strings.TrimSpace(gvk.Group)
+	switch strings.TrimSpace(gvk.Kind) {
+	case "Namespace", "Node", "PersistentVolume", "ComponentStatus", "PodSecurityPolicy":
+		return group == "" || group == "policy"
+	case "StorageClass", "VolumeAttachment", "CSIDriver", "CSINode":
+		return group == "storage.k8s.io"
+	case "ClusterRole", "ClusterRoleBinding":
+		return group == "rbac.authorization.k8s.io"
+	case "CustomResourceDefinition":
+		return group == "apiextensions.k8s.io"
+	case "IngressClass":
+		return group == "networking.k8s.io"
+	case "PriorityClass":
+		return group == "scheduling.k8s.io"
+	case "RuntimeClass":
+		return group == "node.k8s.io"
+	case "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration",
+		"ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding":
+		return group == "admissionregistration.k8s.io"
+	case "APIService":
+		return group == "apiregistration.k8s.io"
+	case "NodeMetrics":
+		return group == "metrics.k8s.io"
+	case "CertificateSigningRequest", "ClusterTrustBundle":
+		return group == "certificates.k8s.io"
+	}
+	return false
+}
+
+// ensureManifestClusterScopesAllowed 集群级资源仅允许无命名空间限制的集群管理员提交。
+func (s *DynamicResourceService) ensureManifestClusterScopesAllowed(ctx context.Context, k *kom.Kubectl, manifest string) error {
+	if k8sauth.SkipNamespacePolicy(ctx) {
+		return nil
+	}
+	scope, ok := k8sauth.RequestScopeFromContext(ctx)
+	if !ok || scope.BypassAuth {
+		return nil
+	}
+	for _, doc := range k8sutil.SplitYAMLDocs(manifest) {
+		doc = strings.TrimSpace(doc)
+		if doc == "" {
+			continue
+		}
+		var m map[string]any
+		if err := yaml.Unmarshal([]byte(doc), &m); err != nil || m == nil {
+			continue
+		}
+		kind, _ := m["kind"].(string)
+		kind = strings.TrimSpace(kind)
+		if kind == "" || kind == "Namespace" {
+			continue
+		}
+		apiVersion, _ := m["apiVersion"].(string)
+		gvk := schema.FromAPIVersionAndKind(apiVersion, kind)
+		namespaced := !manifestClusterScoped(gvk)
+		if k != nil {
+			namespaced = namespacedForGVK(k, gvk)
+		}
+		if namespaced {
+			continue
+		}
+		if !k8srole.HasUnrestrictedAdmin(scope.Grants) {
+			return constants.ErrForbiddenWithMsg("集群级资源「" + kind + "」仅允许无命名空间限制的集群管理员操作")
+		}
+	}
+	return nil
+}
+
+// ensureManifestScopesAllowed 同时校验清单中的命名空间目标与集群级资源权限。
+func (s *DynamicResourceService) ensureManifestScopesAllowed(ctx context.Context, k *kom.Kubectl, manifest string) error {
+	if err := s.ensureManifestClusterScopesAllowed(ctx, k, manifest); err != nil {
+		return err
+	}
+	return s.ensureManifestNamespacesAllowed(ctx, manifest)
 }
 
 // extractManifestNamespaces 从多文档 YAML 提取命名空间资源目标 NS（缺省则视为 default）。
@@ -453,7 +555,8 @@ func extractManifestNamespaces(manifest string) []string {
 		}
 		kind, _ := m["kind"].(string)
 		kind = strings.TrimSpace(kind)
-		if kind == "" || gvkClusterScoped(schema.GroupVersionKind{Kind: kind}) {
+		apiVersion, _ := m["apiVersion"].(string)
+		if kind == "" || manifestClusterScoped(schema.FromAPIVersionAndKind(apiVersion, kind)) {
 			// Namespace 资源本身：校验其 metadata.name（创建 NS 不视为「往某 NS 写」）
 			if kind == "Namespace" {
 				continue

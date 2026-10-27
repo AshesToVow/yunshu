@@ -1,8 +1,9 @@
 import { DeleteOutlined, ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 import { Button, Card, Input, Popconfirm, Select, Space, Table, Tag, Typography, message } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { batchDeleteLoginLogs, deleteLoginLog, getLoginLogs, exportLoginLogs } from "../services/login-logs";
 import type { LoginLogItem, LoginLogQuery } from "../services/login-logs";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 const defaultQuery: LoginLogQuery = { page: 1, page_size: 10 };
@@ -26,20 +27,29 @@ export function LoginLogsPage() {
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
   const [filters, setFilters] = useState({ username: "", status: undefined as number | undefined, source: "" });
-  const fileRef = null as unknown as HTMLInputElement | null;
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number>();
+  const [exporting, setExporting] = useState(false);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     void loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   async function loadList() {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const result = await getLoginLogs(query);
+      if (seq !== loadSeqRef.current) return;
       setList(result.list || []);
       setTotal(result.total || 0);
+    } catch (e: unknown) {
+      if (seq !== loadSeqRef.current) return;
+      message.error(extractApiErrorMessage(e, "加载登录日志失败"));
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }
 
@@ -57,13 +67,23 @@ export function LoginLogsPage() {
       message.warning("请先选择要删除的记录");
       return;
     }
-    await batchDeleteLoginLogs(selectedRowKeys);
-    message.success("已删除");
-    setSelectedRowKeys([]);
-    void loadList();
+    if (batchDeleting) return;
+    setBatchDeleting(true);
+    try {
+      await batchDeleteLoginLogs(selectedRowKeys);
+      message.success("已删除");
+      setSelectedRowKeys([]);
+      await loadList();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "批量删除失败"));
+    } finally {
+      setBatchDeleting(false);
+    }
   }
 
   async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
     try {
       const res = await exportLoginLogs({ username: filters.username, status: filters.status, source: filters.source });
       const blob = res;
@@ -74,14 +94,24 @@ export function LoginLogsPage() {
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      message.error("导出失败");
+      message.error(extractApiErrorMessage(err, "导出失败"));
+    } finally {
+      setExporting(false);
     }
   }
 
   async function handleDelete(id: number) {
-    await deleteLoginLog(id);
-    message.success("已删除");
-    void loadList();
+    if (deletingId != null) return;
+    setDeletingId(id);
+    try {
+      await deleteLoginLog(id);
+      message.success("已删除");
+      await loadList();
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除失败"));
+    } finally {
+      setDeletingId(undefined);
+    }
   }
 
   return (
@@ -127,9 +157,22 @@ export function LoginLogsPage() {
             </Button>
           </Space>
           <div className="toolbar__actions">
-            <Button onClick={() => void handleExport()}>导出</Button>
-            <Popconfirm title="确定删除选中的日志？" onConfirm={() => void handleBatchDelete()}>
-              <Button danger icon={<DeleteOutlined />} disabled={selectedRowKeys.length === 0}>
+            <Button loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
+              导出
+            </Button>
+            <Popconfirm
+              title="确定删除选中的日志？"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ loading: batchDeleting }}
+              onConfirm={() => handleBatchDelete()}
+            >
+              <Button
+                danger
+                icon={<DeleteOutlined />}
+                disabled={selectedRowKeys.length === 0 || batchDeleting}
+                loading={batchDeleting}
+              >
                 批量删除
               </Button>
             </Popconfirm>
@@ -207,8 +250,21 @@ export function LoginLogsPage() {
               fixed: "right",
               className: "yunshu-table-actions-cell",
               render: (_: unknown, record: LoginLogItem) => (
-                <Popconfirm title="确定删除？" onConfirm={() => void handleDelete(record.id)}>
-                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                <Popconfirm
+                  title="确定删除？"
+                  okText="删除"
+                  cancelText="取消"
+                  okButtonProps={{ loading: deletingId === record.id }}
+                  onConfirm={() => handleDelete(record.id)}
+                >
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    loading={deletingId === record.id}
+                    disabled={deletingId != null}
+                  >
                     删除
                   </Button>
                 </Popconfirm>

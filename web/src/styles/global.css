@@ -5673,3 +5673,38 @@ body {
 .ant-table-wrapper .ant-table-cell-fix-right {
   overflow: visible;
 }
+
+/* AI 助手页自适应布局 */
+.ai-assistant-layout {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.admin-shell.ops-platform .ai-assistant-sessions-card.ant-card {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+.ai-assistant-sessions-card .ant-card-body {
+  max-height: calc(100vh - 190px);
+}
+
+.ai-assistant-main-card {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .ai-assistant-layout {
+    flex-direction: column;
+  }
+
+  .admin-shell.ops-platform .ai-assistant-sessions-card.ant-card {
+    width: 100%;
+  }
+
+  .ai-assistant-sessions-card .ant-card-body {
+    max-height: 260px;
+  }
+}

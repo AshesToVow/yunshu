@@ -3,8 +3,20 @@ package llm
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 )
+
+// sharedHTTPTransport 所有 LLM 客户端共享，复用连接池。
+var sharedHTTPTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	MaxIdleConns:          32,
+	MaxIdleConnsPerHost:   8,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: time.Second,
+}
 
 // Message 对话消息。
 type Message struct {

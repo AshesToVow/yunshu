@@ -28,7 +28,7 @@ type AlertDutyCalendarItem struct {
 }
 
 type AlertDutyValidateRequest struct {
-	MonitorRuleID uint                        `json:"monitor_rule_id" binding:"required"`
+	MonitorRuleID uint                          `json:"monitor_rule_id" binding:"required"`
 	Blocks        []AlertDutyBlockUpsertRequest `json:"blocks" binding:"required,dive"`
 }
 

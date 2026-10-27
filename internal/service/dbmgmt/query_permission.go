@@ -12,9 +12,13 @@ import (
 )
 
 var (
-	reExplainShow = regexp.MustCompile(`(?i)^\s*(EXPLAIN|SHOW\s+CREATE)\b`)
-	reFromTable   = regexp.MustCompile("(?i)\\bFROM\\s+`?([a-zA-Z0-9_]+)`?(?:\\.`?([a-zA-Z0-9_]+)`?)?")
-	reJoinTable   = regexp.MustCompile("(?i)\\bJOIN\\s+`?([a-zA-Z0-9_]+)`?(?:\\.`?([a-zA-Z0-9_]+)`?)?")
+	reExplainPrefix = regexp.MustCompile(`(?is)^\s*EXPLAIN\s+(?:(?:ANALYZE|EXTENDED|PARTITIONS)\s+|FORMAT\s*=\s*[A-Za-z0-9_]+\s+)*`)
+	reStatementHead = regexp.MustCompile(`(?i)^(SELECT|INSERT|UPDATE|DELETE|REPLACE|TABLE|VALUES)\b`)
+	reShowCreateObj = regexp.MustCompile("(?is)^\\s*SHOW\\s+CREATE\\s+(?:TEMPORARY\\s+)?(?:TABLE|VIEW)\\s+(.+?)\\s*;?\\s*$")
+	reShowCreateDB  = regexp.MustCompile(`(?is)^\s*SHOW\s+CREATE\s+(?:DATABASE|SCHEMA)\s+(.+?)\s*;?\s*$`)
+	reQualifiedName = regexp.MustCompile("^`?([A-Za-z0-9_$]+)`?(?:\\.`?([A-Za-z0-9_$]+)`?)?$")
+	reFromTable     = regexp.MustCompile("(?i)\\bFROM\\s+`?([a-zA-Z0-9_]+)`?(?:\\.`?([a-zA-Z0-9_]+)`?)?")
+	reJoinTable     = regexp.MustCompile("(?i)\\bJOIN\\s+`?([a-zA-Z0-9_]+)`?(?:\\.`?([a-zA-Z0-9_]+)`?)?")
 )
 
 type queryTableRef struct {
@@ -22,10 +26,52 @@ type queryTableRef struct {
 	Table  string
 }
 
+// parseQualifiedName 解析 `schema`.`table` / `table` 形式的对象名。
+func parseQualifiedName(raw, defaultDB string) (queryTableRef, bool) {
+	raw = strings.TrimSpace(strings.TrimRight(strings.TrimSpace(raw), ";"))
+	m := reQualifiedName.FindStringSubmatch(raw)
+	if m == nil {
+		return queryTableRef{}, false
+	}
+	if m[2] != "" {
+		return queryTableRef{Schema: m[1], Table: m[2]}, true
+	}
+	return queryTableRef{Schema: defaultDB, Table: m[1]}, true
+}
+
 func extractQueryTableRefs(sqlText, defaultDB string) []queryTableRef {
 	sqlText = stripSQLComments(sqlText)
-	if reExplainShow.MatchString(strings.TrimSpace(sqlText)) {
+	trimmed := strings.TrimSpace(sqlText)
+	// SHOW CREATE TABLE/VIEW：被查看对象即受控资源，按表级授权校验。
+	if m := reShowCreateObj.FindStringSubmatch(trimmed); m != nil {
+		if ref, ok := parseQualifiedName(m[1], defaultDB); ok {
+			return []queryTableRef{ref}
+		}
 		return nil
+	}
+	// SHOW CREATE DATABASE/SCHEMA：整库对象，交给整库授权判定。
+	if m := reShowCreateDB.FindStringSubmatch(trimmed); m != nil {
+		name := strings.Trim(strings.TrimSpace(m[1]), "`")
+		if name == "" {
+			return nil
+		}
+		return []queryTableRef{{Schema: name}}
+	}
+	// EXPLAIN [options] <statement>：剥离前缀后按被解释语句涉及的表校验，
+	// 防止 EXPLAIN/SHOW CREATE 成为跨库探测通道。
+	if reExplainPrefix.MatchString(trimmed) {
+		rest := strings.TrimSpace(reExplainPrefix.ReplaceAllString(trimmed, ""))
+		if rest == "" {
+			return nil
+		}
+		if !reStatementHead.MatchString(rest) {
+			// EXPLAIN db.t 简写：rest 即对象名；无法识别则按“未知对象”处理。
+			if ref, ok := parseQualifiedName(rest, defaultDB); ok {
+				return []queryTableRef{ref}
+			}
+			return nil
+		}
+		sqlText = rest
 	}
 	if refs, ok := extractTableRefsAST(sqlText, defaultDB); ok {
 		return refs
@@ -101,7 +147,7 @@ func grantCoversQuery(g model.DbAccessGrant, db, table string) (bool, int) {
 }
 
 func (s *Service) resolveQueryAccess(ctx context.Context, projectID uint, inst *model.DbInstance, database, sqlText string, actor *auth.CurrentUser, cfgMaxRows int) (int, error) {
-	if auth.IsSuperAdminRole(actor.RoleCodes) {
+	if isSuperAdmin(actor) {
 		return cfgMaxRows, nil
 	}
 	if inst.OwnerUserID != nil && *inst.OwnerUserID == actorUserID(actor) {
@@ -119,35 +165,6 @@ func (s *Service) resolveQueryAccess(ctx context.Context, projectID uint, inst *
 	now := time.Now()
 	limit := cfgMaxRows
 	hasAnyGrant := false
-
-	// EXPLAIN / SHOW CREATE：允许任意命中该库的查询授权（含表级）。
-	if reExplainShow.MatchString(strings.TrimSpace(sqlText)) {
-		for _, k := range principalRefs(actor) {
-			grants, err := s.repo.ListGrantsForPrincipal(ctx, projectID, inst.ID, k.kind, k.ref)
-			if err != nil {
-				return 0, err
-			}
-			for _, g := range grants {
-				if !grantStillValid(g, now) || !grantMatchesDatabase(g, database) {
-					continue
-				}
-				if !g.CanQuery && !hasPrivilege(parsePrivilegesJSON(g.PrivilegesJSON), "select") {
-					continue
-				}
-				hasAnyGrant = true
-				if g.QueryLimitNum > 0 && g.QueryLimitNum < limit {
-					limit = g.QueryLimitNum
-				}
-			}
-		}
-		if !hasAnyGrant {
-			return 0, constants.ErrForbiddenWithMsg("你无该库的查询权限，请先申请平台查询权限")
-		}
-		if limit <= 0 {
-			limit = 1000
-		}
-		return limit, nil
-	}
 
 	// 解析不到表：仅整库（或整实例）查询授权可放行，表级授权一律拒绝，避免绕过。
 	if len(refs) == 0 {
@@ -202,6 +219,9 @@ func (s *Service) resolveQueryAccess(ctx context.Context, projectID uint, inst *
 			}
 		}
 		if !covered {
+			if ref.Table == "" {
+				return 0, constants.ErrForbiddenWithMsg("你无 " + db + " 库的查询权限，请先申请平台查询权限")
+			}
 			return 0, constants.ErrForbiddenWithMsg("你无 " + db + "." + ref.Table + " 表的查询权限，请先申请平台查询权限")
 		}
 	}

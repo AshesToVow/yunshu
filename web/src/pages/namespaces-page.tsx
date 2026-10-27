@@ -167,6 +167,7 @@ export function NamespacesPage() {
         needNamespace={false}
         watchResource="namespaces"
         actionColumnWidth={400}
+        deleteWarning="删除命名空间将级联删除其内全部资源（Pod、Service、Deployment、PVC 等），且不可恢复。请确认已备份关键数据。"
         columns={columns}
         extraRowActions={(record, { clusterId }) => (
           <Button
@@ -188,7 +189,7 @@ export function NamespacesPage() {
         onToolbarReady={(ctx) => {
           listReloadRef.current = ctx.reload;
         }}
-        renderToolbarExtraRight={() => (
+        renderToolbarExtraRight={(ctx) => (
           <Space size={8}>
             <Tooltip title="命名空间较多时默认用 metrics/Quota 轻量统计；开启后会 List 全部 Pod 计算精确用量（较慢）">
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -198,10 +199,14 @@ export function NamespacesPage() {
             <Switch
               size="small"
               checked={withPodStats}
+              loading={Boolean(ctx.loading)}
+              disabled={Boolean(ctx.loading)}
               onChange={(checked) => {
+                // 列表加载中忽略切换，避免并发 reload 以旧值覆盖新状态。
+                if (ctx.loading) return;
                 withPodStatsRef.current = checked;
                 setWithPodStats(checked);
-                listReloadRef.current();
+                ctx.reload();
               }}
             />
           </Space>

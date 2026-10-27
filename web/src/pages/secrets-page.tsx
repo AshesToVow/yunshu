@@ -19,6 +19,7 @@ export function SecretsPage() {
   const listReloadRef = useRef<() => void>(() => {});
   const [revealed, setRevealed] = useState<ConfigDetail | null>(null);
   const [revealCtx, setRevealCtx] = useState<{ clusterId: number; namespace: string; name: string } | null>(null);
+  const revealCtxRef = useRef<{ clusterId: number; namespace: string; name: string } | null>(null);
 
   const columns: ColumnsType<SecretItem> = [
     { title: "名称", dataIndex: "name" },
@@ -58,8 +59,10 @@ export function SecretsPage() {
           list: async ({ clusterId, namespace, keyword }) =>
             await listSecrets(clusterId, namespace ?? "default", keyword),
           detail: async ({ clusterId, namespace, name }) => {
+            const ctx = { clusterId, namespace: namespace ?? "default", name };
+            revealCtxRef.current = ctx;
+            setRevealCtx(ctx);
             setRevealed(null);
-            setRevealCtx({ clusterId, namespace: namespace ?? "default", name });
             return await getSecretDetail(clusterId, namespace ?? "default", name);
           },
           apply: async ({ clusterId, manifest, idemKey }) => await applySecret(clusterId, manifest, idemKey),
@@ -94,8 +97,18 @@ stringData:
                   style={{ marginTop: 12 }}
                   danger
                   onClick={() => {
-                    void revealSecret(revealCtx.clusterId, revealCtx.namespace, revealCtx.name)
+                    const target = revealCtx;
+                    void revealSecret(target.clusterId, target.namespace, target.name)
                       .then((r) => {
+                        const current = revealCtxRef.current;
+                        if (
+                          !current ||
+                          current.clusterId !== target.clusterId ||
+                          current.namespace !== target.namespace ||
+                          current.name !== target.name
+                        ) {
+                          return;
+                        }
                         setRevealed(r);
                         message.success("已揭示明文（请谨慎使用）");
                       })

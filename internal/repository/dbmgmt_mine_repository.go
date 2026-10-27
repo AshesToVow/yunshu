@@ -26,6 +26,7 @@ type DbMineListParams struct {
 type DbTicketMineListParams struct {
 	DbMineListParams
 	TicketType string
+	Keyword    string
 	MineTab    string // approval | execution
 }
 
@@ -165,6 +166,10 @@ func (r *DbmgmtRepository) ListSqlTicketsMine(ctx context.Context, p DbTicketMin
 	if st := strings.TrimSpace(p.Status); st != "" {
 		dbq = dbq.Where("status = ?", st)
 	}
+	if kw := strings.TrimSpace(p.Keyword); kw != "" {
+		like := "%" + kw + "%"
+		dbq = dbq.Where("(reason LIKE ? OR sql_text LIKE ?)", like, like)
+	}
 	scope := strings.TrimSpace(p.Scope)
 	if scope == "" {
 		scope = "all"
@@ -186,7 +191,7 @@ func (r *DbmgmtRepository) ListSqlTicketsMine(ctx context.Context, p DbTicketMin
 				dbq = dbq.Where("1 = 0")
 			} else {
 				dbq = dbq.Where("submitter_user_id = ?", p.UserID).
-					Where("status IN ?", []string{model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting})
+					Where("status IN ?", []string{model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting, model.DbTicketStatusResultUnknown})
 			}
 		default:
 			pending := r.db.Table("db_sql_tickets AS r").
@@ -198,7 +203,7 @@ func (r *DbmgmtRepository) ListSqlTicketsMine(ctx context.Context, p DbTicketMin
 				Select("1").
 				Where("r.id = db_sql_tickets.id").
 				Where("r.submitter_user_id = ?", p.UserID).
-				Where("r.status IN ?", []string{model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting})
+				Where("r.status IN ?", []string{model.DbTicketStatusSuccess, model.DbTicketStatusFailed, model.DbTicketStatusExecuting, model.DbTicketStatusResultUnknown})
 			dbq = dbq.Where("EXISTS (?) OR EXISTS (?)", pending, done)
 		}
 	} else {

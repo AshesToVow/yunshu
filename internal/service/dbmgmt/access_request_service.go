@@ -3,7 +3,9 @@ package dbmgmt
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -13,6 +15,8 @@ import (
 	"yunshu/internal/pkg/pagination"
 	"yunshu/internal/repository"
 	workflowsvc "yunshu/internal/service/workflow"
+
+	"gorm.io/gorm"
 )
 
 type AccessRequestItem struct {
@@ -40,6 +44,7 @@ type AccessRequestItem struct {
 	ExpiresAt        *string  `json:"expires_at,omitempty"`
 	QueryLimitNum    int      `json:"query_limit_num"`
 	CreateMeta       *AccessRequestMetaItem `json:"create_meta,omitempty"`
+	ProvisionError   string   `json:"provision_error,omitempty"`
 	CreatedAt        string   `json:"created_at"`
 }
 
@@ -102,6 +107,7 @@ func (s *Service) toAccessRequestItem(ctx context.Context, req model.DbAccessReq
 		Reason: req.Reason, Status: req.Status,
 		QueryLimitNum: req.QueryLimitNum,
 		ExpiresAt: formatTimeRFC3339(req.ExpiresAt),
+		ProvisionError: req.ProvisionError,
 		CreatedAt: req.CreatedAt.Format(time.RFC3339),
 	}
 	if inst, err := s.repo.GetInstance(ctx, req.InstanceID); err == nil {
@@ -216,7 +222,7 @@ func (s *Service) CreateAccessRequest(ctx context.Context, projectID uint, body 
 		CanExport: canExport, CanImport: canImport, PrivilegesJSON: marshalPrivilegesJSON(privs),
 		QueryLimitNum: queryLimit,
 		MetaJSON:      marshalAccessRequestMeta(meta),
-		Reason: strings.TrimSpace(body.Reason), Status: model.DbAccessRequestStatusPending,
+		Reason:        strings.TrimSpace(body.Reason), Status: model.DbAccessRequestStatusPending,
 		ExpiresAt: expiresAt,
 	}
 	if err := s.repo.CreateAccessRequest(ctx, req); err != nil {
@@ -224,7 +230,9 @@ func (s *Service) CreateAccessRequest(ctx context.Context, projectID uint, body 
 	}
 	if err := s.initAccessRequestSteps(ctx, req); err != nil {
 		req.Status = model.DbAccessRequestStatusRejected
-		_ = s.repo.UpdateAccessRequest(ctx, req)
+		if uerr := s.repo.UpdateAccessRequest(ctx, req); uerr != nil {
+			slog.Default().With("component", "dbmgmt").Error("mark access request rejected failed", "request_id", req.ID, "error", uerr)
+		}
 		return nil, err
 	}
 	iid := body.InstanceID
@@ -276,21 +284,51 @@ func (s *Service) ListAccessRequests(ctx context.Context, q AccessRequestListQue
 }
 
 func (s *Service) grantFromAccessRequest(ctx context.Context, req *model.DbAccessRequest) error {
+	// 幂等：同一申请只生成一条授权（source_request_id 唯一索引兜底并发终审）。
+	if _, err := s.repo.GetGrantBySourceRequest(ctx, req.ProjectID, req.ID); err == nil {
+		return s.applyProvisionAfterGrant(ctx, req)
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	rid := req.ID
 	g := &model.DbAccessGrant{
 		ProjectID: req.ProjectID, InstanceID: req.InstanceID,
 		PrincipalKind: model.DbPrincipalUser, PrincipalRef: fmt.Sprintf("%d", req.RequesterUserID),
 		DatabaseName: req.DatabaseName, TableNamesJSON: req.TableNamesJSON,
 		CanConnect: req.CanConnect, CanQuery: req.CanQuery, CanDML: req.CanDML, CanDDL: req.CanDDL,
 		CanExport: req.CanExport, CanImport: req.CanImport,
-		QueryLimitNum: req.QueryLimitNum,
+		QueryLimitNum:  req.QueryLimitNum,
 		PrivilegesJSON: req.PrivilegesJSON,
-		ExpiresAt: req.ExpiresAt, Remark: fmt.Sprintf("来自权限申请 #%d", req.ID),
+		ExpiresAt:      req.ExpiresAt, Remark: fmt.Sprintf("来自权限申请 #%d", req.ID),
+		SourceRequestID: &rid,
 	}
-	g.PrincipalRef = fmt.Sprintf("%d", req.RequesterUserID)
 	if err := s.repo.CreateGrant(ctx, g); err != nil {
+		// 并发终审触发唯一索引冲突：复用已生成的授权继续建库，保持幂等。
+		if existing, getErr := s.repo.GetGrantBySourceRequest(ctx, req.ProjectID, req.ID); getErr == nil && existing != nil {
+			return s.applyProvisionAfterGrant(ctx, req)
+		}
 		return err
 	}
-	_ = s.provisionDatabaseAfterGrant(ctx, req)
+	return s.applyProvisionAfterGrant(ctx, req)
+}
+
+// applyProvisionAfterGrant 执行建库等落地动作，并把失败结果回写到申请上。
+// 授权此时已生效，建库失败不能整体回滚授权，但必须让审批人可见并可重试。
+func (s *Service) applyProvisionAfterGrant(ctx context.Context, req *model.DbAccessRequest) error {
+	if err := s.provisionDatabaseAfterGrant(ctx, req); err != nil {
+		msg := truncateSQL(err.Error(), 900)
+		if updErr := s.repo.UpdateAccessRequestFields(ctx, req.ID, map[string]any{"provision_error": msg}); updErr != nil {
+			return errors.Join(err, updErr)
+		}
+		iid := req.InstanceID
+		_ = s.writeAudit(ctx, req.ProjectID, &iid, &auth.CurrentUser{Username: "system"}, "access_request_provision_failed", map[string]any{
+			"request_id": req.ID, "database": req.DatabaseName, "error": msg,
+		})
+		return constants.ErrBadRequestWithMsg("授权已生效，但自动建库失败：" + err.Error())
+	}
+	if strings.TrimSpace(req.ProvisionError) != "" {
+		_ = s.repo.UpdateAccessRequestFields(ctx, req.ID, map[string]any{"provision_error": ""})
+	}
 	return nil
 }
 
@@ -302,8 +340,13 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 	if req.Status != model.DbAccessRequestStatusPending {
 		return constants.ErrBadRequestWithMsg("申请已结束")
 	}
+	comment := strings.TrimSpace(body.Comment)
+	hasWorkflow := s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, id)
+	// 有效期调整只允许最后一环审批人操作。这里只做「是否最后一环」与格式校验，
+	// 真正写入必须等审批人身份校验通过（工作流分支在最终审批回调里落库）。
+	var expiresAt *time.Time
 	if body.ExpiresAt != nil {
-		if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, id) {
+		if hasWorkflow {
 			if !s.isFinalWorkflowApproval(ctx, model.WorkflowRefDbAccessRequest, id) {
 				return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
 			}
@@ -319,25 +362,23 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 					break
 				}
 			}
-			if cur != nil && !isFinalAccessApprovalStep(steps, cur) {
+			if cur == nil {
+				return constants.ErrBadRequestWithMsg("无待审批步骤")
+			}
+			if !isFinalAccessApprovalStep(steps, cur) {
 				return constants.ErrBadRequestWithMsg("仅最后一环审批人可调整授权有效期")
 			}
 		}
-		expiresAt, err := parseOptionalExpiresAt(body.ExpiresAt)
+		expiresAt, err = parseOptionalExpiresAt(body.ExpiresAt)
 		if err != nil {
 			return err
 		}
-		req.ExpiresAt = expiresAt
-		if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
-			return err
-		}
 	}
-	comment := strings.TrimSpace(body.Comment)
-	if s.workflowEngine().HasLinkedTicket(ctx, model.WorkflowRefDbAccessRequest, id) {
+	if hasWorkflow {
 		err := s.reviewDbmgmtViaWorkflow(ctx, model.WorkflowRefDbAccessRequest, id, true, comment, actor,
 			func(d *workflowsvc.TicketDetail) error {
 				if d.Status == model.WorkflowTicketStatusApproved {
-					return s.finalizeAccessRequestApproval(ctx, projectID, id)
+					return s.finalizeAccessRequestApproval(ctx, projectID, id, expiresAt)
 				}
 				return nil
 			})
@@ -345,8 +386,12 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 			return workflowOrLegacyErr(err)
 		}
 		iid := req.InstanceID
+		auditExpires := req.ExpiresAt
+		if expiresAt != nil {
+			auditExpires = expiresAt
+		}
 		_ = s.writeAudit(ctx, projectID, &iid, actor, "access_request_approve", map[string]any{
-			"request_id": req.ID, "database": req.DatabaseName, "comment": comment, "expires_at": formatTimeRFC3339(req.ExpiresAt),
+			"request_id": req.ID, "database": req.DatabaseName, "comment": comment, "expires_at": formatTimeRFC3339(auditExpires),
 		})
 		return nil
 	}
@@ -376,15 +421,24 @@ func (s *Service) ApproveAccessRequest(ctx context.Context, projectID, id uint, 
 	}
 	now := time.Now()
 	uid := actorUserID(actor)
+	// 乐观锁：仅 pending 步骤可被认领，避免同一节点被并发审批两次。
+	claimed, err := s.repo.ClaimAccessRequestStep(ctx, cur.ID, id, map[string]any{
+		"status": model.DbApprovalStepApproved, "reviewer_user_id": uid,
+		"reviewer_name": actorUsername(actor), "review_comment": comment, "reviewed_at": now,
+		"updated_at": now,
+	})
+	if err != nil {
+		return err
+	}
+	if claimed == 0 {
+		return constants.ErrBadRequestWithMsg("该审批节点已被处理，请刷新后重试")
+	}
 	cur.Status = model.DbApprovalStepApproved
 	cur.ReviewerUserID = &uid
 	cur.ReviewerName = actorUsername(actor)
 	cur.ReviewComment = comment
 	cur.ReviewedAt = &now
-	if err := s.repo.UpdateAccessRequestStep(ctx, cur); err != nil {
-		return err
-	}
-	if err := s.advanceAccessRequestAfterApproval(ctx, req, cur); err != nil {
+	if err := s.advanceAccessRequestAfterApproval(ctx, req, cur, expiresAt); err != nil {
 		return err
 	}
 	iid := req.InstanceID
@@ -425,23 +479,37 @@ func (s *Service) RejectAccessRequest(ctx context.Context, projectID, id uint, c
 		}
 	}
 	if cur != nil {
-		ok, _ := s.userCanApproveStep(ctx, actor, cur.UserGroupID)
+		ok, err := s.userCanApproveStep(ctx, actor, cur.UserGroupID)
+		if err != nil {
+			return err
+		}
 		if !ok {
 			return constants.ErrForbidden
 		}
 		now := time.Now()
 		uid := actorUserID(actor)
-		cur.Status = model.DbApprovalStepRejected
-		cur.ReviewerUserID = &uid
-		cur.ReviewerName = actorUsername(actor)
-		cur.ReviewComment = strings.TrimSpace(comment)
-		cur.ReviewedAt = &now
-		_ = s.repo.UpdateAccessRequestStep(ctx, cur)
+		claimed, err := s.repo.ClaimAccessRequestStep(ctx, cur.ID, id, map[string]any{
+			"status": model.DbApprovalStepRejected, "reviewer_user_id": uid,
+			"reviewer_name": actorUsername(actor), "review_comment": strings.TrimSpace(comment),
+			"reviewed_at": now, "updated_at": now,
+		})
+		if err != nil {
+			return err
+		}
+		if claimed == 0 {
+			return constants.ErrBadRequestWithMsg("该审批节点已被处理，请刷新后重试")
+		}
 	}
-	req.Status = model.DbAccessRequestStatusRejected
-	if err := s.repo.UpdateAccessRequest(ctx, req); err != nil {
+	n, err := s.repo.UpdateAccessRequestFieldsIfStatus(ctx, id, model.DbAccessRequestStatusPending, map[string]any{
+		"status": model.DbAccessRequestStatusRejected, "updated_at": time.Now(),
+	})
+	if err != nil {
 		return err
 	}
+	if n == 0 {
+		return constants.ErrBadRequestWithMsg("申请状态已变更，请刷新后重试")
+	}
+	req.Status = model.DbAccessRequestStatusRejected
 	iid := req.InstanceID
 	_ = s.writeAudit(ctx, projectID, &iid, actor, "access_request_reject", map[string]any{
 		"request_id": req.ID, "database": req.DatabaseName, "comment": strings.TrimSpace(comment),
