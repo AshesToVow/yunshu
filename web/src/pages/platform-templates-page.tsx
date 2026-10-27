@@ -7,6 +7,7 @@ import {
   SaveOutlined,
 } from "@ant-design/icons";
 import Editor from "@monaco-editor/react";
+import "../utils/monaco-setup";
 import {
   Button,
   Card,

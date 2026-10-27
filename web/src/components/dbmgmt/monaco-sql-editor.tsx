@@ -1,5 +1,6 @@
 import Editor from "@monaco-editor/react";
 import { useMemo } from "react";
+import "../../utils/monaco-setup";
 
 export type MonacoSqlEditorProps = {
   value?: string;

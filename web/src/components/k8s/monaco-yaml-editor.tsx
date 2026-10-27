@@ -1,7 +1,8 @@
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { Alert } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import YAML from "yaml";
+import { validateYaml } from "../../utils/yaml-validate";
+import "../../utils/monaco-setup";
 
 export type MonacoYamlEditorProps = {
   value?: string;
@@ -10,17 +11,6 @@ export type MonacoYamlEditorProps = {
   height?: number | string;
   className?: string;
 };
-
-function validateYaml(text: string): string | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
-  try {
-    YAML.parseAllDocuments(trimmed);
-    return null;
-  } catch (e) {
-    return e instanceof Error ? e.message : "YAML 解析失败";
-  }
-}
 
 export function MonacoYamlEditor({
   value = "",
@@ -81,5 +71,3 @@ export function MonacoYamlEditor({
     </div>
   );
 }
-
-export { validateYaml };

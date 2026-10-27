@@ -50,7 +50,7 @@ import { useK8sWatch } from "../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../stores/edit-guard-store";
 import { formatDateTime } from "../utils/format";
 import { K8sDeleteDialog } from "../components/k8s/k8s-delete-dialog";
-import { validateYaml } from "../components/k8s/monaco-yaml-editor";
+import { validateYaml } from "../utils/yaml-validate";
 import { RealtimeUsageText } from "../components/k8s/k8s-resource-usage-cells";
 import type { K8sDeleteOptions } from "../services/service-factory";
 import {

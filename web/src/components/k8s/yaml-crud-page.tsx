@@ -13,7 +13,8 @@ import { useK8sWatch } from "../../hooks/use-k8s-watch";
 import { useEditGuardStore } from "../../stores/edit-guard-store";
 import { AiYamlGeneratePanel } from "./ai-yaml-generate-panel";
 import { K8sDeleteDialog } from "./k8s-delete-dialog";
-import { MonacoYamlEditor, validateYaml } from "./monaco-yaml-editor";
+import { validateYaml } from "../../utils/yaml-validate";
+import { MonacoYamlEditor } from "./monaco-yaml-editor";
 
 function sumColumnWidths(columns: ColumnType<unknown>[], fallback = 120): number {
   return columns.reduce((sum, col) => {
