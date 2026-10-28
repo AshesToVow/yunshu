@@ -182,10 +182,12 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 	}
 	unit := s.unitName()
 	// 热更配置后必须刷新 heartbeat timer，否则 Token/env 更新后平台仍显示离线。
+	// 是否“已安装”按单元文件是否存在判断：`systemctl cat` 对坏单元同样报错，
+	// 用它判断会导致损坏的 unit 永远无法通过热更修复，只能反复提示去点安装。
 	cmd := fmt.Sprintf(
 		`set +e; DEPLOY=%q; UNIT=%q; `+
 			`chmod +x "$DEPLOY/heartbeat.sh" "$DEPLOY/start.sh" 2>/dev/null; `+
-			`if systemctl cat "$UNIT" >/dev/null 2>&1; then `+
+			`if [ -f "/etc/systemd/system/$UNIT" ]; then `+
 			`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT" 2>/dev/null; `+
 			`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null; `+
 			`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer 2>/dev/null; `+
@@ -387,8 +389,14 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 //
 //	/export/loggie/loggie          # 二进制
 //	/export/loggie/*.yml / *.sh    # 配置与脚本
+//
+// 单元文件里的路径不能用 %q 拼接：systemd 的路径类指令不剥双引号，
+// WorkingDirectory="/export/loggie" 会被判为 "path is not absolute"。
+// deployDir 已由 validateLoggieDeployDir 限定为 [a-zA-Z0-9/-_.]，直接 %s 即可。
 func renderSystemdUnit(deployDir string) string {
 	bin := path.Join(deployDir, loggieBinaryName)
+	systemCfg := path.Join(deployDir, "pipeline.yml")
+	pipelineCfg := path.Join(deployDir, pipelinesOnlyFilename)
 	return fmt.Sprintf(`[Unit]
 Description=Loggie log collector (Yunshu)
 After=network-online.target
@@ -399,8 +407,8 @@ Type=simple
 User=%s
 Group=%s
 Environment=DBUS_SESSION_BUS_ADDRESS=disabled:
-WorkingDirectory=%q
-ExecStart=%q -config.system=%q -config.pipeline=%q
+WorkingDirectory=%s
+ExecStart=%s -config.system=%s -config.pipeline=%s
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65535
@@ -420,7 +428,7 @@ UMask=0027
 
 [Install]
 WantedBy=multi-user.target
-`, loggieServiceUser, loggieServiceUser, deployDir, bin, deployDir, deployDir)
+`, loggieServiceUser, loggieServiceUser, deployDir, bin, systemCfg, pipelineCfg)
 }
 
 func renderStartScript() string {
@@ -470,9 +478,9 @@ After=network-online.target
 Type=oneshot
 User=%s
 Group=%s
-WorkingDirectory=%q
-EnvironmentFile=-%q
-ExecStart=/bin/bash %q
+WorkingDirectory=%s
+EnvironmentFile=-%s
+ExecStart=/bin/bash %s
 Nice=10
 NoNewPrivileges=true
 ProtectSystem=full
