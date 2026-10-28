@@ -52,6 +52,23 @@ func TestProfileNginxAccessTailFields(t *testing.T) {
 			wantURI:     "/b",
 			wantReqTime: "0.5",
 		},
+		{
+			// log_format 分行书写时 '"$http_x_forwarded_for"' 与 '$request_time'
+			// 之间没有空格，实际日志是 '"10.0.0.2"0.123'。
+			name:        "no_space_before_request_time",
+			line:        `10.10.10.4 - - [28/Oct/2026:20:15:30 +0800] "GET /api/v1/users?page=1 HTTP/1.1" 200 1234 "-" "curl/8.4.0" "10.0.0.1, 10.0.0.2"0.123 0.120`,
+			wantStatus:  "200",
+			wantURI:     "/api/v1/users?page=1",
+			wantReqTime: "0.123",
+		},
+		{
+			// 尾部继续追加未知字段时，status/request 仍要解析出来（否则整个统计页归零）。
+			name:        "unknown_trailing_field",
+			line:        `10.10.10.4 - - [28/Oct/2026:20:15:30 +0800] "GET /metrics HTTP/1.1" 200 42 "-" "Prometheus/2.45" "-" 0.008 0.007 123456`,
+			wantStatus:  "200",
+			wantURI:     "/metrics",
+			wantReqTime: "0.008",
+		},
 	}
 	for _, tc := range cases {
 		tc := tc

@@ -105,10 +105,13 @@ func profileNginxAccess() pipelineParseProfile {
 		name:             "nginx_access",
 		multilinePattern: `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
 		// combined：IP - user [ts] "METHOD URI PROTO" status bytes "ref" "ua"
-		// 尾部可选 "$http_x_forwarded_for"、$request_time、$upstream_response_time：
-		// 只认到 ua 就结束会让加了 xff/耗时字段的 log_format 整行匹配失败，
-		// 统计页因缺少 status/request 字段而恒为空。
-		regexPattern:        `^(?P<remote>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>(?P<method>\S+)\s+(?P<uri>\S+)(?:\s+(?P<proto>[^"]*))?)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)")?(?:\s+"(?P<xff>[^"]*)")?(?:\s+(?P<request_time>\d+(?:\.\d+)?))?(?:\s+(?P<upstream_time>[\d.,\s-]+))?\s*$`,
+		// 尾部可选 "$http_x_forwarded_for"、$request_time、$upstream_response_time。
+		// 两处必须放宽：log_format 分行书写时相邻字段可能没有空格
+		// （'"$http_x_forwarded_for"' 后直接 '$request_time' → '"10.0.0.2"0.123'），
+		// 尾部还会继续追加自定义字段，所以分隔符用 \s* 且不锚定行尾。
+		// 匹配失败时 transformer 的 ignoreError 只保留原始 body，文档缺 status/request，
+		// 统计页过滤条件会永远命中 0 条。
+		regexPattern:        `^(?P<remote>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>(?P<method>\S+)\s+(?P<uri>\S+)(?:\s+(?P<proto>[^"]*))?)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s*"(?P<referrer>[^"]*)"\s*"(?P<agent>[^"]*)")?(?:\s*"(?P<xff>[^"]*)")?(?:\s*(?P<request_time>\d+(?:\.\d+)?))?(?:\s*(?P<upstream_time>[\d.,\s-]+))?`,
 		timestampFromLayout: "02/Jan/2006:15:04:05 -0700",
 		maxLines:            50,
 	}
