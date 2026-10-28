@@ -104,9 +104,11 @@ func profileNginxAccess() pipelineParseProfile {
 	return pipelineParseProfile{
 		name:             "nginx_access",
 		multilinePattern: `^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
-		// combined：IP - - [ts] "METHOD URI PROTO" status bytes "ref" "ua"
-		// 可选行尾 $request_time（秒）；method/uri/proto 从 request 拆出便于 TOP/统计。
-		regexPattern: `^(?P<remote>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>(?P<method>\S+)\s+(?P<uri>\S+)(?:\s+(?P<proto>[^"]*))?)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)"(?:\s+(?P<request_time>[\d.]+))?)?\s*$`,
+		// combined：IP - user [ts] "METHOD URI PROTO" status bytes "ref" "ua"
+		// 尾部可选 "$http_x_forwarded_for"、$request_time、$upstream_response_time：
+		// 只认到 ua 就结束会让加了 xff/耗时字段的 log_format 整行匹配失败，
+		// 统计页因缺少 status/request 字段而恒为空。
+		regexPattern:        `^(?P<remote>\S+)\s+\S+\s+\S+\s+\[(?P<ts>[^\]]+)\]\s+"(?P<request>(?P<method>\S+)\s+(?P<uri>\S+)(?:\s+(?P<proto>[^"]*))?)"\s+(?P<status>\d{3})\s+(?P<bytes>\S+)(?:\s+"(?P<referrer>[^"]*)"\s+"(?P<agent>[^"]*)")?(?:\s+"(?P<xff>[^"]*)")?(?:\s+(?P<request_time>\d+(?:\.\d+)?))?(?:\s+(?P<upstream_time>[\d.,\s-]+))?\s*$`,
 		timestampFromLayout: "02/Jan/2006:15:04:05 -0700",
 		maxLines:            50,
 	}
