@@ -13,6 +13,7 @@ type (
 	AlertMonitorRuleRepository         = repository.AlertMonitorRuleRepo
 	AlertReceiverGroupRepository       = repository.AlertReceiverGroupRepo
 	AlertDutyRepository                = repository.AlertDutyRepo
+	AlertDutyRotationRepository        = repository.AlertDutyRotationRepo
 	AlertRuleAssigneeRepository        = repository.AlertRuleAssigneeRepo
 	AlertFiringDeliveryRepository      = repository.AlertFiringDeliveryRepo
 	AlertAckRepository                 = repository.AlertAckRepo

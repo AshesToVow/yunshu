@@ -1,4 +1,5 @@
 import {
+  BellOutlined,
   StarOutlined,
   DownloadOutlined,
   FilterOutlined,
@@ -82,6 +83,7 @@ import { getClusters, type ClusterItem } from "../services/clusters";
 import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 import { LEVEL_STACK_COLORS, loadLogViewerPrefs, saveLogViewerPrefs } from "../utils/log-viewer-prefs";
+import { LogAlertCreateModal, type LogAlertCreateInitial } from "./log-alert-create-modal";
 
 type SearchForm = {
   project_id?: number;
@@ -174,6 +176,8 @@ export function ProjectLogsPage() {
   const [deletingQueryId, setDeletingQueryId] = useState<number>();
   const [dropActingId, setDropActingId] = useState<number>();
   const [anomalyActing, setAnomalyActing] = useState<string | null>(null);
+  const [logAlertOpen, setLogAlertOpen] = useState(false);
+  const [logAlertInitial, setLogAlertInitial] = useState<LogAlertCreateInitial>({});
   const loadSeqRef = useRef(0);
   const topnSeqRef = useRef(0);
   const savedSeqRef = useRef(0);
@@ -846,6 +850,25 @@ export function ProjectLogsPage() {
     void runSearch({ page: 1, time_range: range });
   }
 
+  function openLogAlertCreate() {
+    const values = form.getFieldsValue();
+    if (!values.project_id) {
+      message.warning("请先选择项目");
+      return;
+    }
+    const project = projects.find((p) => p.id === values.project_id);
+    setLogAlertInitial({
+      projectId: values.project_id,
+      projectLabel: project ? `${project.name} (${project.code})` : undefined,
+      level: values.level,
+      keyword: values.keyword,
+      serviceName: values.service_name,
+      namespace: values.namespace,
+      range: values.time_range,
+    });
+    setLogAlertOpen(true);
+  }
+
   async function handleExport() {
     if (exporting) return;
     setExporting(true);
@@ -1046,6 +1069,9 @@ export function ProjectLogsPage() {
           </Dropdown>
           <Button type="primary" ghost icon={<RobotOutlined />} onClick={() => void runAiAnalyze()}>
             AI 分析建议
+          </Button>
+          <Button icon={<BellOutlined />} onClick={openLogAlertCreate}>
+            创建告警
           </Button>
           <Button onClick={() => goAdjustPipeline()}>Pipeline 仓库</Button>
           <Button
@@ -2048,6 +2074,8 @@ export function ProjectLogsPage() {
           <Typography.Text type="secondary">暂无收藏查询</Typography.Text>
         )}
       </Modal>
+
+      <LogAlertCreateModal open={logAlertOpen} initial={logAlertInitial} onClose={() => setLogAlertOpen(false)} />
     </div>
   );
 }

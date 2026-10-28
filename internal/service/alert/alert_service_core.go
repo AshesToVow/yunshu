@@ -281,6 +281,9 @@ func (s *AlertService) RunBackgroundWorkers(ctx context.Context) {
 	lifecycle.Go("alert.monitor-rule-evaluator", func() { s.runMonitorRuleEvaluator(evalCtx) })
 	lifecycle.Go("alert.cloud-expiry-evaluator", func() { s.runCloudExpiryEvaluator(evalCtx) })
 	lifecycle.Go("alert.timing-worker", func() { s.runAlertTimingWorker(evalCtx) })
+	if s.dutySvc != nil {
+		s.dutySvc.startRotationSync(evalCtx)
+	}
 	s.runAlertWebhookIngestWorker(evalCtx)
 }
 

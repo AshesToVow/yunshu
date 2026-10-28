@@ -81,6 +81,7 @@ export interface AlertRuleAssigneeItem {
 export interface AlertDutyBlockItem {
   id: number;
   monitor_rule_id: number;
+  rotation_id?: number;
   starts_at: string;
   ends_at: string;
   title?: string;

@@ -95,3 +95,13 @@ func (r *AlertDutyRepository) ListBetween(ctx context.Context, f AlertDutyListFi
 }
 
 var _ AlertDutyRepo = (*AlertDutyRepository)(nil)
+
+func (r *AlertDutyRepository) DeleteFutureByRotation(ctx context.Context, rotationID uint, from time.Time) (int64, error) {
+	if rotationID == 0 {
+		return 0, nil
+	}
+	res := r.db.WithContext(ctx).
+		Where("rotation_id = ? AND ends_at > ?", rotationID, from).
+		Delete(&model.AlertDutyBlock{})
+	return res.RowsAffected, res.Error
+}

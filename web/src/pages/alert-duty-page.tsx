@@ -6,11 +6,13 @@ import {
   DatePicker,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Segmented,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   TreeSelect,
@@ -18,7 +20,7 @@ import {
   message,
 } from "antd";
 import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getDepartmentTree } from "../services/departments";
 import {
   createDutyBlock,
@@ -30,11 +32,19 @@ import {
   updateDutyBlock,
 } from "../services/alert-platform";
 import {
+  createDutyRotation,
+  deleteDutyRotation,
+  getDutyOnCall,
   handoffDutyBlock,
   listDutyCalendar,
+  listDutyRotations,
+  updateDutyRotation,
   validateDutyBlocks,
   type AlertDutyCalendarItem,
+  type AlertDutyOnCallResult,
+  type AlertDutyRotationItem,
 } from "../services/alert-duty";
+import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { getUsers } from "../services/users";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
@@ -61,6 +71,17 @@ export function AlertDutyPage() {
   const [saving, setSaving] = useState(false);
   const [current, setCurrent] = useState<AlertDutyBlockItem | null>(null);
   const [form] = Form.useForm();
+
+  const [rotations, setRotations] = useState<AlertDutyRotationItem[]>([]);
+  const [rotationLoading, setRotationLoading] = useState(false);
+  const [rotationOpen, setRotationOpen] = useState(false);
+  const [rotationSaving, setRotationSaving] = useState(false);
+  const [rotationCurrent, setRotationCurrent] = useState<AlertDutyRotationItem | null>(null);
+  const [rotationForm] = Form.useForm();
+  const [onCall, setOnCall] = useState<AlertDutyOnCallResult | null>(null);
+  const [onCallLoading, setOnCallLoading] = useState(false);
+  const rotationSeqRef = useRef(0);
+  const onCallSeqRef = useRef(0);
 
   const projectOptions = useMemo(
     () => projects.map((p) => ({ label: `${p.name} (${p.code})`, value: p.id })),
@@ -188,6 +209,47 @@ export function AlertDutyPage() {
     }
   }
 
+  async function loadRotations(nextRuleID?: number) {
+    const useRule = nextRuleID ?? ruleId;
+    const seq = ++rotationSeqRef.current;
+    if (!useRule) {
+      setRotations([]);
+      return;
+    }
+    setRotationLoading(true);
+    try {
+      const res = await listDutyRotations({ monitor_rule_id: useRule, page: 1, page_size: 200 });
+      if (seq !== rotationSeqRef.current) return;
+      setRotations(res.list);
+    } catch (e: unknown) {
+      if (seq !== rotationSeqRef.current) return;
+      setRotations([]);
+      message.error(extractApiErrorMessage(e, "加载轮换配置失败"));
+    } finally {
+      if (seq === rotationSeqRef.current) setRotationLoading(false);
+    }
+  }
+
+  async function loadOnCall(nextRuleID?: number) {
+    const useRule = nextRuleID ?? ruleId;
+    const seq = ++onCallSeqRef.current;
+    if (!useRule) {
+      setOnCall(null);
+      return;
+    }
+    setOnCallLoading(true);
+    try {
+      const res = await getDutyOnCall({ monitor_rule_id: useRule });
+      if (seq !== onCallSeqRef.current) return;
+      setOnCall(res);
+    } catch {
+      if (seq !== onCallSeqRef.current) return;
+      setOnCall(null);
+    } finally {
+      if (seq === onCallSeqRef.current) setOnCallLoading(false);
+    }
+  }
+
   useEffect(() => {
     void loadProjects();
     void loadRules();
@@ -201,6 +263,8 @@ export function AlertDutyPage() {
 
   useEffect(() => {
     void loadBlocks(ruleId, projectId);
+    void loadRotations(ruleId);
+    void loadOnCall(ruleId);
   }, [ruleId]);
 
   useEffect(() => {
@@ -340,6 +404,107 @@ export function AlertDutyPage() {
     }
   }
 
+  function openRotationCreate() {
+    if (!ruleId) {
+      message.warning("请先选择监控规则");
+      return;
+    }
+    setRotationCurrent(null);
+    rotationForm.setFieldsValue({
+      name: "",
+      participants: [],
+      department_ids: [],
+      extra_emails: [],
+      anchor_at: dayjs().startOf("hour"),
+      period_minutes: 1440,
+      enabled: true,
+      remark: "",
+    });
+    setRotationOpen(true);
+  }
+
+  function openRotationEdit(row: AlertDutyRotationItem) {
+    setRotationCurrent(row);
+    rotationForm.setFieldsValue({
+      name: row.name,
+      participants: parseUintArrayJSON(row.participants_json),
+      department_ids: parseUintArrayJSON(row.department_ids_json),
+      extra_emails: parseStringArrayJSON(row.extra_emails_json),
+      anchor_at: dayjs(row.anchor_at),
+      period_minutes: row.period_minutes,
+      enabled: row.enabled,
+      remark: row.remark || "",
+    });
+    setRotationOpen(true);
+  }
+
+  async function submitRotation() {
+    if (!ruleId) return;
+    let v: Record<string, unknown>;
+    try {
+      v = await rotationForm.validateFields();
+    } catch {
+      return;
+    }
+    const participants = Array.isArray(v.participants)
+      ? v.participants.map((it: unknown) => Number(it)).filter((n: number) => n > 0)
+      : [];
+    if (!participants.length) {
+      message.warning("请至少选择一名轮换参与人");
+      return;
+    }
+    const anchor = v.anchor_at as dayjs.Dayjs | undefined;
+    if (!anchor) {
+      message.warning("请选择轮换起算时间");
+      return;
+    }
+    const payload = {
+      monitor_rule_id: ruleId,
+      name: String(v.name || "").trim(),
+      participants_json: JSON.stringify(participants),
+      department_ids_json: JSON.stringify(
+        Array.isArray(v.department_ids)
+          ? v.department_ids.map((it: unknown) => Number(it)).filter((n: number) => n > 0)
+          : [],
+      ),
+      extra_emails_json: JSON.stringify(
+        Array.isArray(v.extra_emails)
+          ? v.extra_emails.map((it: unknown) => String(it || "").trim()).filter(Boolean)
+          : [],
+      ),
+      anchor_at: anchor.toISOString(),
+      period_minutes: Number(v.period_minutes || 1440),
+      enabled: !!v.enabled,
+      remark: String(v.remark || "").trim(),
+    };
+    setRotationSaving(true);
+    try {
+      if (rotationCurrent) {
+        await updateDutyRotation(rotationCurrent.id, payload);
+        message.success("轮换配置已更新，未来班次已重算");
+      } else {
+        await createDutyRotation(payload);
+        message.success("轮换配置已创建，未来班次已生成");
+      }
+      setRotationOpen(false);
+      await Promise.all([loadRotations(ruleId), loadOnCall(ruleId), loadBlocks(ruleId), loadCalendar()]);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "保存轮换配置失败"));
+    } finally {
+      setRotationSaving(false);
+    }
+  }
+
+  async function removeRotation(row: AlertDutyRotationItem) {
+    try {
+      await deleteDutyRotation(row.id);
+      message.success("已删除轮换配置");
+      await Promise.all([loadRotations(ruleId), loadOnCall(ruleId), loadBlocks(ruleId)]);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "删除轮换配置失败"));
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageTelemetryHeader
@@ -379,6 +544,8 @@ export function AlertDutyPage() {
               onClick={() => {
                 void loadBlocks();
                 void loadCalendar();
+                void loadRotations();
+                void loadOnCall();
               }}
             >
               刷新
@@ -390,6 +557,136 @@ export function AlertDutyPage() {
           </Space>
         }
       />
+      <Card
+        className="table-card"
+        title="此刻谁值班"
+        extra={
+          <Button
+            size="small"
+            icon={<ReloadOutlined />}
+            loading={onCallLoading}
+            onClick={() => void loadOnCall()}
+          >
+            刷新
+          </Button>
+        }
+      >
+        {!ruleId ? (
+          <Typography.Text type="secondary">请先选择监控规则</Typography.Text>
+        ) : onCallLoading && !onCall ? (
+          <Typography.Text type="secondary">加载中…</Typography.Text>
+        ) : (
+          <Space direction="vertical" size="small" style={{ width: "100%" }}>
+            <Space wrap>
+              <Tag color="blue">{ruleNameMap.get(ruleId) || `规则 #${ruleId}`}</Tag>
+              <Typography.Text type="secondary">解析时间：{onCall ? formatDateTime(onCall.at) : "-"}</Typography.Text>
+            </Space>
+            {onCall?.rotations?.length
+              ? onCall.rotations.map((slot) => (
+                  <Typography.Text key={slot.rotation_id} type="secondary" style={{ fontSize: 12 }}>
+                    轮换「{slot.name}」本期 {formatDateTime(slot.starts_at)} ~ {formatDateTime(slot.ends_at)}（每班{" "}
+                    {formatRotationPeriod(slot.period_minutes)}）
+                  </Typography.Text>
+                ))
+              : null}
+            <Space wrap size={[6, 6]}>
+              {onCall?.users?.length ? (
+                onCall.users.map((u) => (
+                  <Tag key={`${u.source}-${u.id}`} color={u.source === "rotation" ? "geekblue" : "blue"}>
+                    {u.nickname || u.username}
+                    {u.email ? ` · ${u.email}` : ""}
+                    {u.source === "rotation" ? "（轮换）" : "（手工班次）"}
+                  </Tag>
+                ))
+              ) : (
+                <Typography.Text type="secondary">当前无值班人（未命中手工班次或启用的轮换）</Typography.Text>
+              )}
+            </Space>
+            {onCall?.extra_emails?.length ? (
+              <Space wrap>
+                <Typography.Text type="secondary">额外邮箱：</Typography.Text>
+                {onCall.extra_emails.map((email) => (
+                  <Tag key={email}>{email}</Tag>
+                ))}
+              </Space>
+            ) : null}
+          </Space>
+        )}
+      </Card>
+      <Card
+        className="table-card"
+        title="轮换排班"
+        extra={
+          <Button type="primary" size="small" icon={<PlusOutlined />} disabled={!ruleId} onClick={openRotationCreate}>
+            新建轮换
+          </Button>
+        }
+      >
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+          按「起算时间 + 每班时长 + 参与人顺序」自动轮转；保存后立即把未来 14 天的班次写入值班班次，通知解析 / 交接 /
+          日历与手工班次一致。每条规则同一时间只允许一个启用的轮换。
+        </Typography.Paragraph>
+        <Table<AlertDutyRotationItem>
+          rowKey="id"
+          loading={rotationLoading}
+          dataSource={rotations}
+          pagination={false}
+          size="small"
+          locale={{ emptyText: ruleId ? "暂无轮换配置" : "请先选择监控规则" }}
+          columns={[
+            { title: "名称", dataIndex: "name", ellipsis: true },
+            {
+              title: "参与人",
+              width: 320,
+              render: (_, row) => {
+                const names = parseUintArrayJSON(row.participants_json)
+                  .map((id) => userNameMap.get(id))
+                  .filter(Boolean) as string[];
+                if (!names.length) return "-";
+                return (
+                  <Space size={[4, 4]} wrap>
+                    {names.map((n) => (
+                      <Tag key={n} color="geekblue">
+                        {n}
+                      </Tag>
+                    ))}
+                  </Space>
+                );
+              },
+            },
+            { title: "每班时长", width: 110, render: (_, row) => formatRotationPeriod(row.period_minutes) },
+            { title: "起算时间", dataIndex: "anchor_at", width: 180, render: (v: string) => formatDateTime(v) },
+            {
+              title: "状态",
+              width: 90,
+              render: (_, row) => (row.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>),
+            },
+            {
+              title: "操作",
+              key: "actions",
+              width: 150,
+              className: "yunshu-table-actions-cell",
+              render: (_, row) => (
+                <Space size={0} wrap className="yunshu-table-actions">
+                  <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openRotationEdit(row)}>
+                    编辑
+                  </Button>
+                  <Popconfirm
+                    title="删除该轮换配置？未来已生成的班次会一并删除。"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => void removeRotation(row)}
+                  >
+                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
       <Card className="table-card">
         <div style={{ width: "100%", overflow: "hidden" }}>
           <Card
@@ -691,6 +988,68 @@ export function AlertDutyPage() {
             </Form.Item>
           </Form>
         </Modal>
+
+        <Modal
+          title={rotationCurrent ? "编辑轮换配置" : "新建轮换配置"}
+          open={rotationOpen}
+          onCancel={() => setRotationOpen(false)}
+          onOk={() => void submitRotation()}
+          confirmLoading={rotationSaving}
+          okText="保存"
+          width={640}
+        >
+          <Form form={rotationForm} layout="vertical">
+            <Form.Item name="name" label="轮换名称" rules={[{ required: true, message: "请填写轮换名称" }]}>
+              <Input maxLength={128} placeholder="例如：DBA 7x24 轮班" />
+            </Form.Item>
+            <Form.Item
+              name="participants"
+              label="轮换参与人（选择顺序即轮转顺序）"
+              rules={[{ required: true, message: "请选择参与人" }]}
+            >
+              <Select mode="multiple" options={users} optionFilterProp="label" placeholder="选择参与人" />
+            </Form.Item>
+            <Space size="middle" style={{ display: "flex" }}>
+              <Form.Item
+                name="period_minutes"
+                label="每班时长（分钟）"
+                style={{ flex: 1 }}
+                rules={[{ required: true, message: "请填写每班时长" }]}
+              >
+                <InputNumber min={60} max={43200} step={60} style={{ width: "100%" }} />
+              </Form.Item>
+              <Form.Item
+                name="anchor_at"
+                label="起算时间（第一班开始）"
+                style={{ flex: 1 }}
+                rules={[{ required: true, message: "请选择起算时间" }]}
+              >
+                <DatePicker showTime style={{ width: "100%" }} />
+              </Form.Item>
+            </Space>
+            <Form.Item name="department_ids" label="附加部门（子树全员）">
+              <TreeSelect
+                treeCheckable
+                showCheckedStrategy={TreeSelect.SHOW_PARENT}
+                treeData={deptTree}
+                allowClear
+                showSearch
+                treeDefaultExpandAll
+                style={{ width: "100%" }}
+                placeholder="可选：部门子树全员一并值班"
+              />
+            </Form.Item>
+            <Form.Item name="extra_emails" label="额外邮箱">
+              <Select mode="tags" tokenSeparators={[",", " ", ";"]} placeholder="输入后回车" />
+            </Form.Item>
+            <Form.Item name="enabled" label="启用" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="remark" label="备注">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+          </Form>
+        </Modal>
       </Card>
     </div>
   );
@@ -718,4 +1077,12 @@ function parseStringArrayJSON(raw?: string): string[] {
   } catch {
     return [];
   }
+}
+
+function formatRotationPeriod(minutes: number): string {
+  const n = Math.floor(Number(minutes));
+  if (!Number.isFinite(n) || n <= 0) return "-";
+  if (n % 1440 === 0) return `${n / 1440} 天`;
+  if (n % 60 === 0) return `${n / 60} 小时`;
+  return `${n} 分钟`;
 }

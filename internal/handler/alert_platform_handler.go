@@ -2,8 +2,11 @@ package handler
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
@@ -41,6 +44,21 @@ func alertPlatformUserID(c *gin.Context) uint {
 		return u.ID
 	}
 	return 0
+}
+
+// parseDutyOnCallAt 解析「此刻谁值班」的 at 查询参数；留空取当前时间。
+func parseDutyOnCallAt(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Now(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t, nil
+	}
+	return time.Time{}, constants.ErrBadRequestWithMsg("at 须为 RFC3339 时间")
 }
 
 func (h *AlertPlatformHandler) ListDatasources(c *gin.Context) {
@@ -448,6 +466,54 @@ func (h *AlertPlatformHandler) HandoffDutyBlock(c *gin.Context) {
 	}
 	ServeJSON(c, func(ctx context.Context, req service.AlertDutyHandoffRequest) (any, error) {
 		return h.duty.HandoffBlock(ctx, id, req)
+	})
+}
+
+func (h *AlertPlatformHandler) ListDutyRotations(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertDutyRotationListQuery) (gin.H, error) {
+		list, total, page, pageSize, err := h.duty.ListRotations(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return gin.H{"items": list, "list": list, "total": total, "page": page, "page_size": pageSize}, nil
+	})
+}
+
+func (h *AlertPlatformHandler) CreateDutyRotation(c *gin.Context) {
+	ServeJSON(c, h.duty.CreateRotation)
+}
+
+func (h *AlertPlatformHandler) UpdateDutyRotation(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.AlertDutyRotationUpsertRequest) (any, error) {
+		return h.duty.UpdateRotation(ctx, id, req)
+	})
+}
+
+func (h *AlertPlatformHandler) DeleteDutyRotation(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		abortService(c, err)
+		return
+	}
+	if err := h.duty.DeleteRotation(c.Request.Context(), id); err != nil {
+		abortService(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "deleted"})
+}
+
+func (h *AlertPlatformHandler) GetDutyOnCall(c *gin.Context) {
+	ServeQuery(c, func(ctx context.Context, q service.AlertDutyOnCallQuery) (any, error) {
+		at, err := parseDutyOnCallAt(q.At)
+		if err != nil {
+			return nil, err
+		}
+		return h.duty.OnCallAtRule(ctx, q.MonitorRuleID, at)
 	})
 }
 

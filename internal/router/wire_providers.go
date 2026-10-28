@@ -31,7 +31,7 @@ var repositoryFieldNames = wire.FieldsOf(
 	"LogIntelligence", "ClusterLog", "LogPipeline", "MysqlBackup", "Dbmgmt",
 	"AlertEvent", "AlertChannel", "AlertSilence", "AlertMaintenance",
 	"AlertInhibitionRule", "AlertSubscription", "AlertDatasource",
-	"AlertMonitorRule", "AlertReceiverGroup", "AlertDuty", "AlertRuleAssignee",
+	"AlertMonitorRule", "AlertReceiverGroup", "AlertDuty", "AlertDutyRotation", "AlertRuleAssignee",
 	"AlertFiringDelivery", "AlertAck", "AlertProgressNote", "AlertCurHis",
 	"AlertConsul", "AlertRuleChange", "PromqlSavedQuery",
 	"CloudExpiryRule", "Overview", "K8sEventForward",

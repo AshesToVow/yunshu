@@ -74,7 +74,8 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v38 := routerRouteRepositories.AlertSilence
 	v39 := alert.NewAlertSilenceService(v38, v10)
 	v40 := routerRouteRepositories.AlertDuty
-	v41 := alert.NewAlertDutyService(v40, v12, v5)
+	v40a := routerRouteRepositories.AlertDutyRotation
+	v41 := alert.NewAlertDutyService(v40, v40a, v12, v5, v10)
 	v42 := routerRouteRepositories.AlertReceiverGroup
 	v43 := alert.NewReceiverGroupCache(v42)
 	alertConfig := provideAlertConfig(app)

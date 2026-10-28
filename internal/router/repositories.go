@@ -49,6 +49,7 @@ type routeRepositories struct {
 	AlertMonitorRule    interfaces.AlertMonitorRuleRepository
 	AlertReceiverGroup  interfaces.AlertReceiverGroupRepository
 	AlertDuty           interfaces.AlertDutyRepository
+	AlertDutyRotation   interfaces.AlertDutyRotationRepository
 	AlertRuleAssignee   interfaces.AlertRuleAssigneeRepository
 	AlertFiringDelivery interfaces.AlertFiringDeliveryRepository
 	AlertAck            interfaces.AlertAckRepository
@@ -118,6 +119,7 @@ func newRouteRepositories(db *gorm.DB) *routeRepositories {
 		AlertMonitorRule:    repository.NewAlertMonitorRuleRepository(db),
 		AlertReceiverGroup:  repository.NewAlertReceiverGroupRepository(db),
 		AlertDuty:           repository.NewAlertDutyRepository(db),
+		AlertDutyRotation:   repository.NewAlertDutyRotationRepository(db),
 		AlertRuleAssignee:   repository.NewAlertRuleAssigneeRepository(db),
 		AlertFiringDelivery: repository.NewAlertFiringDeliveryRepository(db),
 		AlertAck:            repository.NewAlertAckRepository(db),

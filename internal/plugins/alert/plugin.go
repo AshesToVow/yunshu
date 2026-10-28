@@ -22,7 +22,7 @@ func (m *module) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		MenuPathPrefixes: []string{"/alert-"},
 		APIPrefixes:      []string{"/api/v1/alerts"},
-		Workers:          []string{"alert_monitor_eval", "cloud_expiry_eval", "alert_timing"},
+		Workers:          []string{"alert_monitor_eval", "cloud_expiry_eval", "alert_timing", "alert_duty_rotation_sync"},
 	}
 }
 
@@ -36,6 +36,7 @@ func (m *module) Models() []any {
 		&model.AlertMonitorRule{},
 		&model.AlertRuleAssignee{},
 		&model.AlertDutyBlock{},
+		&model.AlertDutyRotation{},
 		&model.AlertInhibitionRule{},
 		&model.AlertInhibitionEvent{},
 		&model.AlertSubscriptionNode{},

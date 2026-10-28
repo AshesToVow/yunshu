@@ -11,6 +11,7 @@ type AlertDutyBlock struct {
 	ID uint `json:"id" gorm:"primaryKey;comment:主键ID"`
 
 	MonitorRuleID     uint      `json:"monitor_rule_id" gorm:"not null;index;comment:监控规则ID（直接绑定值班）"`
+	RotationID        uint      `json:"rotation_id" gorm:"not null;default:0;index;comment:来源轮换配置ID；0 表示手工班次"`
 	StartsAt          time.Time `json:"starts_at" gorm:"index;comment:开始时间"`
 	EndsAt            time.Time `json:"ends_at" gorm:"index;comment:结束时间"`
 	Title             string    `json:"title" gorm:"size:128;comment:班次标题"`

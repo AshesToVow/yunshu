@@ -459,6 +459,12 @@ type (
 	AlertDutyValidateRequest           = alert.AlertDutyValidateRequest
 	AlertDutyValidateResult            = alert.AlertDutyValidateResult
 	AlertDutyHandoffRequest            = alert.AlertDutyHandoffRequest
+	AlertDutyRotationListQuery         = alert.AlertDutyRotationListQuery
+	AlertDutyRotationUpsertRequest     = alert.AlertDutyRotationUpsertRequest
+	AlertDutyRotationSlotInfo          = alert.AlertDutyRotationSlotInfo
+	AlertDutyOnCallQuery               = alert.AlertDutyOnCallQuery
+	AlertDutyOnCallUser                = alert.AlertDutyOnCallUser
+	AlertDutyOnCallResult              = alert.AlertDutyOnCallResult
 	CanonicalIngressAlert              = alert.CanonicalIngressAlert
 	AlertInhibitionRuleListQuery       = alert.AlertInhibitionRuleListQuery
 	AlertInhibitionRuleUpsertRequest   = alert.AlertInhibitionRuleUpsertRequest

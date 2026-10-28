@@ -34,17 +34,27 @@ type AlertDutyBlockUpsertRequest struct {
 }
 
 type AlertDutyService struct {
-	repo     interfaces.AlertDutyRepository
-	ruleRepo interfaces.AlertMonitorRuleRepository
-	userRepo interfaces.UserRepository
+	repo         interfaces.AlertDutyRepository
+	rotationRepo interfaces.AlertDutyRotationRepository
+	ruleRepo     interfaces.AlertMonitorRuleRepository
+	userRepo     interfaces.UserRepository
+	memberRepo   interfaces.ProjectMemberRepository
 }
 
 func NewAlertDutyService(
 	repo interfaces.AlertDutyRepository,
+	rotationRepo interfaces.AlertDutyRotationRepository,
 	ruleRepo interfaces.AlertMonitorRuleRepository,
 	userRepo interfaces.UserRepository,
+	memberRepo interfaces.ProjectMemberRepository,
 ) *AlertDutyService {
-	return &AlertDutyService{repo: repo, ruleRepo: ruleRepo, userRepo: userRepo}
+	return &AlertDutyService{
+		repo:         repo,
+		rotationRepo: rotationRepo,
+		ruleRepo:     ruleRepo,
+		userRepo:     userRepo,
+		memberRepo:   memberRepo,
+	}
 }
 
 func (s *AlertDutyService) ListBlocks(ctx context.Context, q AlertDutyBlockListQuery) ([]model.AlertDutyBlock, int64, int, int, error) {

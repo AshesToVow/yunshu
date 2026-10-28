@@ -97,6 +97,11 @@ func RegisterAlertRoutes(api *gin.RouterGroup, d AlertRouteDeps) {
 	alerts.GET("/duty-blocks/calendar", alertPlatformHandler.ListDutyCalendar)
 	alerts.POST("/duty-blocks/validate", alertPlatformHandler.ValidateDutyBlocks)
 	alerts.POST("/duty-blocks/:id/handoff", alertPlatformHandler.HandoffDutyBlock)
+	alerts.GET("/duty-rotations", alertPlatformHandler.ListDutyRotations)
+	alerts.POST("/duty-rotations", alertPlatformHandler.CreateDutyRotation)
+	alerts.PUT("/duty-rotations/:id", alertPlatformHandler.UpdateDutyRotation)
+	alerts.DELETE("/duty-rotations/:id", alertPlatformHandler.DeleteDutyRotation)
+	alerts.GET("/duty/on-call", alertPlatformHandler.GetDutyOnCall)
 
 	alerts.GET("/subscriptions", alertSubscriptionHandler.ListNodes)
 	alerts.GET("/subscriptions/tree", alertSubscriptionHandler.GetNodeTree)
