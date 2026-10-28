@@ -36,24 +36,85 @@ func kafkaTransport(dialer *kafka.Dialer) *kafka.Transport {
 	return t
 }
 
-// EnsureAgentKafkaTopic 确保该 Agent 当日 Topic 存在（幂等）：yunshu-agent-{ip}-YYYY.MM.DD
+// topicEnsureDayOffsets Agent 与后端可能不在同一时区：Loggie 用本地日期渲染
+// ${+YYYY.MM.DD}，后端按 UTC 计算，两者最多相差一天。因此前后各预热一天，
+// 避免本地跨过 0 点后 sink 写入一个 broker 上不存在的 Topic。
+var topicEnsureDayOffsets = []int{-1, 0, 1}
+
+// EnsureAgentKafkaTopic 确保该 Agent 的 Topic 存在（幂等），返回 UTC 当日 Topic 名。
 func EnsureAgentKafkaTopic(ctx context.Context, cfg config.KafkaConfig, serverHost string) (string, error) {
 	cfg = cfg.Normalized()
-	topic := AgentKafkaTopicForDay(serverHost, cfg.TopicPrefix, time.Now().UTC())
-	if err := ensureKafkaTopics(ctx, cfg, []string{topic}); err != nil {
+	now := time.Now().UTC()
+	topic := AgentKafkaTopicForDay(serverHost, cfg.TopicPrefix, now)
+	if err := ensureAgentTopicWindow(ctx, cfg, serverHost, now); err != nil {
 		return topic, err
 	}
 	return topic, nil
 }
 
-// EnsureK8sKafkaTopic 确保集群采集当日 Topic 存在（含项目隔离）。
+// EnsureK8sKafkaTopic 确保集群采集 Topic 存在（含项目隔离）。
 func EnsureK8sKafkaTopic(ctx context.Context, cfg config.KafkaConfig, clusterID, projectID uint) (string, error) {
 	cfg = cfg.Normalized()
-	topic := K8sKafkaTopicForDay(clusterID, projectID, cfg.K8sTopicPrefix, time.Now().UTC())
-	if err := ensureKafkaTopics(ctx, cfg, []string{topic}); err != nil {
+	now := time.Now().UTC()
+	topic := K8sKafkaTopicForDay(clusterID, projectID, cfg.K8sTopicPrefix, now)
+	if err := ensureK8sTopicWindow(ctx, cfg, clusterID, projectID, now); err != nil {
 		return topic, err
 	}
 	return topic, nil
+}
+
+func ensureAgentTopicWindow(ctx context.Context, cfg config.KafkaConfig, serverHost string, now time.Time) error {
+	topics := make([]string, 0, len(topicEnsureDayOffsets))
+	for _, off := range topicEnsureDayOffsets {
+		topics = append(topics, AgentKafkaTopicForDay(serverHost, cfg.TopicPrefix, now.AddDate(0, 0, off)))
+	}
+	return ensureKafkaTopics(ctx, cfg, topics)
+}
+
+func ensureK8sTopicWindow(ctx context.Context, cfg config.KafkaConfig, clusterID, projectID uint, now time.Time) error {
+	topics := make([]string, 0, len(topicEnsureDayOffsets))
+	for _, off := range topicEnsureDayOffsets {
+		topics = append(topics, K8sKafkaTopicForDay(clusterID, projectID, cfg.K8sTopicPrefix, now.AddDate(0, 0, off)))
+	}
+	return ensureKafkaTopics(ctx, cfg, topics)
+}
+
+// desiredDailyTopics 按已存在的 Agent/K8s Topic 推导出应存在但缺失的日期 Topic。
+// 部署时只建当日 Topic，Agent 连续运行跨天后就没人再建；broker 关闭
+// auto.create.topics.enable 时 sink 会持续报 Unknown Topic Or Partition，日志全部写不进去。
+func desiredDailyTopics(existing []string, cfg config.KafkaConfig, now time.Time) []string {
+	cfg = cfg.Normalized()
+	present := make(map[string]struct{}, len(existing))
+	for _, t := range existing {
+		present[strings.TrimSpace(t)] = struct{}{}
+	}
+	out := make([]string, 0, len(existing)*len(topicEnsureDayOffsets))
+	seen := map[string]struct{}{}
+	for _, t := range existing {
+		var build func(time.Time) string
+		if key, ok := ParseHostKeyFromAgentName(t, cfg.TopicPrefix); ok {
+			build = func(day time.Time) string { return AgentKafkaTopicForDay(key, cfg.TopicPrefix, day) }
+		} else if clusterID, projectID, ok := ParseK8sKafkaTopicMeta(t, cfg.K8sTopicPrefix); ok {
+			build = func(day time.Time) string {
+				return K8sKafkaTopicForDay(clusterID, projectID, cfg.K8sTopicPrefix, day)
+			}
+		} else {
+			continue
+		}
+		for _, off := range topicEnsureDayOffsets {
+			want := build(now.AddDate(0, 0, off))
+			if _, ok := present[want]; ok {
+				continue
+			}
+			if _, dup := seen[want]; dup {
+				continue
+			}
+			seen[want] = struct{}{}
+			out = append(out, want)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func ensureKafkaTopics(ctx context.Context, cfg config.KafkaConfig, topics []string) error {

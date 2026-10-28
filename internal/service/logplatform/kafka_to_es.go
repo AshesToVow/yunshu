@@ -42,9 +42,11 @@ type KafkaToESService struct {
 	writtenTotal  atomic.Int64
 	errorTotal    atomic.Int64
 	lastConsumeAt atomic.Int64
-	lastError     atomic.Value
-	activeWorkers atomic.Int32 // 实际仍在 consumeLoop 中的 goroutine 数
-	activeTopics  atomic.Value // []string
+	// lastTopicEnsureWarn 上次「跨天 Topic 补建失败」告警时间（UnixNano），用于限频
+	lastTopicEnsureWarn atomic.Int64
+	lastError           atomic.Value
+	activeWorkers       atomic.Int32 // 实际仍在 consumeLoop 中的 goroutine 数
+	activeTopics        atomic.Value // []string
 }
 
 // topicRestartDebounce Topic 列表仅增删时延迟重启，避免每 15s 因新日切 Topic 反复 rebalance。
@@ -155,6 +157,7 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 		s.setLastError("list topics: " + err.Error())
 		// 仍尝试按已有 fingerprint 继续；无 topic 则停
 	}
+	s.ensureDailyTopics(parent, cfg, topics)
 	cfgFP := kafkaConfigFingerprint(cfg)
 	topicsKey := strings.Join(topics, ",")
 
@@ -197,6 +200,27 @@ func (s *KafkaToESService) reconcile(parent context.Context) {
 	}
 	s.setLastError("")
 	s.startConsumer(parent, cfg, topics)
+}
+
+// topicEnsureWarnInterval 补建 Topic 失败时的告警间隔（reconcile 每 15s 跑一次）。
+const topicEnsureWarnInterval = 10 * time.Minute
+
+func (s *KafkaToESService) ensureDailyTopics(ctx context.Context, cfg config.KafkaConfig, existing []string) {
+	missing := desiredDailyTopics(existing, cfg, time.Now().UTC())
+	if len(missing) == 0 {
+		return
+	}
+	if err := ensureKafkaTopics(ctx, cfg, missing); err != nil {
+		now := time.Now()
+		last := s.lastTopicEnsureWarn.Load()
+		if last == 0 || now.Sub(time.Unix(0, last)) >= topicEnsureWarnInterval {
+			s.lastTopicEnsureWarn.Store(now.UnixNano())
+			slog.Default().With("component", "kafka-to-es").Warn("ensure daily topics failed",
+				"err", err, "topics", missing)
+		}
+		return
+	}
+	slog.Default().With("component", "kafka-to-es").Info("daily topics ensured", "topics", missing)
 }
 
 func (s *KafkaToESService) startConsumer(parent context.Context, cfg config.KafkaConfig, topics []string) {
@@ -432,11 +456,15 @@ func parseKafkaLogMessage(raw []byte, topic, topicPrefix, k8sTopicPrefix, k8sInd
 		ts = parseTimestampAny(doc["timestamp"])
 	}
 	if ts.IsZero() {
+		// transformer 的 move(ts, @timestamp) 失败时，转换后的时间会留在 ts 上
+		ts = parseTimestampAny(doc["ts"])
+	}
+	if ts.IsZero() {
 		ts = time.Now().UTC()
 	}
-	if _, ok := doc["@timestamp"]; !ok {
-		doc["@timestamp"] = ts.Format(time.RFC3339Nano)
-	}
+	// Loggie 文件源在未生成事件时间时会带上 "@timestamp": null。原样写入后文档没有时间，
+	// 检索/统计的时间窗过滤一条都命中不了，因此这里无条件覆盖为可解析的时间。
+	doc["@timestamp"] = ts.Format(time.RFC3339Nano)
 	return doc, resolveIndexName(host, serverID, topic, topicPrefix, k8sTopicPrefix, k8sIndexPrefix, ts), nil
 }
 
@@ -539,7 +567,7 @@ func parseTimestampAny(v any) time.Time {
 	switch t := v.(type) {
 	case string:
 		s := strings.TrimSpace(t)
-		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05.000Z07:00", "2006-01-02 15:04:05"} {
+		for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05.000Z07:00", "2006-01-02 15:04:05", "02/Jan/2006:15:04:05 -0700"} {
 			if ts, err := time.Parse(layout, s); err == nil {
 				return ts
 			}
