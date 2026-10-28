@@ -364,7 +364,8 @@ type FixDisabledPluginPoliciesResult struct {
 }
 
 // FixMenuEntryAPIs 为角色补齐菜单入口 GET：权限不存在则创建，未授权则授予。
-func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID uint) (*FixMenuEntryAPIsResult, error) {
+// 非超管只能修复其他角色，且仅能为对方补齐自己已持有的入口权限。
+func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, actor *auth.CurrentUser, roleID uint) (*FixMenuEntryAPIsResult, error) {
 	conflicts, err := s.Conflicts(ctx, roleID)
 	if err != nil {
 		return nil, err
@@ -373,6 +374,10 @@ func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID u
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
 	}
+	if err := authorizeRoleTarget(actor, role.Code); err != nil {
+		return nil, err
+	}
+	isSuper := actor != nil && auth.IsSuperAdminRole(actor.RoleCodes)
 	out := &FixMenuEntryAPIsResult{}
 	seen := map[string]struct{}{}
 	for _, item := range conflicts.Items {
@@ -407,6 +412,11 @@ func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID u
 			}
 		}
 		if perm == nil || errors.Is(err, gorm.ErrRecordNotFound) {
+			// 新增权限点属于鉴权边界变更，非超管不得借修复流程自造入口。
+			if !isSuper {
+				out.Skipped++
+				continue
+			}
 			name := strings.TrimSpace(item.Permission)
 			if name == "" && item.MenuName != "" {
 				name = item.MenuName + " 入口"
@@ -432,6 +442,10 @@ func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID u
 		if policyAction == "" {
 			policyAction = "GET"
 		}
+		if !isSuper && !actorHoldsPermission(s.enforcer, actor, perm.Resource, policyAction) {
+			out.Skipped++
+			continue
+		}
 		added, err := s.enforcer.AddPolicy(role.Code, perm.Resource, policyAction)
 		if err != nil {
 			return nil, bizerrors.Pass(ctx, "policy", "FixMenuEntryAPIs", err)
@@ -442,15 +456,23 @@ func (s *PolicyGovernanceService) FixMenuEntryAPIs(ctx context.Context, roleID u
 			out.Skipped++
 		}
 	}
+	if out.Granted > 0 {
+		notifyPolicyChange()
+	}
 	return out, nil
 }
 
 // FixDisabledPluginPolicies 撤销角色上属于未启用插件的 Casbin 策略。
-func (s *PolicyGovernanceService) FixDisabledPluginPolicies(ctx context.Context, roleID uint) (*FixDisabledPluginPoliciesResult, error) {
+// 非超管只能清理其他角色，且仅能撤销自己已持有的策略。
+func (s *PolicyGovernanceService) FixDisabledPluginPolicies(ctx context.Context, actor *auth.CurrentUser, roleID uint) (*FixDisabledPluginPoliciesResult, error) {
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "policy", "FixDisabledPluginPolicies", err)
 	}
+	if err := authorizeRoleTarget(actor, role.Code); err != nil {
+		return nil, err
+	}
+	isSuper := actor != nil && auth.IsSuperAdminRole(actor.RoleCodes)
 	permissions, err := s.permissionRepo.ListAll(ctx)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "policy", "FixDisabledPluginPolicies", err)
@@ -461,6 +483,10 @@ func (s *PolicyGovernanceService) FixDisabledPluginPolicies(ctx context.Context,
 			continue
 		}
 		out.Total++
+		if !isSuper && !actorHoldsPermission(s.enforcer, actor, p.Resource, p.Action) {
+			out.Skipped++
+			continue
+		}
 		if !hasRolePolicy(s.enforcer, role.Code, p.Resource, p.Action) {
 			out.Skipped++
 			continue
@@ -481,6 +507,9 @@ func (s *PolicyGovernanceService) FixDisabledPluginPolicies(ctx context.Context,
 		} else {
 			out.Skipped++
 		}
+	}
+	if out.Revoked > 0 {
+		notifyPolicyChange()
 	}
 	return out, nil
 }

@@ -17,6 +17,7 @@ import { sendEmailCode, sendPasswordLoginCode, registerByEmail } from "../servic
 import { extractApiErrorMessage } from "../services/http";
 import type {
   EmailLoginPayload,
+  LoginResult,
   PasswordLoginPayload,
   RegisterPayload,
   SendEmailCodePayload,
@@ -60,10 +61,13 @@ function useCountdown(seconds: number, onTick: (next: number) => void) {
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { passwordLoginAction, emailLoginAction } = useAuth();
+  const { passwordLoginAction, emailLoginAction, completeMfaAction } = useAuth();
 
   const [tab, setTab] = useState<AuthTabKey>("account");
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaSubmitting, setMfaSubmitting] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [sendingCode, setSendingCode] = useState(false);
@@ -197,7 +201,7 @@ export function LoginPage() {
   }
 
   async function runLogin<TPayload>(
-    action: (payload: TPayload) => Promise<unknown>,
+    action: (payload: TPayload) => Promise<LoginResult>,
     payload: TPayload,
     onError?: () => void | Promise<void>,
   ) {
@@ -205,7 +209,13 @@ export function LoginPage() {
     setButtonFx("loading");
 
     try {
-      await action(payload);
+      const result = await action(payload);
+      if (result?.mfa_required && result.mfa_challenge) {
+        setMfaChallenge(result.mfa_challenge);
+        setMfaCode("");
+        setButtonFx("idle");
+        return;
+      }
       message.success("登录成功");
       setButtonFx("success");
       window.setTimeout(() => navigate(fromPath, { replace: true }), 520);
@@ -219,18 +229,38 @@ export function LoginPage() {
     }
   }
 
+  async function handleMfaSubmit() {
+    if (!mfaChallenge) return;
+    const code = mfaCode.trim();
+    if (!code) {
+      message.warning(isZh ? "请输入动态口令或恢复码" : "Please enter code");
+      return;
+    }
+    setMfaSubmitting(true);
+    try {
+      await completeMfaAction(mfaChallenge, code);
+      message.success(isZh ? "验证通过" : "Verified");
+      window.setTimeout(() => navigate(fromPath, { replace: true }), 520);
+    } catch (e) {
+      message.error(extractApiErrorMessage(e, isZh ? "验证失败" : "Verification failed"));
+      setMfaCode("");
+    } finally {
+      setMfaSubmitting(false);
+    }
+  }
+
   async function handlePasswordLogin(values: PasswordLoginPayload) {
     const payload: PasswordLoginPayload = {
       ...values,
       captcha_key: values.captcha_key || captchaKey,
     };
-    void runLogin(passwordLoginAction as (p: PasswordLoginPayload) => Promise<unknown>, payload, async () => {
+    void runLogin(passwordLoginAction, payload, async () => {
       await refreshPasswordCaptcha({ silent: true, requireUsername: false, afterLoginFailure: true });
     });
   }
 
   async function handleEmailLogin(values: EmailLoginPayload) {
-    void runLogin(emailLoginAction as (p: EmailLoginPayload) => Promise<unknown>, values);
+    void runLogin(emailLoginAction, values);
   }
 
   async function handleRegister(values: RegisterPayload) {
@@ -296,6 +326,59 @@ export function LoginPage() {
   }
 
   function renderFormCard() {
+    if (mfaChallenge) {
+      return (
+        <section className="gw-auth-card" role="region" aria-label={isZh ? "二次验证" : "Two-factor verification"}>
+          <div className="gw-auth-card__header">
+            <div className="gw-auth-card__title">{isZh ? "二次验证" : "Two-Factor Verification"}</div>
+            <div className="gw-auth-card__sub">
+              {isZh ? "请输入验证器 App 中的 6 位动态口令，或使用一条恢复码" : "Enter the 6-digit code from your authenticator or a recovery code"}
+            </div>
+          </div>
+
+          <Form layout="vertical" onFinish={() => void handleMfaSubmit()} size="large">
+            <Form.Item label={isZh ? "动态口令 / 恢复码" : "Code / Recovery code"}>
+              <Input
+                prefix={<SafetyCertificateOutlined />}
+                placeholder={isZh ? "6 位数字或 8 位恢复码" : "6-digit code or 8-char recovery code"}
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                maxLength={16}
+                autoFocus
+                autoComplete="one-time-code"
+              />
+            </Form.Item>
+
+            <div className="login-submitRow">
+              <Button
+                htmlType="submit"
+                className="login-submitBtn"
+                loading={mfaSubmitting}
+                disabled={!mfaCode.trim()}
+              >
+                {isZh ? "验证并登录" : "Verify & Sign in"}
+              </Button>
+            </div>
+          </Form>
+
+          <div className="login-light-card__footer">
+            <button
+              type="button"
+              className="login-light-registerLink"
+              onClick={() => {
+                setMfaChallenge(null);
+                setMfaCode("");
+                // 验证码已在第一因子登录时被消费，返回后需换新图再提交。
+                void refreshPasswordCaptcha({ silent: true, requireUsername: false });
+              }}
+            >
+              {isZh ? "返回登录" : "Back to sign in"}
+            </button>
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section className="gw-auth-card" role="region" aria-label={t("login.panel")}>
         <div className="gw-auth-card__header">

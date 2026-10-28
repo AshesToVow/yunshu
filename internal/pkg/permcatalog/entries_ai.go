@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsAI() []model.Permission {
+func aiEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "AI 状态查询", Resource: "/api/v1/ai/status", Action: "GET", Description: "Get AI status"},
 		{Name: "AI 连通测试", Resource: "/api/v1/ai/ping", Action: "POST", Description: "Ping AI provider"},

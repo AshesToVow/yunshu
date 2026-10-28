@@ -38,7 +38,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	sender := provideMailer(app)
 	routerAppRouteConfig := provideAppRouteConfig(app)
 	appDisplayName := routerAppRouteConfig.AppName
-	v7 := provideAuthService(v5, client, v6, authConfig, sender, appDisplayName)
+	v7 := provideAuthService(v5, client, v6, authConfig, sender, appDisplayName, routerAppRouteConfig.EncryptionKey)
 	v8 := routerRouteRepositories.Role
 	v9 := routerRouteRepositories.Department
 	syncedEnforcer := provideEnforcer(app)
@@ -68,7 +68,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v32 := system.NewUserGroupService(v26, v5, v10, v31)
 	v33 := routerRouteRepositories.RegRequest
 	v34 := provideRegistrationService(v33, v5, client, v6, authConfig, sender, appDisplayName)
-	v35 := system.NewMenuService(v21)
+	v35 := system.NewMenuService(v21, v18)
 	v36 := routerRouteRepositories.DictEntry
 	v37 := system.NewDictEntryService(v36)
 	v38 := routerRouteRepositories.AlertSilence
@@ -264,7 +264,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	}
 	systemHandler := provideSystemHandler(app)
 	pluginHandler := handler.NewPluginHandler(pluginsConfig)
-	authHandler := handler.NewAuthHandler(v7, v2)
+	authHandler := handler.NewAuthHandler(v7, v2, syncedEnforcer)
 	loginLogHandler := handler.NewLoginLogHandler(v2)
 	operationLogHandler := handler.NewOperationLogHandler(v4)
 	userHandler := handler.NewUserHandler(v15)
@@ -278,7 +278,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	userGroupHandler := handler.NewUserGroupHandler(v32)
 	registrationHandler := handler.NewRegistrationHandler(v34)
 	menuHandler := handler.NewMenuHandler(v35, pluginsConfig, syncedEnforcer)
-	dictEntryHandler := handler.NewDictEntryHandler(v37)
+	dictEntryHandler := handler.NewDictEntryHandler(v37, syncedEnforcer)
 	adminHandler := handler.NewAdminHandler(client)
 	alertHandler := handler.NewAlertHandler(v64)
 	v133 := routerRouteRepositories.AlertConsul

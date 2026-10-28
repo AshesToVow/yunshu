@@ -33,11 +33,11 @@ import {
   getPermission,
   updatePermission,
   batchSetPermissionK8sScope,
-  listAllPermissions,
+  getPermissionCatalog,
+  syncRoutePermissions,
 } from "../services/permissions";
 import { getRoleOptions } from "../services/roles";
 import { grantPolicy } from "../services/policies";
-import { API_CATALOG_GROUPS, type ApiCatalogRow } from "../constants/api-catalog";
 import type { PermissionItem, PermissionPayload, PermissionQuery, RoleItem } from "../types/api";
 import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
@@ -70,40 +70,6 @@ function k8sScopeSwitchTooltip(resource: string) {
   return "打开后：该接口在请求带 cluster_id 时将进入 K8s 范围校验中间件。集群侧能力由「K8s 集群访问档位」配置，API 能否调用仍由「授权管理」决定。";
 }
 
-/** 无 Casbin authorize 的路由，不应写入 permissions 表（与 cmd/seed_permissions_cleanup.go 对齐）。 */
-const PERMISSION_SYNC_SKIP = new Set([
-  "GET /api/v1/health",
-  "POST /api/v1/auth/verification-code",
-  "POST /api/v1/auth/login-code",
-  "POST /api/v1/auth/password-login-code",
-  "POST /api/v1/auth/login",
-  "POST /api/v1/auth/email-login",
-  "POST /api/v1/auth/register",
-  "POST /api/v1/auth/logout",
-  "POST /api/v1/auth/ws-ticket",
-  "GET /api/v1/auth/me",
-  "PUT /api/v1/auth/me",
-  "PUT /api/v1/auth/password",
-  "GET /api/v1/menus/tree",
-  "POST /api/v1/alerts/webhook/alertmanager",
-  "POST /api/v1/alerts/ingress/k8s-events",
-  "POST /api/v1/loggie/heartbeat/report",
-]);
-
-function catalogRouteKey(route: ApiCatalogRow) {
-  return `${route.method.toUpperCase()} ${route.path.trim()}`;
-}
-
-function shouldSyncCatalogRoute(route: ApiCatalogRow) {
-  if (!route.auth) return false;
-  return !PERMISSION_SYNC_SKIP.has(catalogRouteKey(route));
-}
-
-function truncateText(value: string, max: number) {
-  const s = value.trim();
-  return s.length <= max ? s : s.slice(0, max);
-}
-
 export function PermissionsPage() {
   const [list, setList] = useState<PermissionItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -122,6 +88,7 @@ export function PermissionsPage() {
   const [detailSubmitting, setDetailSubmitting] = useState(false);
   const [detailForm] = Form.useForm<PermissionPayload>();
   const [syncingCatalog, setSyncingCatalog] = useState(false);
+  const [catalogMissing, setCatalogMissing] = useState(0);
   const [batchK8sScopeLoading, setBatchK8sScopeLoading] = useState(false);
 
   useEffect(() => {
@@ -131,6 +98,20 @@ export function PermissionsPage() {
   useEffect(() => {
     void loadRoles();
   }, []);
+
+  useEffect(() => {
+    void loadCatalogSummary();
+  }, []);
+
+  async function loadCatalogSummary() {
+    try {
+      const catalog = await getPermissionCatalog();
+      setCatalogMissing(catalog.missing ?? 0);
+    } catch {
+      // 目录接口需要「查看权限」授权；无权限时不影响主列表，仅隐藏补全计数。
+      setCatalogMissing(0);
+    }
+  }
 
   async function loadPermissions(nextQuery = query) {
     const seq = ++listSeqRef.current;
@@ -235,60 +216,13 @@ export function PermissionsPage() {
   async function handleSyncCatalog() {
     setSyncingCatalog(true);
     try {
-      const existing = new Set<string>();
-      const all = await listAllPermissions();
-      for (const it of all) {
-        existing.add(`${it.action.toUpperCase()} ${it.resource}`);
-      }
-      const missing: { name: string; resource: string; action: string; description: string }[] = [];
-      for (const group of API_CATALOG_GROUPS) {
-        for (const route of group.routes) {
-          if (!shouldSyncCatalogRoute(route)) continue;
-          const action = route.method.toUpperCase();
-          const resource = route.path.trim();
-          const key = `${action} ${resource}`;
-          if (existing.has(key)) continue;
-          missing.push({
-            name: truncateText(route.summary, 64),
-            resource,
-            action,
-            description: truncateText(`${group.title} · ${route.ui}`, 255),
-          });
-        }
-      }
-      if (missing.length === 0) {
+      const result = await syncRoutePermissions();
+      if (result.created > 0) {
+        message.success(`已按实际路由补全 ${result.created} 条接口能力记录`);
+      } else {
         message.info("接口能力记录已是最新，无需补全");
-        return;
       }
-      let created = 0;
-      const failed: string[] = [];
-      for (const it of missing) {
-        try {
-          await createPermission(
-            {
-              name: it.name,
-              resource: it.resource,
-              action: it.action,
-              description: it.description,
-              k8s_scope_enabled: false,
-            },
-            { silentErrorToast: true },
-          );
-          created += 1;
-        } catch (e) {
-          failed.push(`${it.action} ${it.resource}: ${extractApiErrorMessage(e, "创建失败")}`);
-        }
-      }
-      if (created > 0) {
-        message.success(`已补全 ${created} 条接口能力记录`);
-        await loadPermissions();
-      }
-      if (failed.length > 0) {
-        message.warning(`有 ${failed.length} 条补全失败：${failed[0]}${failed.length > 1 ? " 等" : ""}`);
-      }
-      if (created === 0 && failed.length > 0) {
-        message.error(`补全失败：${failed[0]}`);
-      }
+      await Promise.all([loadPermissions(), loadCatalogSummary()]);
     } catch (e) {
       message.error(extractApiErrorMessage(e, "补全接口失败"));
     } finally {
@@ -395,7 +329,7 @@ export function PermissionsPage() {
               新建能力项
             </Button>
             <Button onClick={() => void handleSyncCatalog()} loading={syncingCatalog}>
-              一键补全接口
+              一键补全接口{catalogMissing > 0 ? ` (${catalogMissing})` : ""}
             </Button>
             <Button icon={<ReloadOutlined />} onClick={() => void loadPermissions()}>
               刷新
@@ -407,14 +341,12 @@ export function PermissionsPage() {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message="接口目录与前端入口"
+          message="接口目录与补全"
           description={
             <span>
-              「一键补全接口」按 <Typography.Text code>constants/api-catalog.ts</Typography.Text>{" "}
-              中「告警中心」等分组补全缺失的权限记录（能力名称取各行的 <Typography.Text code>summary</Typography.Text>
-              ，须与 <Typography.Text code>cmd/seed.go</Typography.Text> 中 Casbin 的{" "}
-              <Typography.Text code>Name</Typography.Text> 一致）。数据源、静默、监控规则、处理人、值班、PromQL
-              与「策略与联调」（Webhook、策略、历史、模板）均在{" "}
+              「一键补全接口」直接按后端实际注册的路由补齐权限记录（名称/描述取自单一权限目录{" "}
+              <Typography.Text code>internal/pkg/permcatalog</Typography.Text>），不再依赖前端静态清单；接口下线后
+              对应权限点与孤儿策略会在下次启动时自动回收。{" "}
               <Link to="/alert-monitor-platform/datasources">告警监控平台</Link>（
               <Link to="/alert-monitor-platform/policies">告警路由</Link>）。
               <br />

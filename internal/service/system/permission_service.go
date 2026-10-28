@@ -30,6 +30,14 @@ func NewPermissionService(permissionRepo interfaces.PermissionRepository, enforc
 	}
 }
 
+// CreateByActor 新增权限点属于鉴权边界变更，仅内置超级管理员可执行。
+func (s *PermissionService) CreateByActor(ctx context.Context, actor *auth.CurrentUser, req PermissionCreateRequest) (*PermissionItem, error) {
+	if err := authorizePermissionCatalogChange(actor, "新增"); err != nil {
+		return nil, err
+	}
+	return s.Create(ctx, req)
+}
+
 // Create 创建相关的业务逻辑。
 func (s *PermissionService) Create(ctx context.Context, req PermissionCreateRequest) (*PermissionItem, error) {
 	resource := strings.TrimSpace(req.Resource)
@@ -137,6 +145,14 @@ func (s *PermissionService) BatchSetK8sScopeByActor(ctx context.Context, actor *
 		return nil, constants.ErrForbiddenWithMsg("仅内置超级管理员可以调整 K8s 范围校验开关")
 	}
 	return s.BatchSetK8sScope(ctx, req)
+}
+
+// DeleteByActor 删除权限点会同步移除所有角色上的策略，仅内置超级管理员可执行。
+func (s *PermissionService) DeleteByActor(ctx context.Context, actor *auth.CurrentUser, id uint) error {
+	if err := authorizePermissionCatalogChange(actor, "删除"); err != nil {
+		return err
+	}
+	return s.Delete(ctx, id)
 }
 
 // Delete 删除相关的业务逻辑。

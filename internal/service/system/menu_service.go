@@ -17,14 +17,32 @@ import (
 
 type MenuService struct {
 	menuRepo          interfaces.MenuRepository
+	permissionRepo    interfaces.PermissionRepository
 	mu                sync.RWMutex
 	treeCache         []model.Menu
 	treeCacheExpireAt time.Time
 }
 
 // NewMenuService 创建相关逻辑。
-func NewMenuService(menuRepo interfaces.MenuRepository) *MenuService {
-	return &MenuService{menuRepo: menuRepo}
+func NewMenuService(menuRepo interfaces.MenuRepository, permissionRepo interfaces.PermissionRepository) *MenuService {
+	return &MenuService{menuRepo: menuRepo, permissionRepo: permissionRepo}
+}
+
+// menuPathConflict 判断 trim 后的路径是否已被其它菜单占用；空路径不参与唯一性约束。
+func menuPathConflict(all []model.Menu, path string, excludeID uint) bool {
+	p := strings.TrimSpace(path)
+	if p == "" {
+		return false
+	}
+	for _, it := range all {
+		if it.ID == excludeID {
+			continue
+		}
+		if strings.TrimSpace(it.Path) == p {
+			return true
+		}
+	}
+	return false
 }
 
 func sameParent(a, b *uint) bool {
@@ -116,12 +134,31 @@ func (s *MenuService) Tree(ctx context.Context) ([]model.Menu, error) {
 	return list, nil
 }
 
+// assertMenuPathAvailable 保证同一路径只对应一条菜单，避免动态路由命中哪条看运气。
+func (s *MenuService) assertMenuPathAvailable(ctx context.Context, path string, excludeID uint) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	all, err := s.menuRepo.ListAll(ctx)
+	if err != nil {
+		return bizerrors.Pass(ctx, "menu", "assertMenuPathAvailable", err)
+	}
+	if menuPathConflict(all, path, excludeID) {
+		return constants.ErrBadRequestWithMsg("菜单路径已被占用：" + strings.TrimSpace(path))
+	}
+	return nil
+}
+
 // Create 创建相关的业务逻辑。
 func (s *MenuService) Create(ctx context.Context, payload MenuCreatePayload) (*model.Menu, error) {
+	path := strings.TrimSpace(payload.Path)
+	if err := s.assertMenuPathAvailable(ctx, path, 0); err != nil {
+		return nil, err
+	}
 	parentID := payload.ParentID
 	if parentID == nil {
 		// For nested paths like /system/security, auto-create missing parent menus.
-		autoParentID, err := s.ensureMenuParentChainByPath(ctx, payload.Path)
+		autoParentID, err := s.ensureMenuParentChainByPath(ctx, path)
 		if err != nil {
 			return nil, bizerrors.Pass(ctx, "menu", "Create", err)
 		}
@@ -133,7 +170,7 @@ func (s *MenuService) Create(ctx context.Context, payload MenuCreatePayload) (*m
 	}
 	menu := model.Menu{
 		ParentID:  parentID,
-		Path:      payload.Path,
+		Path:      path,
 		Name:      payload.Name,
 		Icon:      payload.Icon,
 		AdminOnly: payload.AdminOnly,
@@ -216,10 +253,14 @@ func (s *MenuService) Update(ctx context.Context, id uint, payload MenuUpdatePay
 		}
 		return nil, bizerrors.Pass(ctx, "menu", "Update", err)
 	}
+	path := strings.TrimSpace(payload.Path)
+	if err := s.assertMenuPathAvailable(ctx, path, menu.ID); err != nil {
+		return nil, err
+	}
 	if payload.Name != "" {
 		menu.Name = payload.Name
 	}
-	menu.Path = payload.Path
+	menu.Path = path
 	menu.Icon = payload.Icon
 	if payload.AdminOnly != nil {
 		menu.AdminOnly = *payload.AdminOnly

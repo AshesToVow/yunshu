@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsSystem() []model.Permission {
+func systemEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "用户列表", Resource: "/api/v1/users", Action: "GET", Description: "View user list"},
 		{Name: "创建用户", Resource: "/api/v1/users", Action: "POST", Description: "Create user"},
@@ -59,6 +59,9 @@ func seedPermissionsSystem() []model.Permission {
 		{Name: "数据字典删除", Resource: "/api/v1/dict/entries/:id", Action: "DELETE", Description: "Delete dict entry"},
 		{Name: "数据字典下拉", Resource: "/api/v1/dict/options/:dictType", Action: "GET", Description: "Dict options for UI"},
 		{Name: "数据字典敏感明文", Resource: "/api/v1/dict/entries/:id/reveal-value", Action: "POST", Description: "Reveal sensitive dict entry value"},
+		// 伪权限：无同名路由，仅用于把「敏感凭据类字典」的读写与普通数据字典拆开授权。
+		{Name: "查看敏感字典", Resource: "/api/v1/dict/sensitive", Action: "GET", Description: "Read sensitive dict types (keys/secrets) in list and reveal plaintext"},
+		{Name: "维护敏感字典", Resource: "/api/v1/dict/sensitive", Action: "PUT", Description: "Create/update/delete sensitive dict entries"},
 		{Name: "登录日志列表", Resource: "/api/v1/login-logs", Action: "GET", Description: "View login logs"},
 		{Name: "导出登录日志", Resource: "/api/v1/login-logs/export", Action: "GET", Description: "Export login logs to Excel"},
 		{Name: "删除登录日志", Resource: "/api/v1/login-logs/:id", Action: "DELETE", Description: "Delete login log"},

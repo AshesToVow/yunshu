@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsCicd() []model.Permission {
+func cicdEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "发布后验证", Resource: "/api/v1/projects/:id/cicd/release-runs/:runId/verify", Action: "POST", Description: "Verify release run"},
 		{Name: "集群日志 Pipeline 预览", Resource: "/api/v1/projects/:id/cluster-log/pipelines/preview", Action: "GET", Description: "Preview K8s cluster pipelines.yml"},

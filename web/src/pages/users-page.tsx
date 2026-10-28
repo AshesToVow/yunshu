@@ -54,7 +54,7 @@ const defaultQuery = { keyword: "", department_id: undefined as number | undefin
 
 export function UsersPage() {
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, can } = useAuth();
   const [list, setList] = useState<UserItem[]>([]);
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState(defaultQuery);
@@ -432,13 +432,20 @@ export function UsersPage() {
               style={{ display: "none" }}
               onChange={handleImportChange}
             />
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新建账号
-            </Button>
-            <Button onClick={() => void handleDownloadTemplate()}>模板</Button>
-            <Button onClick={() => fileInputRef.current?.click()}>导入</Button>
-            <Button onClick={() => void handleExport()}>导出</Button>
-            <Button icon={<ReloadOutlined />} onClick={() => void loadUsers()}>
+            {can("POST", "/api/v1/users") ? (
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新建账号
+              </Button>
+            ) : null}
+            {can("GET", "/api/v1/users/import-template") ? (
+              <Button onClick={() => void handleDownloadTemplate()}>模板</Button>
+            ) : null}
+            {can("POST", "/api/v1/users/import") ? (
+              <Button onClick={() => fileInputRef.current?.click()}>导入</Button>
+            ) : null}
+            {can("GET", "/api/v1/users/export") ? (
+              <Button onClick={() => void handleExport()}>导出</Button>
+            ) : null}            <Button icon={<ReloadOutlined />} onClick={() => void loadUsers()}>
               刷新
             </Button>
           </div>
@@ -540,14 +547,18 @@ export function UsersPage() {
                       修改密码
                     </Button>
                   ) : null}
-                  <Button type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssign(record)}>
-                    分配角色
-                  </Button>
-                  <Popconfirm title="确认删除该账号吗？" onConfirm={() => handleDelete(record)}>
-                    <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                      删除
+                  {can("PUT", "/api/v1/users/:id/roles") ? (
+                    <Button type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssign(record)}>
+                      分配角色
                     </Button>
-                  </Popconfirm>
+                  ) : null}
+                  {can("DELETE", "/api/v1/users/:id") ? (
+                    <Popconfirm title="确认删除该账号吗？" onConfirm={() => handleDelete(record)}>
+                      <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
                 </Space>
               ),
             },
@@ -662,9 +673,11 @@ export function UsersPage() {
                 修改密码
               </Button>
             ) : null}
-            <Button type="primary" loading={detailSubmitting} onClick={() => void submitDetailEdit()}>
-              保存修改
-            </Button>
+            {can("PUT", "/api/v1/users/:id") ? (
+              <Button type="primary" loading={detailSubmitting} onClick={() => void submitDetailEdit()}>
+                保存修改
+              </Button>
+            ) : null}
           </Space>
         }
       >

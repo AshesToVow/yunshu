@@ -65,17 +65,50 @@ type RegisterResponse struct {
 
 type LoginResponse struct {
 	// Token 已弃用：浏览器走 HttpOnly Cookie，响应体不再回传 JWT，避免落入 JS/localStorage。
-	Token              string             `json:"token,omitempty"`
-	ExpiresAt          time.Time          `json:"expires_at"`
-	RefreshExpiresAt   time.Time          `json:"refresh_expires_at,omitempty"`
-	User               UserDetailResponse `json:"user"`
-	MustChangePassword bool               `json:"must_change_password"`
-	PasswordExpired    bool               `json:"password_expired"`
-	PasswordPolicyHint string             `json:"password_policy_hint,omitempty"`
+	Token            string             `json:"token,omitempty"`
+	ExpiresAt        time.Time          `json:"expires_at"`
+	RefreshExpiresAt time.Time          `json:"refresh_expires_at,omitempty"`
+	User             UserDetailResponse `json:"user,omitzero"`
+	MustChangePassword bool             `json:"must_change_password"`
+	PasswordExpired    bool             `json:"password_expired"`
+	PasswordPolicyHint string           `json:"password_policy_hint,omitempty"`
+
+	// MFARequired 为 true 时第一因子已通过，需要携带 MFAChallenge 调用 /auth/mfa/verify 完成二次验证。
+	MFARequired  bool   `json:"mfa_required,omitempty"`
+	MFAChallenge string `json:"mfa_challenge,omitempty"`
 
 	// 仅服务端写 Cookie 用，不进入 JSON。
 	AccessToken  string `json:"-"`
 	RefreshToken string `json:"-"`
+	// LoginSource 记录第一因子来源（password/email），供二次验证后写登录日志。
+	LoginSource string `json:"-"`
+}
+
+type MFAVerifyRequest struct {
+	Challenge string `json:"challenge" binding:"required,max=128"`
+	Code      string `json:"code" binding:"required,max=32"`
+}
+
+type MFASetupRequest struct {
+	Password string `json:"password" binding:"required,max=128"`
+}
+
+type MFASetupResponse struct {
+	Secret     string `json:"secret"`
+	OtpauthURL string `json:"otpauth_url"`
+}
+
+type MFAEnableRequest struct {
+	Code string `json:"code" binding:"required,max=32"`
+}
+
+type MFAEnableResponse struct {
+	RecoveryCodes []string `json:"recovery_codes"`
+}
+
+type MFADisableRequest struct {
+	Password string `json:"password" binding:"required,max=128"`
+	Code     string `json:"code" binding:"required,max=32"`
 }
 
 // RefreshResponse 刷新会话后的公开字段。
@@ -274,6 +307,7 @@ type UserDetailResponse struct {
 	Roles              []RoleItem       `json:"roles"`
 	Groups             []UserGroupBrief `json:"groups"`
 	MustChangePassword bool             `json:"must_change_password"`
+	MFAEnabled         bool             `json:"mfa_enabled"`
 	PasswordChangedAt  *time.Time       `json:"password_changed_at,omitempty"`
 	CreatedAt          time.Time        `json:"created_at"`
 	UpdatedAt          time.Time        `json:"updated_at"`
@@ -345,6 +379,7 @@ func NewUserDetailResponse(user model.User) UserDetailResponse {
 		Roles:              roles,
 		Groups:             groups,
 		MustChangePassword: user.MustChangePassword,
+		MFAEnabled:         user.MFAEnabled,
 		PasswordChangedAt:  user.PasswordChangedAt,
 		CreatedAt:          user.CreatedAt,
 		UpdatedAt:          user.UpdatedAt,

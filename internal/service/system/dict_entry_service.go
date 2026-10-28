@@ -17,8 +17,12 @@ import (
 func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (*pagination.Result[DictEntryListItem], error) {
 	s.ensureBuiltins(ctx)
 	query.DictType = canonicalDictType(query.DictType)
+	var excludeTypes []string
+	if query.ExcludeSensitive {
+		excludeTypes = s.sensitiveDictTypes(ctx)
+	}
 	page, pageSize := pagination.Normalize(query.Page, query.PageSize)
-	list, total, err := s.repo.List(ctx, query.DictType, query.Keyword, dictcategory.NormalizeID(query.Category), query.Status, page, pageSize)
+	list, total, err := s.repo.List(ctx, query.DictType, query.Keyword, dictcategory.NormalizeID(query.Category), query.Status, excludeTypes, page, pageSize)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "dict", "List", err)
 	}
@@ -32,6 +36,33 @@ func (s *DictEntryService) List(ctx context.Context, query DictEntryListQuery) (
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+// sensitiveDictTypes 返回当前库中属于「敏感凭据」的字典类型。
+func (s *DictEntryService) sensitiveDictTypes(ctx context.Context) []string {
+	types, err := s.repo.ListDistinctTypes(ctx)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(types))
+	for _, t := range types {
+		if dictmask.SensitiveDictType(t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// Get 返回字典条目原始记录（含明文），仅供服务端鉴权与敏感值提交判定使用。
+func (s *DictEntryService) Get(ctx context.Context, id uint) (*model.DictEntry, error) {
+	item, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, constants.ErrNotFoundWithMsg(constants.ErrMsg094b285159a4)
+		}
+		return nil, bizerrors.Pass(ctx, "dict", "Get", err)
+	}
+	return item, nil
 }
 
 func (s *DictEntryService) Create(ctx context.Context, req DictEntryCreateRequest) (*model.DictEntry, error) {

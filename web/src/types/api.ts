@@ -55,6 +55,8 @@ export interface UserItem {
   groups?: UserGroupBrief[];
   must_change_password?: boolean;
   password_changed_at?: string;
+  /** 是否已启用 TOTP 二次验证 */
+  mfa_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -133,12 +135,20 @@ export interface RegisterResult {
 
 export interface LoginResult {
   token?: string;
-  expires_at: string;
+  expires_at?: string;
   refresh_expires_at?: string;
-  user: UserItem;
+  /** 启用 MFA 时第一因子通过后返回 mfa_required=true，此时不含 user/会话。 */
+  user?: UserItem;
   must_change_password?: boolean;
   password_expired?: boolean;
   password_policy_hint?: string;
+  mfa_required?: boolean;
+  mfa_challenge?: string;
+}
+
+export interface VerifyMFAPayload {
+  challenge: string;
+  code: string;
 }
 
 export interface PasswordPolicy {

@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsKafkamgmt() []model.Permission {
+func kafkamgmtEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "Kafka 连接列表", Resource: "/api/v1/kafkamgmt/connections", Action: "GET", Description: "List Kafka connections"},
 		{Name: "Kafka 创建连接", Resource: "/api/v1/kafkamgmt/connections", Action: "POST", Description: "Create Kafka connection"},

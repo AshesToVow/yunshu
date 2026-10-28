@@ -78,18 +78,19 @@ func upsertByPath(ctx context.Context, db *gorm.DB, spec Spec, parentID *uint) (
 	}
 
 	existing.ParentID = parentID
-	existing.Name = spec.Name
-	existing.Icon = spec.Icon
-	existing.Sort = spec.Sort
-	existing.Hidden = spec.Hidden
-	existing.AdminOnly = spec.AdminOnly
-	existing.Component = spec.Component
-	existing.Redirect = spec.Redirect
-	existing.Status = spec.statusOrDefault()
+	applySpecToExisting(&existing, spec)
 	if err := db.WithContext(ctx).Save(&existing).Error; err != nil {
 		return nil, err
 	}
 	return &existing, nil
+}
+
+// applySpecToExisting 只同步代码定义的结构字段（挂载位置、组件、重定向、仅管理员可见）。
+// 名称/图标/排序/隐藏/状态属于管理员可维护的展示配置，启动同步不再覆盖，否则后台改动重启即还原。
+func applySpecToExisting(existing *model.Menu, spec Spec) {
+	existing.AdminOnly = spec.AdminOnly
+	existing.Component = spec.Component
+	existing.Redirect = spec.Redirect
 }
 
 func specToModel(s Spec, parentID *uint) model.Menu {

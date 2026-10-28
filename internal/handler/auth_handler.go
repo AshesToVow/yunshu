@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"yunshu/internal/pkg/constants"
@@ -12,17 +13,77 @@ import (
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/service"
 
+	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 )
 
 type AuthHandler struct {
 	service   *service.AuthService
 	loginLogs *service.LoginLogService
+	enforcer  *casbin.SyncedEnforcer
 }
 
 // NewAuthHandler 创建相关逻辑。
-func NewAuthHandler(service *service.AuthService, loginLogs *service.LoginLogService) *AuthHandler {
-	return &AuthHandler{service: service, loginLogs: loginLogs}
+func NewAuthHandler(service *service.AuthService, loginLogs *service.LoginLogService, enforcer *casbin.SyncedEnforcer) *AuthHandler {
+	return &AuthHandler{service: service, loginLogs: loginLogs, enforcer: enforcer}
+}
+
+// PermissionCapability 当前用户可直接调用的 API 能力（按钮级权限据此收敛）。
+type PermissionCapability struct {
+	Resource string `json:"resource"`
+	Action   string `json:"action"`
+}
+
+// PermissionsResponse 当前用户的 API 能力集合。
+type PermissionsResponse struct {
+	// SuperAdmin 为 true 时前端可放行全部按钮，无需逐条比对。
+	SuperAdmin  bool                  `json:"super_admin"`
+	Permissions []PermissionCapability `json:"permissions"`
+}
+
+// Permissions godoc
+// @Summary 当前用户的 API 能力集合
+// @Description 返回当前用户经角色继承得到的 Casbin 权限点，供前端做按钮级显隐；超管返回 super_admin=true。
+// @Tags Auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.Body{data=PermissionsResponse} "success"
+// @Failure 401 {object} response.Body "未登录或登录已失效"
+// @Router /api/v1/auth/permissions [get]
+func (h *AuthHandler) Permissions(c *gin.Context) {
+	user, ok := auth.CurrentUserFromContext(c)
+	if !ok || user == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	resp := PermissionsResponse{SuperAdmin: auth.IsSuperAdminRole(user.RoleCodes), Permissions: []PermissionCapability{}}
+	if resp.SuperAdmin || h.enforcer == nil {
+		response.Success(c, resp)
+		return
+	}
+	rules, err := h.enforcer.GetImplicitPermissionsForUser(service.UserSubject(user.ID))
+	if err != nil {
+		response.Error(c, bizerrors.Pass(c.Request.Context(), "auth", "Permissions", err))
+		return
+	}
+	seen := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		if len(rule) < 3 {
+			continue
+		}
+		resource := strings.TrimSpace(rule[1])
+		action := strings.ToUpper(strings.TrimSpace(rule[2]))
+		if resource == "" || action == "" {
+			continue
+		}
+		key := action + " " + resource
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		resp.Permissions = append(resp.Permissions, PermissionCapability{Resource: resource, Action: action})
+	}
+	response.Success(c, resp)
 }
 
 func loginErrMessage(err error) string {
@@ -136,10 +197,109 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	// 已启用 MFA 时不发会话、不记登录成功，等第二因子通过后再落日志。
+	if data.MFARequired {
+		response.Success(c, publicLoginResponse(data))
+		return
+	}
 	uid := data.User.ID
 	h.recordLogin(c, data.User.Username, model.LoginSourcePassword, true, "登录成功", &uid)
 	h.applySessionCookies(c, data.AccessToken, data.RefreshToken, data.ExpiresAt, data.RefreshExpiresAt)
 	response.Success(c, publicLoginResponse(data))
+}
+
+// VerifyMFA godoc
+// @Summary 登录二次验证
+// @Description 使用登录返回的 mfa_challenge 与 TOTP/恢复码换取会话。
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body service.MFAVerifyRequest true "二次验证请求"
+// @Success 200 {object} response.Body{data=service.LoginResponse} "success"
+// @Failure 400 {object} response.Body "验证码不正确或挑战已过期"
+// @Router /api/v1/auth/mfa/verify [post]
+func (h *AuthHandler) VerifyMFA(c *gin.Context) {
+	var req service.MFAVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, constants.ErrBadRequest)
+		return
+	}
+	data, err := h.service.VerifyMFALogin(c.Request.Context(), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	uid := data.User.ID
+	source := data.LoginSource
+	if source == "" {
+		source = model.LoginSourcePassword
+	}
+	h.recordLogin(c, data.User.Username, source, true, "二次验证通过", &uid)
+	h.applySessionCookies(c, data.AccessToken, data.RefreshToken, data.ExpiresAt, data.RefreshExpiresAt)
+	response.Success(c, publicLoginResponse(data))
+}
+
+// SetupMFA godoc
+// @Summary 生成 TOTP 密钥
+// @Description 校验当前密码后生成待确认的 TOTP 密钥与 otpauth 链接。
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.MFASetupRequest true "校验密码"
+// @Success 200 {object} response.Body{data=service.MFASetupResponse} "success"
+// @Router /api/v1/auth/mfa/setup [post]
+func (h *AuthHandler) SetupMFA(c *gin.Context) {
+	user, ok := auth.CurrentUserFromContext(c)
+	if !ok || user == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.MFASetupRequest) (*service.MFASetupResponse, error) {
+		return h.service.SetupMFA(ctx, user.ID, req)
+	})
+}
+
+// EnableMFA godoc
+// @Summary 启用 TOTP
+// @Description 校验一次 TOTP 后启用二次验证，并一次性返回恢复码。
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.MFAEnableRequest true "TOTP 验证码"
+// @Success 200 {object} response.Body{data=service.MFAEnableResponse} "success"
+// @Router /api/v1/auth/mfa/enable [post]
+func (h *AuthHandler) EnableMFA(c *gin.Context) {
+	user, ok := auth.CurrentUserFromContext(c)
+	if !ok || user == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSON(c, func(ctx context.Context, req service.MFAEnableRequest) (*service.MFAEnableResponse, error) {
+		return h.service.EnableMFA(ctx, user.ID, req)
+	})
+}
+
+// DisableMFA godoc
+// @Summary 关闭 TOTP
+// @Description 需要同时校验当前密码与 TOTP/恢复码。
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.MFADisableRequest true "关闭二次验证"
+// @Success 200 {object} response.Body{data=MessageData} "success"
+// @Router /api/v1/auth/mfa/disable [post]
+func (h *AuthHandler) DisableMFA(c *gin.Context) {
+	user, ok := auth.CurrentUserFromContext(c)
+	if !ok || user == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSONOK(c, gin.H{"message": "已关闭二次验证"}, func(ctx context.Context, req service.MFADisableRequest) error {
+		return h.service.DisableMFA(ctx, user.ID, req)
+	})
 }
 
 // EmailLogin godoc
@@ -165,6 +325,10 @@ func (h *AuthHandler) EmailLogin(c *gin.Context) {
 	if err != nil {
 		h.recordLogin(c, req.Email, model.LoginSourceEmail, false, loginErrMessage(err), nil)
 		response.Error(c, err)
+		return
+	}
+	if data.MFARequired {
+		response.Success(c, publicLoginResponse(data))
 		return
 	}
 	uid := data.User.ID

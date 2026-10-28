@@ -7,23 +7,15 @@ import (
 	"yunshu/internal/model"
 )
 
-// ensureBuiltins 负责内置字典的历史收敛与幂等 seed 编排。
+// ensureBuiltins 负责内置字典的历史收敛与幂等 seed 编排（进程内只执行一次）。
 // 具体种子数据按域拆分到 dict_seed_*.go，本文件只保留流程与清理逻辑。
+// 读路径不写库：历史去重已前移到启动期 bootstrapPreMigrate，唯一性由 DB 唯一索引兜底。
 func (s *DictEntryService) ensureBuiltins(ctx context.Context) {
-	// 每次进入字典服务都先做一次历史去重，避免依赖 initOnce 触发时机。
-	// 这样即使服务已运行较久、或历史版本已产生重复，也能自动收敛。
-	_ = s.repo.CleanupDuplicateTypeLabel(ctx)
-	_ = s.repo.CleanupDuplicateTypeValue(ctx)
-
 	s.initOnce.Do(func() {
 		s.normalizeLegacyDictData(ctx)
 		s.seedBuiltinDictEntries(ctx)
 		s.cleanupLegacyDictEntries(ctx)
 	})
-
-	// 内置种子处理后再做一次去重，兜底并发/历史脏数据场景。
-	_ = s.repo.CleanupDuplicateTypeLabel(ctx)
-	_ = s.repo.CleanupDuplicateTypeValue(ctx)
 }
 
 // normalizeLegacyDictData 在 seed 之前做历史数据收敛：大小写归一、旧类型迁移与废弃类型删除。

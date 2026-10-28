@@ -13,6 +13,7 @@ import (
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/constants"
 	logx "yunshu/internal/pkg/logger"
+	"yunshu/internal/pkg/permcatalog"
 	"yunshu/internal/pkg/password"
 	"yunshu/internal/plugingate"
 	"yunshu/internal/service"
@@ -180,19 +181,9 @@ func seedPermissions(ctx context.Context, db *gorm.DB, permissions []model.Permi
 	}).CreateInBatches(normalized, 200).Error
 }
 
+// defaultPermissions 与路由自动登记共用同一份权限目录（internal/pkg/permcatalog）。
 func defaultPermissions() []model.Permission {
-	out := make([]model.Permission, 0, 700)
-	out = append(out, seedPermissionsSystem()...)
-	out = append(out, seedPermissionsK8s()...)
-	out = append(out, seedPermissionsAlert()...)
-	out = append(out, seedPermissionsProject()...)
-	out = append(out, seedPermissionsCicd()...)
-	out = append(out, seedPermissionsDbmgmt()...)
-	out = append(out, seedPermissionsAI()...)
-	out = append(out, seedPermissionsLog()...)
-	out = append(out, seedPermissionsKafkamgmt()...)
-	out = append(out, seedPermissionsInspect()...)
-	return out
+	return permcatalog.AllPermissions()
 }
 
 func seedMenus(ctx context.Context, db *gorm.DB, cfg *config.PluginsConfig) error {

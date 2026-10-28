@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsAlert() []model.Permission {
+func alertEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "告警通道列表", Resource: "/api/v1/alerts/channels", Action: "GET", Description: "List alert channels"},
 		{Name: "创建告警通道", Resource: "/api/v1/alerts/channels", Action: "POST", Description: "Create alert channel"},

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"yunshu/internal/config"
@@ -15,6 +16,8 @@ import (
 	logx "yunshu/internal/pkg/logger"
 	"yunshu/internal/pkg/mailer"
 	"yunshu/internal/providers"
+	"yunshu/internal/service/system"
+	"yunshu/internal/store"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
@@ -33,6 +36,8 @@ type App struct {
 	Engine   *gin.Engine
 	// YamlK8sEventForwardBase config.yaml 底稿，供 Event 转发运行期从字典重新解析。
 	YamlK8sEventForwardBase config.K8sEventForwardConfig
+	// casbinWatchStop 停止策略变更订阅。
+	casbinWatchStop func()
 }
 
 type Builder struct {
@@ -209,11 +214,15 @@ func (b *Builder) WithCasbin() *Builder {
 		return b
 	}
 
-	// 多副本部署：定时从 DB 重新加载策略，使一台副本的授权变更对其他副本可见。
-	// 未配置（0）时取默认 30s；显式配置为负数表示关闭（适用于单副本）。
+	// 多副本部署：变更后通过 Redis 广播即时重载（推送），定时全量重载仅作兜底。
+	// 推送可用时默认 300s 兜底（防消息丢失/订阅重连期间漏更新）；无 Redis 时退回 30s 轮询。
+	// 显式配置为负数表示关闭轮询（推送仍生效）。
 	interval := b.app.Config.Casbin.AutoLoadIntervalSeconds
 	if interval == 0 {
 		interval = 30
+		if b.app.Redis != nil {
+			interval = 300
+		}
 	}
 	if interval > 0 {
 		enforcer.StartAutoLoadPolicy(time.Duration(interval) * time.Second)
@@ -222,8 +231,33 @@ func (b *Builder) WithCasbin() *Builder {
 		slog.Default().With("component", "casbin").Info("Casbin auto policy reload disabled")
 	}
 
+	// Redis 可用时启用推送：本副本写入策略后广播，其他副本收到即重载，
+	// 无需等待下一轮全量轮询；轮询保留为兜底（Redis 抖动/消息丢失）。
+	if b.app.Redis != nil {
+		source := casbinInstanceID()
+		system.SetPolicyChangeHook(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if err := store.PublishCasbinPolicyChange(ctx, b.app.Redis, source); err != nil {
+				slog.Default().With("component", "casbin").Warn("publish policy change failed", "error", err)
+			}
+		})
+		b.app.casbinWatchStop = store.WatchCasbinPolicyChanges(
+			context.Background(), b.app.Redis, slog.Default().With("component", "casbin"), source, enforcer.LoadPolicy)
+		slog.Default().With("component", "casbin").Info("Casbin policy push enabled", "source", source)
+	}
+
 	b.app.Enforcer = enforcer
 	return b
+}
+
+// casbinInstanceID 生成副本标识，用于订阅端忽略自己发布的消息。
+func casbinInstanceID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown-host"
+	}
+	return fmt.Sprintf("%s-%d", host, os.Getpid())
 }
 
 func (b *Builder) WithMailer() *Builder {
@@ -311,6 +345,11 @@ func (b *Builder) Build() (*App, error) {
 
 func (a *App) Close() error {
 	var errs []error
+
+	if a.casbinWatchStop != nil {
+		a.casbinWatchStop()
+		a.casbinWatchStop = nil
+	}
 
 	if a.Redis != nil {
 		if err := a.Redis.Close(); err != nil {

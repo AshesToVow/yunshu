@@ -3,10 +3,12 @@ package core
 import (
 	"context"
 	"strings"
+	"time"
 	"yunshu/internal/service"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/database"
+	"yunshu/internal/pkg/dictmask"
 
 	"gorm.io/gorm"
 )
@@ -38,7 +40,11 @@ func bootstrapPreMigrate(db *gorm.DB) error {
 	if err := dropIndexIfPresent(db, "workflow_tickets", "idx_wf_ticket_ref"); err != nil {
 		return err
 	}
-	return cleanupDictEntriesDuplicatesOnBoot(db)
+	if err := cleanupDictEntriesDuplicatesOnBoot(db); err != nil {
+		return err
+	}
+	// 唯一索引依赖辅助列，必须在 AutoMigrate 之前补列并回填，否则建索引会直接失败。
+	return prepareDictEntryUniqueness(db)
 }
 
 // dropLegacyRoleUniqueIndexes 删除不含 deleted_at 的旧唯一索引，使 AutoMigrate 重建为软删除友好的复合索引。
@@ -271,6 +277,98 @@ func cleanupDictEntriesDuplicatesOnBoot(db *gorm.DB) error {
 	return db.Exec(database.SQLDeleteDictDuplicatesByValue(dialect)).Error
 }
 
+// prepareDictEntryUniqueness 为存量字典补唯一性辅助列并回填，使 AutoMigrate 能安全创建
+// (dict_type, value_hash, active_key) 与 (dict_type, label, active_key) 唯一索引：
+// value 为 TEXT（kubeconfig 可达 MB 级）无法直接建索引，改用 SHA-256；
+// 软删除行 active_key 置为自身 id，让出唯一键，保证同类型/同值可被重复创建。
+func prepareDictEntryUniqueness(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&model.DictEntry{}) {
+		return nil
+	}
+	migrator := db.Migrator()
+	for _, column := range []string{"ValueHash", "ActiveKey"} {
+		if migrator.HasColumn(&model.DictEntry{}, column) {
+			continue
+		}
+		if err := migrator.AddColumn(&model.DictEntry{}, column); err != nil {
+			return err
+		}
+	}
+	if err := db.Exec("UPDATE dict_entries SET active_key = id WHERE deleted_at IS NOT NULL AND active_key = 0").Error; err != nil {
+		return err
+	}
+	if err := backfillDictEntryValueHash(db); err != nil {
+		return err
+	}
+	return dedupeDictEntriesByUniqueKey(db)
+}
+
+// backfillDictEntryValueHash 分批回填存量行的 value_hash（含软删除行，索引同样覆盖它们）。
+func backfillDictEntryValueHash(db *gorm.DB) error {
+	const batchSize = 500
+	var lastID uint
+	for {
+		var rows []model.DictEntry
+		if err := db.Unscoped().
+			Select("id", "value").
+			Where("id > ? AND (value_hash IS NULL OR value_hash = '')", lastID).
+			Order("id ASC").Limit(batchSize).Find(&rows).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		for _, row := range rows {
+			if err := db.Model(&model.DictEntry{}).Unscoped().
+				Where("id = ?", row.ID).
+				UpdateColumn("value_hash", dictmask.ValueHash(row.Value)).Error; err != nil {
+				return err
+			}
+		}
+		lastID = rows[len(rows)-1].ID
+	}
+}
+
+// dedupeDictEntriesByUniqueKey 按最终唯一键口径（类型+值哈希、类型+标签）软删除活跃重复行，
+// 保留最小 id。SQL 去重按 TRIM 比较，与 Go 侧 TrimSpace 存在差异，这里兜底后再建索引。
+func dedupeDictEntriesByUniqueKey(db *gorm.DB) error {
+	var rows []model.DictEntry
+	if err := db.Unscoped().Model(&model.DictEntry{}).
+		Select("id", "dict_type", "label", "value_hash").
+		Where("deleted_at IS NULL").
+		Order("id ASC").Find(&rows).Error; err != nil {
+		return err
+	}
+	seenLabel := make(map[string]struct{}, len(rows))
+	seenValue := make(map[string]struct{}, len(rows))
+	victims := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		labelKey := row.DictType + "\x00" + strings.TrimSpace(row.Label)
+		valueKey := row.DictType + "\x00" + row.ValueHash
+		_, dupLabel := seenLabel[labelKey]
+		_, dupValue := seenValue[valueKey]
+		if dupLabel || dupValue {
+			victims = append(victims, row.ID)
+			continue
+		}
+		seenLabel[labelKey] = struct{}{}
+		seenValue[valueKey] = struct{}{}
+	}
+	for start := 0; start < len(victims); start += 500 {
+		end := start + 500
+		if end > len(victims) {
+			end = len(victims)
+		}
+		if err := db.Exec(
+			"UPDATE dict_entries SET deleted_at = ?, active_key = id WHERE deleted_at IS NULL AND id IN ?",
+			time.Now(), victims[start:end],
+		).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func migrateEnableDingTalkSignSecretDictSeed(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&model.DictEntry{}) {
 		return nil
@@ -279,7 +377,6 @@ func migrateEnableDingTalkSignSecretDictSeed(db *gorm.DB) error {
 		Where("dict_type = ? AND label = ? AND status = ?", "dingtalk_sign_secret", "钉钉 SignSecret 示例", 0).
 		Update("status", 1).Error
 }
-
 func migrateFixWecomNotifyModeDictTypo(db *gorm.DB) error {
 	if !db.Migrator().HasTable(&model.DictEntry{}) {
 		return nil

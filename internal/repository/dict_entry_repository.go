@@ -3,10 +3,11 @@ package repository
 import (
 	"context"
 	"strings"
+	"time"
 
 	"yunshu/internal/dictcategory"
 	"yunshu/internal/model"
-	"yunshu/internal/pkg/database"
+	"yunshu/internal/pkg/dictmask"
 
 	"gorm.io/gorm"
 )
@@ -19,22 +20,33 @@ func NewDictEntryRepository(db *gorm.DB) DictEntryRepo {
 	return &DictEntryRepository{db: db}
 }
 
+// softDelete 走软删除并同步 ActiveKey，避免唯一索引与软删除行冲突。
+func (r *DictEntryRepository) softDelete(ctx context.Context, where string, args ...any) error {
+	sqlArgs := make([]any, 0, len(args)+1)
+	sqlArgs = append(sqlArgs, time.Now())
+	sqlArgs = append(sqlArgs, args...)
+	return r.db.WithContext(ctx).Exec(
+		"UPDATE dict_entries SET deleted_at = ?, active_key = id WHERE deleted_at IS NULL AND ("+where+")",
+		sqlArgs...,
+	).Error
+}
+
 func (r *DictEntryRepository) Create(ctx context.Context, item *model.DictEntry) error {
+	item.ValueHash = dictmask.ValueHash(item.Value)
 	return r.db.WithContext(ctx).Create(item).Error
 }
 
 func (r *DictEntryRepository) Update(ctx context.Context, item *model.DictEntry) error {
+	item.ValueHash = dictmask.ValueHash(item.Value)
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
 func (r *DictEntryRepository) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&model.DictEntry{}, id).Error
+	return r.softDelete(ctx, "id = ?", id)
 }
 
 func (r *DictEntryRepository) DeleteByTypeAndLabel(ctx context.Context, dictType, label string) error {
-	return r.db.WithContext(ctx).
-		Where("dict_type = ? AND label = ?", strings.TrimSpace(dictType), strings.TrimSpace(label)).
-		Delete(&model.DictEntry{}).Error
+	return r.softDelete(ctx, "dict_type = ? AND label = ?", strings.TrimSpace(dictType), strings.TrimSpace(label))
 }
 
 func (r *DictEntryRepository) DeleteByTypes(ctx context.Context, dictTypes []string) error {
@@ -50,9 +62,7 @@ func (r *DictEntryRepository) DeleteByTypes(ctx context.Context, dictTypes []str
 	if len(trimmed) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).
-		Where("dict_type IN ?", trimmed).
-		Delete(&model.DictEntry{}).Error
+	return r.softDelete(ctx, "dict_type IN ?", trimmed)
 }
 
 func (r *DictEntryRepository) GetByID(ctx context.Context, id uint) (*model.DictEntry, error) {
@@ -66,7 +76,7 @@ func (r *DictEntryRepository) GetByID(ctx context.Context, id uint) (*model.Dict
 func (r *DictEntryRepository) ExistsByTypeValue(ctx context.Context, dictType, value string, excludeID uint) (bool, error) {
 	query := r.db.WithContext(ctx).
 		Model(&model.DictEntry{}).
-		Where("dict_type = ? AND value = ?", strings.TrimSpace(dictType), strings.TrimSpace(value))
+		Where("dict_type = ? AND value_hash = ?", strings.TrimSpace(dictType), dictmask.ValueHash(value))
 	if excludeID > 0 {
 		query = query.Where("id <> ?", excludeID)
 	}
@@ -106,25 +116,17 @@ func (r *DictEntryRepository) ExistsByTypeLabel(ctx context.Context, dictType, l
 }
 
 func (r *DictEntryRepository) DeleteByTypeAndValue(ctx context.Context, dictType, value string) error {
-	return r.db.WithContext(ctx).
-		Where("dict_type = ? AND value = ?", strings.TrimSpace(dictType), strings.TrimSpace(value)).
-		Delete(&model.DictEntry{}).Error
+	return r.softDelete(ctx, "dict_type = ? AND value_hash = ?", strings.TrimSpace(dictType), dictmask.ValueHash(value))
 }
 
-// CleanupDuplicateTypeValue 删除重复字典项（按 dict_type + TRIM(value) 维度，仅保留最小 id）。
-func (r *DictEntryRepository) CleanupDuplicateTypeValue(ctx context.Context) error {
-	return r.db.WithContext(ctx).Exec(database.SQLDeleteDictDuplicatesByValue(database.DialectName(r.db))).Error
-}
-
-// CleanupDuplicateTypeLabel 删除重复字典项（按 dict_type + TRIM(label) 维度，仅保留最小 id）。
-func (r *DictEntryRepository) CleanupDuplicateTypeLabel(ctx context.Context) error {
-	return r.db.WithContext(ctx).Exec(database.SQLDeleteDictDuplicatesByLabel(database.DialectName(r.db))).Error
-}
-
-func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword, category string, status *int, page, pageSize int) ([]model.DictEntry, int64, error) {
+// List 分页查询字典项；excludeTypes 中的类型（敏感凭据）对无敏感读权限的调用方不可见。
+func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword, category string, status *int, excludeTypes []string, page, pageSize int) ([]model.DictEntry, int64, error) {
 	query := r.db.WithContext(ctx).Model(&model.DictEntry{})
 	if strings.TrimSpace(dictType) != "" {
 		query = query.Where("dict_type = ?", strings.ToLower(strings.TrimSpace(dictType)))
+	}
+	if len(excludeTypes) > 0 {
+		query = query.Where("dict_type NOT IN ?", excludeTypes)
 	}
 	if clause, args, ok := dictcategory.ApplyFilter(category); ok {
 		query = query.Where(clause, args...)
@@ -152,6 +154,13 @@ func (r *DictEntryRepository) List(ctx context.Context, dictType, keyword, categ
 		Limit(pageSize).
 		Find(&list).Error
 	return list, total, err
+}
+
+// ListDistinctTypes 返回全部在用字典类型（用于按敏感规则派生可见性过滤）。
+func (r *DictEntryRepository) ListDistinctTypes(ctx context.Context) ([]string, error) {
+	var types []string
+	err := r.db.WithContext(ctx).Model(&model.DictEntry{}).Distinct().Pluck("dict_type", &types).Error
+	return types, err
 }
 
 func (r *DictEntryRepository) ListByTypeEnabled(ctx context.Context, dictType string) ([]model.DictEntry, error) {

@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsDbmgmt() []model.Permission {
+func dbmgmtEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "MySQL备份实例列表", Resource: "/api/v1/projects/:id/mysql-backup/instances", Action: "GET", Description: "List MySQL backup instances"},
 		{Name: "MySQL备份实例创建", Resource: "/api/v1/projects/:id/mysql-backup/instances", Action: "POST", Description: "Create MySQL backup instance"},

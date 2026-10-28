@@ -136,6 +136,8 @@ var skipRules = []skipRule{
 	{method: "GET", path: "/api/v1/menus/tree"},
 	{method: "POST", path: "/api/v1/auth/", prefix: true},
 	{method: "GET", path: "/api/v1/auth/password-policy"},
+	// 登录即可读取自身能力集合，不参与 Casbin 授权
+	{method: "GET", path: "/api/v1/auth/permissions"},
 	{method: "POST", path: "/api/v1/cicd/jenkins/callback"},
 	{method: "POST", path: "/api/v1/alerts/webhook/"},
 	{method: "POST", path: "/api/v1/loggie/", prefix: true},

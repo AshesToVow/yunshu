@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsLog() []model.Permission {
+func logEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "日志保留策略查询", Resource: "/api/v1/log-platform/retention", Action: "GET", Description: "Get global log retention policy"},
 		{Name: "日志保留策略保存", Resource: "/api/v1/log-platform/retention", Action: "PUT", Description: "Upsert global log retention policy"},

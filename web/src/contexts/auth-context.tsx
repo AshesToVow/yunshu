@@ -1,15 +1,32 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { PropsWithChildren } from "react";
 import type { EmailLoginPayload, LoginResult, PasswordLoginPayload, UserItem } from "../types/api";
-import { emailLogin, getCurrentUser, logout as logoutRequest, passwordLogin } from "../services/auth";
+import {
+  emailLogin,
+  getCurrentUser,
+  getMyPermissions,
+  logout as logoutRequest,
+  passwordLogin,
+  verifyMfaLogin,
+} from "../services/auth";
 import { clearAuthStorage, clearToken, getUser, setUser } from "../services/storage";
+import {
+  buildCapabilities,
+  EMPTY_CAPABILITIES,
+  hasCapability,
+} from "../modules/permission-capability";
+import type { PermissionCapabilities } from "../modules/permission-capability";
 
 interface AuthContextValue {
   user: UserItem | null;
   loading: boolean;
   isAuthenticated: boolean;
-  passwordLoginAction: (payload: PasswordLoginPayload) => Promise<void>;
-  emailLoginAction: (payload: EmailLoginPayload) => Promise<void>;
+  /** 当前用户的有效能力集合；未加载时按放行处理，后端 Authorize 仍是最终闸门。 */
+  capabilities: PermissionCapabilities;
+  can: (action: string, resource: string) => boolean;
+  passwordLoginAction: (payload: PasswordLoginPayload) => Promise<LoginResult>;
+  emailLoginAction: (payload: EmailLoginPayload) => Promise<LoginResult>;
+  completeMfaAction: (challenge: string, code: string) => Promise<LoginResult>;
   logoutAction: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -30,6 +47,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUserState] = useState<UserItem | null>(() => getUser());
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setAuthenticated] = useState(false);
+  const [capabilities, setCapabilities] = useState<PermissionCapabilities>(EMPTY_CAPABILITIES);
+
+  const loadCapabilities = useCallback(async () => {
+    try {
+      const data = await getMyPermissions();
+      setCapabilities(
+        buildCapabilities({ superAdmin: data.super_admin, permissions: data.permissions }),
+      );
+    } catch {
+      // 能力接口失败不阻塞登录：退化为放行，真正的越权由后端拦截。
+      setCapabilities(EMPTY_CAPABILITIES);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,11 +74,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setUserState(profile);
         setAuthenticated(true);
         markSession();
+        void loadCapabilities();
       } catch {
         if (!cancelled) {
           clearSessionMark();
           setUserState(null);
           setAuthenticated(false);
+          setCapabilities(EMPTY_CAPABILITIES);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -59,27 +91,38 @@ export function AuthProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadCapabilities]);
 
   function applyLoginResult(result: LoginResult) {
+    const resultUser = result.user;
+    if (!resultUser) return;
     const nextUser = {
-      ...result.user,
-      must_change_password: Boolean(result.must_change_password || result.user?.must_change_password),
+      ...resultUser,
+      must_change_password: Boolean(result.must_change_password || resultUser.must_change_password),
     };
     setUser(nextUser);
     setUserState(nextUser);
     setAuthenticated(true);
     markSession();
+    void loadCapabilities();
   }
 
   async function passwordLoginAction(payload: PasswordLoginPayload) {
     const result = await passwordLogin(payload);
-    applyLoginResult(result);
+    if (!result.mfa_required) applyLoginResult(result);
+    return result;
   }
 
   async function emailLoginAction(payload: EmailLoginPayload) {
     const result = await emailLogin(payload);
+    if (!result.mfa_required) applyLoginResult(result);
+    return result;
+  }
+
+  async function completeMfaAction(challenge: string, code: string) {
+    const result = await verifyMfaLogin({ challenge, code });
     applyLoginResult(result);
+    return result;
   }
 
   async function logoutAction() {
@@ -92,6 +135,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       clearSessionMark();
       setUserState(null);
       setAuthenticated(false);
+      setCapabilities(EMPTY_CAPABILITIES);
     }
   }
 
@@ -102,14 +146,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setUserState(profile);
   }
 
+  const can = useCallback(
+    (action: string, resource: string) => hasCapability(capabilities, action, resource),
+    [capabilities],
+  );
+
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
         isAuthenticated,
+        capabilities,
+        can,
         passwordLoginAction,
         emailLoginAction,
+        completeMfaAction,
         logoutAction,
         refreshUser,
       }}

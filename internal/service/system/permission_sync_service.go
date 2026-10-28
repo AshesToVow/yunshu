@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/apiroute"
+	"yunshu/internal/pkg/permcatalog"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/plugingate"
 	"yunshu/internal/plugin"
@@ -61,7 +62,30 @@ func (s *PermissionSyncService) SyncFromEngine(ctx context.Context, engine *gin.
 	if err := s.syncPluginManifestPrefixes(ctx); err != nil {
 		return nil, bizerrors.Pass(ctx, "permission.sync", "SyncFromEngine", err)
 	}
+	if err := s.ensurePseudoPermissions(ctx); err != nil {
+		return nil, bizerrors.Pass(ctx, "permission.sync", "SyncFromEngine", err)
+	}
 	return out, nil
+}
+
+func (s *PermissionSyncService) ensurePseudoPermissions(ctx context.Context) error {
+	for _, p := range permcatalog.PseudoPermissions() {
+		existing, err := s.permissionRepo.GetByResourceAction(ctx, p.Resource, p.Action)
+		if err == nil && existing != nil {
+			continue
+		}
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		row := p
+		if err := s.permissionRepo.Create(ctx, &row); err != nil {
+			if existing, getErr := s.permissionRepo.GetByResourceAction(ctx, p.Resource, p.Action); getErr == nil && existing != nil {
+				continue
+			}
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *PermissionSyncService) upsertRoutePermission(ctx context.Context, method, path, pluginName string) (created bool, err error) {
@@ -74,11 +98,16 @@ func (s *PermissionSyncService) upsertRoutePermission(ctx context.Context, metho
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, err
 	}
+	// 目录已登记的路由沿用人工维护的名称/描述，未登记的走自动命名。
 	row := model.Permission{
 		Name:        apiroute.DefaultName(method, path),
 		Resource:    path,
 		Action:      method,
 		Description: apiroute.AutoSyncDescription(pluginName),
+	}
+	if entry, ok := permcatalog.Lookup(method, path); ok {
+		row.Name = entry.Name
+		row.Description = entry.Description
 	}
 	if err := s.permissionRepo.Create(ctx, &row); err != nil {
 		if existing, getErr := s.permissionRepo.GetByResourceAction(ctx, path, method); getErr == nil && existing != nil {

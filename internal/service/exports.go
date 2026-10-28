@@ -52,6 +52,12 @@ type (
 	WSTicketResponse              = system.WSTicketResponse
 	UpdateProfileRequest          = system.UpdateProfileRequest
 	ChangePasswordRequest         = system.ChangePasswordRequest
+	MFAVerifyRequest              = system.MFAVerifyRequest
+	MFASetupRequest               = system.MFASetupRequest
+	MFASetupResponse              = system.MFASetupResponse
+	MFAEnableRequest              = system.MFAEnableRequest
+	MFAEnableResponse             = system.MFAEnableResponse
+	MFADisableRequest             = system.MFADisableRequest
 )
 
 var (
@@ -763,7 +769,16 @@ type (
 )
 
 // --- system (permission sync) ---
-var NewPermissionSyncService = system.NewPermissionSyncService
+type (
+	RoutePolicyDiff       = system.RoutePolicyDiff
+	PermissionSyncService = system.PermissionSyncService
+	PermissionCatalog     = system.CatalogResult
+)
+
+var (
+	NewPermissionSyncService = system.NewPermissionSyncService
+	BuildRoutePolicyDiff     = system.BuildRoutePolicyDiff
+)
 
 // --- eventforward (manager) ---
 type EventForwardManager = eventforward.Manager

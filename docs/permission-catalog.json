@@ -1,0 +1,6348 @@
+{
+  "total": 786,
+  "groups": [
+    {
+      "title": "系统",
+      "entries": [
+        {
+          "group": "系统",
+          "name": "用户列表",
+          "description": "View user list",
+          "method": "GET",
+          "path": "/api/v1/users",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建用户",
+          "description": "Create user",
+          "method": "POST",
+          "path": "/api/v1/users",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "用户详情",
+          "description": "View user detail",
+          "method": "GET",
+          "path": "/api/v1/users/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新用户",
+          "description": "Update user",
+          "method": "PUT",
+          "path": "/api/v1/users/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除用户",
+          "description": "Delete user",
+          "method": "DELETE",
+          "path": "/api/v1/users/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "分配用户角色",
+          "description": "Assign roles to user",
+          "method": "PUT",
+          "path": "/api/v1/users/:id/roles",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "导出用户",
+          "description": "Export users to Excel",
+          "method": "GET",
+          "path": "/api/v1/users/export",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "用户导入模板",
+          "description": "Download users import template",
+          "method": "GET",
+          "path": "/api/v1/users/import-template",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "导入用户",
+          "description": "Import users from Excel",
+          "method": "POST",
+          "path": "/api/v1/users/import",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "角色列表",
+          "description": "View role list",
+          "method": "GET",
+          "path": "/api/v1/roles",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建角色",
+          "description": "Create role",
+          "method": "POST",
+          "path": "/api/v1/roles",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "角色详情",
+          "description": "View role detail",
+          "method": "GET",
+          "path": "/api/v1/roles/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新角色",
+          "description": "Update role",
+          "method": "PUT",
+          "path": "/api/v1/roles/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除角色",
+          "description": "Delete role",
+          "method": "DELETE",
+          "path": "/api/v1/roles/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "用户组列表",
+          "description": "List user groups",
+          "method": "GET",
+          "path": "/api/v1/user-groups",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建用户组",
+          "description": "Create user group",
+          "method": "POST",
+          "path": "/api/v1/user-groups",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "用户组详情",
+          "description": "View user group detail",
+          "method": "GET",
+          "path": "/api/v1/user-groups/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新用户组",
+          "description": "Update user group",
+          "method": "PUT",
+          "path": "/api/v1/user-groups/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除用户组",
+          "description": "Delete user group",
+          "method": "DELETE",
+          "path": "/api/v1/user-groups/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "分配用户组成员",
+          "description": "Replace members of user group",
+          "method": "PUT",
+          "path": "/api/v1/user-groups/:id/users",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "部门树",
+          "description": "View department tree",
+          "method": "GET",
+          "path": "/api/v1/departments/tree",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "部门详情",
+          "description": "View department detail",
+          "method": "GET",
+          "path": "/api/v1/departments/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建部门",
+          "description": "Create department",
+          "method": "POST",
+          "path": "/api/v1/departments",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新部门",
+          "description": "Update department",
+          "method": "PUT",
+          "path": "/api/v1/departments/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除部门",
+          "description": "Delete department",
+          "method": "DELETE",
+          "path": "/api/v1/departments/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "API列表",
+          "description": "View permission list",
+          "method": "GET",
+          "path": "/api/v1/permissions",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建API",
+          "description": "Create permission",
+          "method": "POST",
+          "path": "/api/v1/permissions",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "批量更新 K8s 范围校验",
+          "description": "Batch enable or disable k8s scope for cluster APIs",
+          "method": "POST",
+          "path": "/api/v1/permissions/k8s-scope/batch",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "API详情",
+          "description": "View permission detail",
+          "method": "GET",
+          "path": "/api/v1/permissions/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新API",
+          "description": "Update permission",
+          "method": "PUT",
+          "path": "/api/v1/permissions/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除API",
+          "description": "Delete permission",
+          "method": "DELETE",
+          "path": "/api/v1/permissions/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "授权列表",
+          "description": "View policy list",
+          "method": "GET",
+          "path": "/api/v1/policies",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建授权策略",
+          "description": "Grant permission to role",
+          "method": "POST",
+          "path": "/api/v1/policies",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除授权策略",
+          "description": "Revoke permission from role (JSON body)",
+          "method": "DELETE",
+          "path": "/api/v1/policies",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "权限菜单关联",
+          "description": "List permission to menu path links",
+          "method": "GET",
+          "path": "/api/v1/policies/menu-links",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "策略冲突分析",
+          "description": "Analyze role policy conflicts",
+          "method": "GET",
+          "path": "/api/v1/policies/conflicts",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "一键补齐入口API",
+          "description": "Create missing menu entry permissions and grant to role",
+          "method": "POST",
+          "path": "/api/v1/policies/conflicts/fix-menu-entry",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "清理禁用插件策略",
+          "description": "Revoke Casbin policies whose API belongs to a disabled plugin",
+          "method": "POST",
+          "path": "/api/v1/policies/conflicts/fix-disabled-plugin",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "统一权限树",
+          "description": "Get menu+API permission tree for role",
+          "method": "GET",
+          "path": "/api/v1/policies/permission-tree",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "策略模拟",
+          "description": "Simulate API authorization layers",
+          "method": "POST",
+          "path": "/api/v1/policies/simulate",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "注册审核列表",
+          "description": "View registration requests",
+          "method": "GET",
+          "path": "/api/v1/registrations",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "审核注册申请",
+          "description": "Review registration request",
+          "method": "POST",
+          "path": "/api/v1/registrations/:id/review",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "菜单管理列表",
+          "description": "List all menus for administration",
+          "method": "GET",
+          "path": "/api/v1/menus",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "创建菜单",
+          "description": "Create menu",
+          "method": "POST",
+          "path": "/api/v1/menus",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "批量更新菜单状态",
+          "description": "Batch update menu status",
+          "method": "PUT",
+          "path": "/api/v1/menus/status",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新菜单",
+          "description": "Update menu",
+          "method": "PUT",
+          "path": "/api/v1/menus/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除菜单",
+          "description": "Delete menu",
+          "method": "DELETE",
+          "path": "/api/v1/menus/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "菜单入口权限绑定",
+          "description": "Get menu entry permission bindings",
+          "method": "GET",
+          "path": "/api/v1/menus/:id/bindings",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "更新菜单入口权限绑定",
+          "description": "Replace menu entry permission bindings",
+          "method": "PUT",
+          "path": "/api/v1/menus/:id/bindings",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "数据字典列表",
+          "description": "List dict entries",
+          "method": "GET",
+          "path": "/api/v1/dict/entries",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "数据字典新增",
+          "description": "Create dict entry",
+          "method": "POST",
+          "path": "/api/v1/dict/entries",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "数据字典更新",
+          "description": "Update dict entry",
+          "method": "PUT",
+          "path": "/api/v1/dict/entries/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "数据字典删除",
+          "description": "Delete dict entry",
+          "method": "DELETE",
+          "path": "/api/v1/dict/entries/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "数据字典下拉",
+          "description": "Dict options for UI",
+          "method": "GET",
+          "path": "/api/v1/dict/options/:dictType",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "数据字典敏感明文",
+          "description": "Reveal sensitive dict entry value",
+          "method": "POST",
+          "path": "/api/v1/dict/entries/:id/reveal-value",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "查看敏感字典",
+          "description": "Read sensitive dict types (keys/secrets) in list and reveal plaintext",
+          "method": "GET",
+          "path": "/api/v1/dict/sensitive",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "维护敏感字典",
+          "description": "Create/update/delete sensitive dict entries",
+          "method": "PUT",
+          "path": "/api/v1/dict/sensitive",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "登录日志列表",
+          "description": "View login logs",
+          "method": "GET",
+          "path": "/api/v1/login-logs",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "导出登录日志",
+          "description": "Export login logs to Excel",
+          "method": "GET",
+          "path": "/api/v1/login-logs/export",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除登录日志",
+          "description": "Delete login log",
+          "method": "DELETE",
+          "path": "/api/v1/login-logs/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "批量删除登录日志",
+          "description": "Batch delete login logs",
+          "method": "POST",
+          "path": "/api/v1/login-logs/delete",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "操作历史列表",
+          "description": "View operation logs",
+          "method": "GET",
+          "path": "/api/v1/operation-logs",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "导出操作历史",
+          "description": "Export operation logs to Excel",
+          "method": "GET",
+          "path": "/api/v1/operation-logs/export",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "删除操作历史",
+          "description": "Delete operation log",
+          "method": "DELETE",
+          "path": "/api/v1/operation-logs/:id",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "批量删除操作历史",
+          "description": "Batch delete operation logs",
+          "method": "POST",
+          "path": "/api/v1/operation-logs/delete",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "查看封禁 IP 列表",
+          "description": "View banned IPs list",
+          "method": "GET",
+          "path": "/api/v1/security/banned-ips",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "解除封禁 IP",
+          "description": "Unban IP",
+          "method": "POST",
+          "path": "/api/v1/security/banned-ips/unban",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "总览页面",
+          "description": "Get system overview metrics",
+          "method": "GET",
+          "path": "/api/v1/overview",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "总览大屏聚合",
+          "description": "Ops command-center screen aggregate",
+          "method": "GET",
+          "path": "/api/v1/overview/screen",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "总览项目上线统计",
+          "description": "Get project launch stats for last 30 days",
+          "method": "GET",
+          "path": "/api/v1/overview/project-launches",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "总览工单按人统计",
+          "description": "Get release runs by submitter for last 30 days",
+          "method": "GET",
+          "path": "/api/v1/overview/release-by-person",
+          "auth": true
+        },
+        {
+          "group": "系统",
+          "name": "插件列表",
+          "description": "List enabled plugins",
+          "method": "GET",
+          "path": "/api/v1/plugins",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "K8s 集群与资源",
+      "entries": [
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 动作码目录",
+          "description": "List k8s scope action codes (reference)",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies/actions",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 能力包目录",
+          "description": "List k8s cluster capability catalog",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies/capabilities",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s API 路径目录",
+          "description": "List k8s scope API paths (reference)",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies/paths",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 集群档位列表",
+          "description": "List k8s cluster access grants by role",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 集群档位预设下发",
+          "description": "Upsert k8s cluster access preset or capabilities per role/cluster",
+          "method": "POST",
+          "path": "/api/v1/k8s-policies/grant-preset",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 集群档位删除",
+          "description": "Delete one k8s cluster access grant",
+          "method": "DELETE",
+          "path": "/api/v1/k8s-policies/cluster-grants/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 集群已授权矩阵",
+          "description": "List cluster auth matrix expanded by user",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies/cluster-auth-matrix",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 用户已授权集群",
+          "description": "List clusters authorized for a user",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies/user-cluster-auth",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 我的集群档位",
+          "description": "Get current user effective k8s access tier for a cluster",
+          "method": "GET",
+          "path": "/api/v1/k8s-policies/my-access",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 集群档位批量删除",
+          "description": "Batch delete k8s cluster access grants",
+          "method": "POST",
+          "path": "/api/v1/k8s-policies/cluster-grants/batch-delete",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 按 NS 拆分档位",
+          "description": "Split k8s scoped policy presets by namespace",
+          "method": "POST",
+          "path": "/api/v1/k8s-policies/split-by-namespaces",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 命名空间黑名单列表",
+          "description": "List k8s namespace deny rules",
+          "method": "GET",
+          "path": "/api/v1/k8s-namespace-deny-rules",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 命名空间黑名单新增",
+          "description": "Create k8s namespace deny rule",
+          "method": "POST",
+          "path": "/api/v1/k8s-namespace-deny-rules",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 命名空间黑名单删除",
+          "description": "Delete k8s namespace deny rule",
+          "method": "DELETE",
+          "path": "/api/v1/k8s-namespace-deny-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 命名空间白名单列表",
+          "description": "List k8s namespace allow rules",
+          "method": "GET",
+          "path": "/api/v1/k8s-namespace-allow-rules",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 命名空间白名单新增",
+          "description": "Create k8s namespace allow rule",
+          "method": "POST",
+          "path": "/api/v1/k8s-namespace-allow-rules",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 命名空间白名单删除",
+          "description": "Delete k8s namespace allow rule",
+          "method": "DELETE",
+          "path": "/api/v1/k8s-namespace-allow-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "集群列表",
+          "description": "View k8s clusters",
+          "method": "GET",
+          "path": "/api/v1/clusters",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "集群详情",
+          "description": "View k8s cluster detail",
+          "method": "GET",
+          "path": "/api/v1/clusters/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "创建集群",
+          "description": "Create k8s cluster",
+          "method": "POST",
+          "path": "/api/v1/clusters",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "更新集群",
+          "description": "Update k8s cluster",
+          "method": "PUT",
+          "path": "/api/v1/clusters/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除集群",
+          "description": "Delete k8s cluster",
+          "method": "DELETE",
+          "path": "/api/v1/clusters/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "启停集群",
+          "description": "Enable/disable k8s cluster",
+          "method": "PUT",
+          "path": "/api/v1/clusters/:id/status",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "集群连接状态",
+          "description": "Check k8s cluster status",
+          "method": "GET",
+          "path": "/api/v1/clusters/:id/status",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "集群命名空间",
+          "description": "List cluster namespaces",
+          "method": "GET",
+          "path": "/api/v1/clusters/:id/namespaces",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "组件状态列表",
+          "description": "List control plane component statuses",
+          "method": "GET",
+          "path": "/api/v1/clusters/:id/component-statuses",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "集群 API 资源发现",
+          "description": "Discovery API resources like kubectl api-resources",
+          "method": "GET",
+          "path": "/api/v1/clusters/:id/api-resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 资源 Watch（SSE）",
+          "description": "Kubernetes watch streamed as Server-Sent Events",
+          "method": "GET",
+          "path": "/api/v1/k8s/resource-watch/stream",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 全局搜索",
+          "description": "Search k8s resources",
+          "method": "GET",
+          "path": "/api/v1/k8s/search",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s 资源拓扑",
+          "description": "Get k8s resource topology graph",
+          "method": "GET",
+          "path": "/api/v1/k8s/topology",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发规则列表",
+          "description": "List k8s event forward rules",
+          "method": "GET",
+          "path": "/api/v1/k8s/event-forward/rules",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发规则详情",
+          "description": "Get k8s event forward rule",
+          "method": "GET",
+          "path": "/api/v1/k8s/event-forward/rules/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发规则创建",
+          "description": "Create k8s event forward rule",
+          "method": "POST",
+          "path": "/api/v1/k8s/event-forward/rules",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发规则更新",
+          "description": "Update k8s event forward rule",
+          "method": "PUT",
+          "path": "/api/v1/k8s/event-forward/rules/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发规则删除",
+          "description": "Delete k8s event forward rule",
+          "method": "DELETE",
+          "path": "/api/v1/k8s/event-forward/rules/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发 Worker 参数",
+          "description": "Get k8s event forward worker settings",
+          "method": "GET",
+          "path": "/api/v1/k8s/event-forward/settings",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发 Worker 更新",
+          "description": "Update k8s event forward worker settings",
+          "method": "PUT",
+          "path": "/api/v1/k8s/event-forward/settings",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发投递记录",
+          "description": "List forwarded k8s events including dead letters",
+          "method": "GET",
+          "path": "/api/v1/k8s/event-forward/events",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s Event 转发死信重投",
+          "description": "Requeue dead-letter forwarded event",
+          "method": "POST",
+          "path": "/api/v1/k8s/event-forward/events/:id/requeue",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 列表",
+          "description": "List pods",
+          "method": "GET",
+          "path": "/api/v1/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 详情",
+          "description": "Get pod detail",
+          "method": "GET",
+          "path": "/api/v1/pods/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 诊断",
+          "description": "Diagnose pod issues",
+          "method": "GET",
+          "path": "/api/v1/pods/diagnose",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 事件",
+          "description": "List pod events",
+          "method": "GET",
+          "path": "/api/v1/pods/events",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 日志",
+          "description": "Get pod logs",
+          "method": "GET",
+          "path": "/api/v1/pods/logs",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 日志下载",
+          "description": "Download pod logs",
+          "method": "GET",
+          "path": "/api/v1/pods/logs/download",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 日志流",
+          "description": "Stream pod logs",
+          "method": "GET",
+          "path": "/api/v1/pods/logs/stream",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 文件列表",
+          "description": "List pod files",
+          "method": "GET",
+          "path": "/api/v1/pods/files",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 文件读取",
+          "description": "Read pod file content",
+          "method": "GET",
+          "path": "/api/v1/pods/file",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 文件下载",
+          "description": "Download pod file",
+          "method": "GET",
+          "path": "/api/v1/pods/file/download",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 文件上传",
+          "description": "Upload file to pod",
+          "method": "POST",
+          "path": "/api/v1/pods/file/upload",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 文件删除",
+          "description": "Delete pod file",
+          "method": "POST",
+          "path": "/api/v1/pods/file/delete",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod Exec",
+          "description": "Exec command in pod",
+          "method": "POST",
+          "path": "/api/v1/pods/exec",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 临时调试容器",
+          "description": "Inject ephemeral debug container",
+          "method": "POST",
+          "path": "/api/v1/pods/debug",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 调试镜像",
+          "description": "Get default ephemeral debug image",
+          "method": "GET",
+          "path": "/api/v1/pods/debug/image",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 交互式终端",
+          "description": "Interactive exec terminal via websocket",
+          "method": "GET",
+          "path": "/api/v1/pods/exec/ws",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 重启",
+          "description": "Restart pod",
+          "method": "POST",
+          "path": "/api/v1/pods/restart",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod YAML 创建",
+          "description": "Create pod by yaml",
+          "method": "POST",
+          "path": "/api/v1/pods/create/yaml",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Pod 快捷创建",
+          "description": "Create pod quickly",
+          "method": "POST",
+          "path": "/api/v1/pods/create/simple",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "编辑并重建 Pod",
+          "description": "Update pod by recreate",
+          "method": "POST",
+          "path": "/api/v1/pods/update/simple",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 Pod",
+          "description": "Delete pod",
+          "method": "DELETE",
+          "path": "/api/v1/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "命名空间列表",
+          "description": "List namespaces",
+          "method": "GET",
+          "path": "/api/v1/namespaces",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "命名空间详情",
+          "description": "Get namespace detail",
+          "method": "GET",
+          "path": "/api/v1/namespaces/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "命名空间应用 YAML",
+          "description": "Apply namespace yaml",
+          "method": "POST",
+          "path": "/api/v1/namespaces/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除命名空间",
+          "description": "Delete namespace",
+          "method": "DELETE",
+          "path": "/api/v1/namespaces",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Node 列表",
+          "description": "List nodes",
+          "method": "GET",
+          "path": "/api/v1/nodes",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Node 详情",
+          "description": "Get node detail",
+          "method": "GET",
+          "path": "/api/v1/nodes/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Node 调度状态",
+          "description": "Cordon or uncordon node",
+          "method": "POST",
+          "path": "/api/v1/nodes/schedulability",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Node 污点",
+          "description": "Replace node taints",
+          "method": "PUT",
+          "path": "/api/v1/nodes/taints",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Node Drain",
+          "description": "Drain node workloads",
+          "method": "POST",
+          "path": "/api/v1/nodes/drain",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Node Drain 进度",
+          "description": "Get node drain status",
+          "method": "GET",
+          "path": "/api/v1/nodes/drain-status",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC Role 列表",
+          "description": "List Roles",
+          "method": "GET",
+          "path": "/api/v1/rbac/roles",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC RoleBinding 列表",
+          "description": "List RoleBindings",
+          "method": "GET",
+          "path": "/api/v1/rbac/rolebindings",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC ClusterRole 列表",
+          "description": "List ClusterRoles",
+          "method": "GET",
+          "path": "/api/v1/rbac/clusterroles",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC ClusterRoleBinding 列表",
+          "description": "List ClusterRoleBindings",
+          "method": "GET",
+          "path": "/api/v1/rbac/clusterrolebindings",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC 详情",
+          "description": "Get RBAC detail",
+          "method": "GET",
+          "path": "/api/v1/rbac/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC 应用 YAML",
+          "description": "Apply RBAC yaml",
+          "method": "POST",
+          "path": "/api/v1/rbac/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "RBAC 删除",
+          "description": "Delete RBAC resource",
+          "method": "DELETE",
+          "path": "/api/v1/rbac",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ServiceAccount 列表",
+          "description": "List serviceaccounts",
+          "method": "GET",
+          "path": "/api/v1/serviceaccounts",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ServiceAccount 详情",
+          "description": "Get serviceaccount detail",
+          "method": "GET",
+          "path": "/api/v1/serviceaccounts/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ServiceAccount 应用 YAML",
+          "description": "Apply serviceaccount yaml",
+          "method": "POST",
+          "path": "/api/v1/serviceaccounts/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ServiceAccount 删除",
+          "description": "Delete serviceaccount",
+          "method": "DELETE",
+          "path": "/api/v1/serviceaccounts",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 列表",
+          "description": "List deployments",
+          "method": "GET",
+          "path": "/api/v1/deployments",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 详情",
+          "description": "Get deployment detail",
+          "method": "GET",
+          "path": "/api/v1/deployments/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 应用 YAML",
+          "description": "Apply deployment yaml",
+          "method": "POST",
+          "path": "/api/v1/deployments/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 扩缩容",
+          "description": "Scale deployment",
+          "method": "POST",
+          "path": "/api/v1/deployments/scale",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 垂直扩缩",
+          "description": "Patch deployment container resources",
+          "method": "POST",
+          "path": "/api/v1/deployments/container-resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 重启",
+          "description": "Restart deployment",
+          "method": "POST",
+          "path": "/api/v1/deployments/restart",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 回滚",
+          "description": "Undo deployment rollout",
+          "method": "POST",
+          "path": "/api/v1/deployments/rollout-undo",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 历史版本",
+          "description": "List deployment rollout revisions",
+          "method": "GET",
+          "path": "/api/v1/deployments/revisions",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 关联 Pods",
+          "description": "List deployment related pods",
+          "method": "GET",
+          "path": "/api/v1/deployments/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Deployment 发布状态",
+          "description": "Get deployment rollout status",
+          "method": "GET",
+          "path": "/api/v1/deployments/rollout-status",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 Deployment",
+          "description": "Delete deployment",
+          "method": "DELETE",
+          "path": "/api/v1/deployments",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 列表",
+          "description": "List statefulsets",
+          "method": "GET",
+          "path": "/api/v1/statefulsets",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 详情",
+          "description": "Get statefulset detail",
+          "method": "GET",
+          "path": "/api/v1/statefulsets/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 应用 YAML",
+          "description": "Apply statefulset yaml",
+          "method": "POST",
+          "path": "/api/v1/statefulsets/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 扩缩容",
+          "description": "Scale statefulset",
+          "method": "POST",
+          "path": "/api/v1/statefulsets/scale",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 垂直扩缩",
+          "description": "Patch statefulset container resources",
+          "method": "POST",
+          "path": "/api/v1/statefulsets/container-resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 重启",
+          "description": "Restart statefulset",
+          "method": "POST",
+          "path": "/api/v1/statefulsets/restart",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 历史版本",
+          "description": "List statefulset controller revisions",
+          "method": "GET",
+          "path": "/api/v1/statefulsets/revisions",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 回滚",
+          "description": "Undo statefulset rollout",
+          "method": "POST",
+          "path": "/api/v1/statefulsets/rollout-undo",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StatefulSet 关联 Pods",
+          "description": "List statefulset related pods",
+          "method": "GET",
+          "path": "/api/v1/statefulsets/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 StatefulSet",
+          "description": "Delete statefulset",
+          "method": "DELETE",
+          "path": "/api/v1/statefulsets",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 垂直扩缩",
+          "description": "Patch daemonset container resources",
+          "method": "POST",
+          "path": "/api/v1/daemonsets/container-resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 列表",
+          "description": "List daemonsets",
+          "method": "GET",
+          "path": "/api/v1/daemonsets",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 详情",
+          "description": "Get daemonset detail",
+          "method": "GET",
+          "path": "/api/v1/daemonsets/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 应用 YAML",
+          "description": "Apply daemonset yaml",
+          "method": "POST",
+          "path": "/api/v1/daemonsets/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 重启",
+          "description": "Restart daemonset",
+          "method": "POST",
+          "path": "/api/v1/daemonsets/restart",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 历史版本",
+          "description": "List daemonset controller revisions",
+          "method": "GET",
+          "path": "/api/v1/daemonsets/revisions",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 回滚",
+          "description": "Undo daemonset rollout",
+          "method": "POST",
+          "path": "/api/v1/daemonsets/rollout-undo",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "DaemonSet 关联 Pods",
+          "description": "List daemonset related pods",
+          "method": "GET",
+          "path": "/api/v1/daemonsets/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 DaemonSet",
+          "description": "Delete daemonset",
+          "method": "DELETE",
+          "path": "/api/v1/daemonsets",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Job 列表",
+          "description": "List jobs",
+          "method": "GET",
+          "path": "/api/v1/jobs",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Job 详情",
+          "description": "Get job detail",
+          "method": "GET",
+          "path": "/api/v1/jobs/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Job 关联 Pods",
+          "description": "List job related pods",
+          "method": "GET",
+          "path": "/api/v1/jobs/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Job 重新执行",
+          "description": "Rerun a job",
+          "method": "POST",
+          "path": "/api/v1/jobs/rerun",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Job 垂直扩缩",
+          "description": "Patch job container resources",
+          "method": "POST",
+          "path": "/api/v1/jobs/container-resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Job 应用 YAML",
+          "description": "Apply job yaml",
+          "method": "POST",
+          "path": "/api/v1/jobs/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 Job",
+          "description": "Delete job",
+          "method": "DELETE",
+          "path": "/api/v1/jobs",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 列表",
+          "description": "List cronjobs",
+          "method": "GET",
+          "path": "/api/v1/cronjobs",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 列表V2",
+          "description": "List cronjobs with suspend and last schedule",
+          "method": "GET",
+          "path": "/api/v1/cronjobs/v2",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 详情",
+          "description": "Get cronjob detail",
+          "method": "GET",
+          "path": "/api/v1/cronjobs/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 关联 Pods",
+          "description": "List cronjob related pods",
+          "method": "GET",
+          "path": "/api/v1/cronjobs/pods",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 应用 YAML",
+          "description": "Apply cronjob yaml",
+          "method": "POST",
+          "path": "/api/v1/cronjobs/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 垂直扩缩",
+          "description": "Patch cronjob container resources",
+          "method": "POST",
+          "path": "/api/v1/cronjobs/container-resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 暂停/恢复",
+          "description": "Suspend/resume cronjob",
+          "method": "POST",
+          "path": "/api/v1/cronjobs/suspend",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CronJob 触发执行",
+          "description": "Trigger cronjob once",
+          "method": "POST",
+          "path": "/api/v1/cronjobs/trigger",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 CronJob",
+          "description": "Delete cronjob",
+          "method": "DELETE",
+          "path": "/api/v1/cronjobs",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ConfigMap 列表",
+          "description": "List configmaps",
+          "method": "GET",
+          "path": "/api/v1/configmaps",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ConfigMap 详情",
+          "description": "Get configmap detail",
+          "method": "GET",
+          "path": "/api/v1/configmaps/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "ConfigMap 应用 YAML",
+          "description": "Apply configmap yaml",
+          "method": "POST",
+          "path": "/api/v1/configmaps/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 ConfigMap",
+          "description": "Delete configmap",
+          "method": "DELETE",
+          "path": "/api/v1/configmaps",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Secret 列表",
+          "description": "List secrets",
+          "method": "GET",
+          "path": "/api/v1/secrets",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Secret 详情",
+          "description": "Get secret detail",
+          "method": "GET",
+          "path": "/api/v1/secrets/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Secret 应用 YAML",
+          "description": "Apply secret yaml",
+          "method": "POST",
+          "path": "/api/v1/secrets/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 Secret",
+          "description": "Delete secret",
+          "method": "DELETE",
+          "path": "/api/v1/secrets",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Service 列表",
+          "description": "List services",
+          "method": "GET",
+          "path": "/api/v1/k8s-services",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Service 详情",
+          "description": "Get service detail",
+          "method": "GET",
+          "path": "/api/v1/k8s-services/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Service 应用 YAML",
+          "description": "Apply service yaml",
+          "method": "POST",
+          "path": "/api/v1/k8s-services/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 Service",
+          "description": "Delete service",
+          "method": "DELETE",
+          "path": "/api/v1/k8s-services",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "PersistentVolume 列表",
+          "description": "List persistent volumes",
+          "method": "GET",
+          "path": "/api/v1/persistentvolumes",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "PersistentVolume 详情",
+          "description": "Get persistent volume detail",
+          "method": "GET",
+          "path": "/api/v1/persistentvolumes/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "PersistentVolume 应用 YAML",
+          "description": "Apply persistent volume yaml",
+          "method": "POST",
+          "path": "/api/v1/persistentvolumes/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 PersistentVolume",
+          "description": "Delete persistent volume",
+          "method": "DELETE",
+          "path": "/api/v1/persistentvolumes",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "PersistentVolumeClaim 列表",
+          "description": "List persistent volume claims",
+          "method": "GET",
+          "path": "/api/v1/persistentvolumeclaims",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "PersistentVolumeClaim 详情",
+          "description": "Get persistent volume claim detail",
+          "method": "GET",
+          "path": "/api/v1/persistentvolumeclaims/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "PersistentVolumeClaim 应用 YAML",
+          "description": "Apply persistent volume claim yaml",
+          "method": "POST",
+          "path": "/api/v1/persistentvolumeclaims/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 PersistentVolumeClaim",
+          "description": "Delete persistent volume claim",
+          "method": "DELETE",
+          "path": "/api/v1/persistentvolumeclaims",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StorageClass 列表",
+          "description": "List storage classes",
+          "method": "GET",
+          "path": "/api/v1/storageclasses",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StorageClass 详情",
+          "description": "Get storage class detail",
+          "method": "GET",
+          "path": "/api/v1/storageclasses/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "StorageClass 应用 YAML",
+          "description": "Apply storage class yaml",
+          "method": "POST",
+          "path": "/api/v1/storageclasses/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 StorageClass",
+          "description": "Delete storage class",
+          "method": "DELETE",
+          "path": "/api/v1/storageclasses",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Ingress 列表",
+          "description": "List ingresses",
+          "method": "GET",
+          "path": "/api/v1/ingresses",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Ingress 详情",
+          "description": "Get ingress detail",
+          "method": "GET",
+          "path": "/api/v1/ingresses/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Ingress 诊断",
+          "description": "Diagnose ingress issues",
+          "method": "GET",
+          "path": "/api/v1/ingresses/diagnose",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Ingress 应用 YAML",
+          "description": "Apply ingress yaml",
+          "method": "POST",
+          "path": "/api/v1/ingresses/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "IngressClass 列表",
+          "description": "List ingress classes",
+          "method": "GET",
+          "path": "/api/v1/ingresses/classes",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "IngressClass 详情",
+          "description": "Get ingress class detail",
+          "method": "GET",
+          "path": "/api/v1/ingresses/classes/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "IngressClass 应用 YAML",
+          "description": "Apply ingress class yaml",
+          "method": "POST",
+          "path": "/api/v1/ingresses/classes/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 IngressClass",
+          "description": "Delete ingress class",
+          "method": "DELETE",
+          "path": "/api/v1/ingresses/classes",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "重启 Ingress-Nginx Pods",
+          "description": "Restart ingress-nginx controller pods (requires cluster admin tier + confirm=true)",
+          "method": "POST",
+          "path": "/api/v1/ingresses/nginx/restart",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 Ingress",
+          "description": "Delete ingress",
+          "method": "DELETE",
+          "path": "/api/v1/ingresses",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "HPA 列表",
+          "description": "List HorizontalPodAutoscaler",
+          "method": "GET",
+          "path": "/api/v1/horizontal-pod-autoscalers",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "HPA 详情",
+          "description": "Get HPA YAML",
+          "method": "GET",
+          "path": "/api/v1/horizontal-pod-autoscalers/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "HPA 应用 YAML",
+          "description": "Apply HPA yaml",
+          "method": "POST",
+          "path": "/api/v1/horizontal-pod-autoscalers/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 HPA",
+          "description": "Delete HPA",
+          "method": "DELETE",
+          "path": "/api/v1/horizontal-pod-autoscalers",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Harbor 信息",
+          "description": "Get Harbor helm repo info",
+          "method": "GET",
+          "path": "/api/v1/helm/harbor/info",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Harbor Chart 列表",
+          "description": "List Harbor helm charts",
+          "method": "GET",
+          "path": "/api/v1/helm/harbor/charts",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Harbor Chart 版本",
+          "description": "List Harbor chart versions",
+          "method": "GET",
+          "path": "/api/v1/helm/harbor/charts/versions",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm Release 列表",
+          "description": "List helm releases",
+          "method": "GET",
+          "path": "/api/v1/helm/releases",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm Release 详情",
+          "description": "Get helm release detail",
+          "method": "GET",
+          "path": "/api/v1/helm/releases/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm Release 历史",
+          "description": "Get helm release history",
+          "method": "GET",
+          "path": "/api/v1/helm/releases/history",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm Release Values",
+          "description": "Get helm release values",
+          "method": "GET",
+          "path": "/api/v1/helm/releases/values",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm 安装",
+          "description": "Install helm release from Harbor",
+          "method": "POST",
+          "path": "/api/v1/helm/releases/install",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm 升级",
+          "description": "Upgrade helm release",
+          "method": "POST",
+          "path": "/api/v1/helm/releases/upgrade",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm 回滚",
+          "description": "Rollback helm release",
+          "method": "POST",
+          "path": "/api/v1/helm/releases/rollback",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Helm 卸载",
+          "description": "Uninstall helm release",
+          "method": "DELETE",
+          "path": "/api/v1/helm/releases",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "网络策略列表",
+          "description": "List network policies",
+          "method": "GET",
+          "path": "/api/v1/network-policies",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "网络策略详情",
+          "description": "Get network policy detail",
+          "method": "GET",
+          "path": "/api/v1/network-policies/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "网络策略应用 YAML",
+          "description": "Apply network policy yaml",
+          "method": "POST",
+          "path": "/api/v1/network-policies/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除网络策略",
+          "description": "Delete network policy",
+          "method": "DELETE",
+          "path": "/api/v1/network-policies",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "工作负载预检",
+          "description": "Preview workload apply",
+          "method": "POST",
+          "path": "/api/v1/deployments/preview-apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "工作负载快照",
+          "description": "List workload snapshots",
+          "method": "GET",
+          "path": "/api/v1/deployments/snapshots",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "工作负载回滚",
+          "description": "Rollback workload snapshot",
+          "method": "POST",
+          "path": "/api/v1/deployments/snapshots/rollback",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Event 列表",
+          "description": "List events",
+          "method": "GET",
+          "path": "/api/v1/events",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "Event 分组列表",
+          "description": "List events grouped",
+          "method": "GET",
+          "path": "/api/v1/events/grouped",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CRD 列表",
+          "description": "List custom resource definitions",
+          "method": "GET",
+          "path": "/api/v1/crds",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CRD 详情",
+          "description": "Get custom resource definition detail",
+          "method": "GET",
+          "path": "/api/v1/crds/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CRD 应用 YAML",
+          "description": "Apply custom resource definition yaml",
+          "method": "POST",
+          "path": "/api/v1/crds/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 CRD",
+          "description": "Delete custom resource definition",
+          "method": "DELETE",
+          "path": "/api/v1/crds",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s CR 模板列表",
+          "description": "List k8s CR/YAML templates",
+          "method": "GET",
+          "path": "/api/v1/k8s-cr-templates",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "K8s CR 模板详情",
+          "description": "Get k8s CR/YAML template by id",
+          "method": "GET",
+          "path": "/api/v1/k8s-cr-templates/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "创建 K8s CR 模板",
+          "description": "Create k8s CR template",
+          "method": "POST",
+          "path": "/api/v1/k8s-cr-templates",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "更新 K8s CR 模板",
+          "description": "Update k8s CR template",
+          "method": "PUT",
+          "path": "/api/v1/k8s-cr-templates/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 K8s CR 模板",
+          "description": "Delete k8s CR template",
+          "method": "DELETE",
+          "path": "/api/v1/k8s-cr-templates/:id",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CR 资源类型列表",
+          "description": "List custom resource types",
+          "method": "GET",
+          "path": "/api/v1/crs/resources",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CR 实例列表",
+          "description": "List custom resources",
+          "method": "GET",
+          "path": "/api/v1/crs",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CR 实例详情",
+          "description": "Get custom resource detail",
+          "method": "GET",
+          "path": "/api/v1/crs/detail",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "CR 实例应用 YAML",
+          "description": "Apply custom resource yaml",
+          "method": "POST",
+          "path": "/api/v1/crs/apply",
+          "auth": true
+        },
+        {
+          "group": "K8s 集群与资源",
+          "name": "删除 CR 实例",
+          "description": "Delete custom resource",
+          "method": "DELETE",
+          "path": "/api/v1/crs",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "告警中心",
+      "entries": [
+        {
+          "group": "告警中心",
+          "name": "告警通道列表",
+          "description": "List alert channels",
+          "method": "GET",
+          "path": "/api/v1/alerts/channels",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建告警通道",
+          "description": "Create alert channel",
+          "method": "POST",
+          "path": "/api/v1/alerts/channels",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新告警通道",
+          "description": "Update alert channel",
+          "method": "PUT",
+          "path": "/api/v1/alerts/channels/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除告警通道",
+          "description": "Delete alert channel",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/channels/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "测试告警通道",
+          "description": "Send test alert to channel",
+          "method": "POST",
+          "path": "/api/v1/alerts/channels/:id/test",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "预览告警通道模板",
+          "description": "Preview alert channel template",
+          "method": "POST",
+          "path": "/api/v1/alerts/channels/preview-template",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警路由调试",
+          "description": "Debug alert routing",
+          "method": "POST",
+          "path": "/api/v1/alerts/routing/debug",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警事件列表",
+          "description": "List alert events",
+          "method": "GET",
+          "path": "/api/v1/alerts/events",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警事件分组列表",
+          "description": "List alert events grouped",
+          "method": "GET",
+          "path": "/api/v1/alerts/events/grouped",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警指纹投递追溯",
+          "description": "Explain alert delivery by fingerprint",
+          "method": "GET",
+          "path": "/api/v1/alerts/events/by-fingerprint",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警证据包",
+          "description": "Collect alert evidence pack (logs/changes/pod hint)",
+          "method": "GET",
+          "path": "/api/v1/alerts/events/evidence",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警转故障工单",
+          "description": "Create incident ticket from alert event or fingerprint",
+          "method": "POST",
+          "path": "/api/v1/alerts/to-ticket",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警事件转故障工单",
+          "description": "Create incident ticket from alert delivery event",
+          "method": "POST",
+          "path": "/api/v1/alerts/events/:alert_event_id/to-ticket",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警历史统计",
+          "description": "Alert history stats",
+          "method": "GET",
+          "path": "/api/v1/alerts/history/stats",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "认领告警",
+          "description": "Acknowledge alert",
+          "method": "POST",
+          "path": "/api/v1/alerts/acks",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "取消认领告警",
+          "description": "Clear alert ack",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/acks",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "查询告警认领",
+          "description": "Get active alert ack",
+          "method": "GET",
+          "path": "/api/v1/alerts/acks",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警进展列表",
+          "description": "List alert progress notes",
+          "method": "GET",
+          "path": "/api/v1/alerts/notes",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "添加告警进展",
+          "description": "Create alert progress note",
+          "method": "POST",
+          "path": "/api/v1/alerts/notes",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警数据源列表",
+          "description": "List alert datasources",
+          "method": "GET",
+          "path": "/api/v1/alerts/datasources",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警数据源连通性检测",
+          "description": "Ping Prometheus datasource",
+          "method": "GET",
+          "path": "/api/v1/alerts/datasources/:id/ping",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警数据源健康列表",
+          "description": "List datasource health",
+          "method": "GET",
+          "path": "/api/v1/alerts/datasources/health",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警数据源健康详情",
+          "description": "Get datasource health",
+          "method": "GET",
+          "path": "/api/v1/alerts/datasources/:id/health",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警数据源健康探测",
+          "description": "Check datasource health",
+          "method": "POST",
+          "path": "/api/v1/alerts/datasources/:id/health-check",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建告警数据源",
+          "description": "Create alert datasource",
+          "method": "POST",
+          "path": "/api/v1/alerts/datasources",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新告警数据源",
+          "description": "Update alert datasource",
+          "method": "PUT",
+          "path": "/api/v1/alerts/datasources/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除告警数据源",
+          "description": "Delete alert datasource",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/datasources/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "Prometheus 活跃告警快照",
+          "description": "GET /api/v1/alerts proxy",
+          "method": "GET",
+          "path": "/api/v1/alerts/datasources/:id/prometheus-alerts",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "Alertmanager 静默列表",
+          "description": "GET /api/v2/silences proxy",
+          "method": "GET",
+          "path": "/api/v1/alerts/datasources/:id/alertmanager-silences",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "PromQL 即时查询",
+          "description": "Prometheus instant query",
+          "method": "POST",
+          "path": "/api/v1/alerts/datasources/:id/query",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "PromQL 范围查询",
+          "description": "Prometheus range query",
+          "method": "POST",
+          "path": "/api/v1/alerts/datasources/:id/query_range",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警静默列表",
+          "description": "List alert silences",
+          "method": "GET",
+          "path": "/api/v1/alerts/silences",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建告警静默",
+          "description": "Create alert silence",
+          "method": "POST",
+          "path": "/api/v1/alerts/silences",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "批量创建告警静默",
+          "description": "Batch create alert silences",
+          "method": "POST",
+          "path": "/api/v1/alerts/silences/batch",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新告警静默",
+          "description": "Update alert silence",
+          "method": "PUT",
+          "path": "/api/v1/alerts/silences/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除告警静默",
+          "description": "Delete alert silence",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/silences/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "维护窗口列表",
+          "description": "List alert maintenance windows",
+          "method": "GET",
+          "path": "/api/v1/alerts/maintenance-windows",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建维护窗口",
+          "description": "Create alert maintenance window",
+          "method": "POST",
+          "path": "/api/v1/alerts/maintenance-windows",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新维护窗口",
+          "description": "Update alert maintenance window",
+          "method": "PUT",
+          "path": "/api/v1/alerts/maintenance-windows/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除维护窗口",
+          "description": "Delete alert maintenance window",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/maintenance-windows/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警抑制规则列表",
+          "description": "List alert inhibition rules",
+          "method": "GET",
+          "path": "/api/v1/alerts/inhibition-rules",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建告警抑制规则",
+          "description": "Create alert inhibition rule",
+          "method": "POST",
+          "path": "/api/v1/alerts/inhibition-rules",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新告警抑制规则",
+          "description": "Update alert inhibition rule",
+          "method": "PUT",
+          "path": "/api/v1/alerts/inhibition-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除告警抑制规则",
+          "description": "Delete alert inhibition rule",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/inhibition-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "刷新告警抑制缓存",
+          "description": "Refresh inhibition rule cache",
+          "method": "POST",
+          "path": "/api/v1/alerts/inhibition-rules/refresh-cache",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "监控告警规则列表",
+          "description": "List monitor alert rules",
+          "method": "GET",
+          "path": "/api/v1/alerts/monitor-rules",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建监控告警规则",
+          "description": "Create monitor alert rule",
+          "method": "POST",
+          "path": "/api/v1/alerts/monitor-rules",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警规则模板列表",
+          "description": "List alert rule templates",
+          "method": "GET",
+          "path": "/api/v1/alerts/rule-templates",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "从模板创建监控规则",
+          "description": "Create monitor rule from template",
+          "method": "POST",
+          "path": "/api/v1/alerts/monitor-rules/from-template",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新监控告警规则",
+          "description": "Update monitor alert rule",
+          "method": "PUT",
+          "path": "/api/v1/alerts/monitor-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除监控告警规则",
+          "description": "Delete monitor alert rule",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/monitor-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "监控规则处理人",
+          "description": "List rule assignees",
+          "method": "GET",
+          "path": "/api/v1/alerts/monitor-rules/:id/assignees",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "配置监控规则处理人",
+          "description": "Upsert rule assignees",
+          "method": "PUT",
+          "path": "/api/v1/alerts/monitor-rules/:id/assignees",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "监控规则变更待审列表",
+          "description": "List pending monitor rule change requests",
+          "method": "GET",
+          "path": "/api/v1/alerts/monitor-rule-changes",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "提交监控规则变更审批",
+          "description": "Propose monitor rule change",
+          "method": "POST",
+          "path": "/api/v1/alerts/monitor-rule-changes",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "批准监控规则变更",
+          "description": "Approve monitor rule change",
+          "method": "POST",
+          "path": "/api/v1/alerts/monitor-rule-changes/:id/approve",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "驳回监控规则变更",
+          "description": "Reject monitor rule change",
+          "method": "POST",
+          "path": "/api/v1/alerts/monitor-rule-changes/:id/reject",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "PromQL 收藏列表",
+          "description": "List promql saved queries",
+          "method": "GET",
+          "path": "/api/v1/alerts/promql-saved-queries",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建 PromQL 收藏",
+          "description": "Create promql saved query",
+          "method": "POST",
+          "path": "/api/v1/alerts/promql-saved-queries",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除 PromQL 收藏",
+          "description": "Delete promql saved query",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/promql-saved-queries/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "导出历史告警 CSV",
+          "description": "Export alert history events as CSV",
+          "method": "GET",
+          "path": "/api/v1/alerts/his-events/export.csv",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "值班班次列表",
+          "description": "List alert duty blocks",
+          "method": "GET",
+          "path": "/api/v1/alerts/duty-blocks",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建值班班次",
+          "description": "Create alert duty block",
+          "method": "POST",
+          "path": "/api/v1/alerts/duty-blocks",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新值班班次",
+          "description": "Update alert duty block",
+          "method": "PUT",
+          "path": "/api/v1/alerts/duty-blocks/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除值班班次",
+          "description": "Delete alert duty block",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/duty-blocks/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "值班日历",
+          "description": "List duty calendar",
+          "method": "GET",
+          "path": "/api/v1/alerts/duty-blocks/calendar",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "校验值班班次",
+          "description": "Validate duty blocks",
+          "method": "POST",
+          "path": "/api/v1/alerts/duty-blocks/validate",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "值班交接",
+          "description": "Handoff duty block",
+          "method": "POST",
+          "path": "/api/v1/alerts/duty-blocks/:id/handoff",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警订阅节点列表",
+          "description": "List alert subscription nodes",
+          "method": "GET",
+          "path": "/api/v1/alerts/subscriptions",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警订阅树",
+          "description": "Get alert subscription tree",
+          "method": "GET",
+          "path": "/api/v1/alerts/subscriptions/tree",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建告警订阅节点",
+          "description": "Create alert subscription node",
+          "method": "POST",
+          "path": "/api/v1/alerts/subscriptions",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新告警订阅节点",
+          "description": "Update alert subscription node",
+          "method": "PUT",
+          "path": "/api/v1/alerts/subscriptions/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除告警订阅节点",
+          "description": "Delete alert subscription node",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/subscriptions/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "移动告警订阅节点",
+          "description": "Move alert subscription node",
+          "method": "POST",
+          "path": "/api/v1/alerts/subscriptions/:id/move",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "从策略迁移订阅",
+          "description": "Migrate subscriptions from policies",
+          "method": "POST",
+          "path": "/api/v1/alerts/subscriptions/migrate-from-policies",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "克隆项目路由",
+          "description": "Clone project routing subscriptions",
+          "method": "POST",
+          "path": "/api/v1/alerts/subscriptions/clone-from-project",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警路由向导",
+          "description": "Create routing node via wizard",
+          "method": "POST",
+          "path": "/api/v1/alerts/subscriptions/wizard",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "接收组列表",
+          "description": "List alert receiver groups",
+          "method": "GET",
+          "path": "/api/v1/alerts/receiver-groups",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建接收组",
+          "description": "Create alert receiver group",
+          "method": "POST",
+          "path": "/api/v1/alerts/receiver-groups",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新接收组",
+          "description": "Update alert receiver group",
+          "method": "PUT",
+          "path": "/api/v1/alerts/receiver-groups/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除接收组",
+          "description": "Delete alert receiver group",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/receiver-groups/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "云到期规则列表",
+          "description": "List cloud expiry rules",
+          "method": "GET",
+          "path": "/api/v1/alerts/cloud-expiry-rules",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "创建云到期规则",
+          "description": "Create cloud expiry rule",
+          "method": "POST",
+          "path": "/api/v1/alerts/cloud-expiry-rules",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "更新云到期规则",
+          "description": "Update cloud expiry rule",
+          "method": "PUT",
+          "path": "/api/v1/alerts/cloud-expiry-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "删除云到期规则",
+          "description": "Delete cloud expiry rule",
+          "method": "DELETE",
+          "path": "/api/v1/alerts/cloud-expiry-rules/:id",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "立即评估云到期",
+          "description": "Evaluate cloud expiry rules now",
+          "method": "POST",
+          "path": "/api/v1/alerts/cloud-expiry-rules/evaluate-now",
+          "auth": true
+        },
+        {
+          "group": "告警中心",
+          "name": "告警质量报告",
+          "description": "Alert quality report",
+          "method": "GET",
+          "path": "/api/v1/alerts/quality-report",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "项目管理",
+      "entries": [
+        {
+          "group": "项目管理",
+          "name": "项目列表",
+          "description": "List projects",
+          "method": "GET",
+          "path": "/api/v1/projects",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "创建项目",
+          "description": "Create project",
+          "method": "POST",
+          "path": "/api/v1/projects",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "更新项目",
+          "description": "Update project",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "删除项目",
+          "description": "Delete project",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "归档项目",
+          "description": "Archive project",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/archive",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "恢复项目",
+          "description": "Restore archived project",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/restore",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目成员列表",
+          "description": "List project members",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/members",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "添加项目成员",
+          "description": "Add project member",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/members",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "更新项目成员",
+          "description": "Update project member",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/members/:memberId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "移除项目成员",
+          "description": "Remove project member",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/members/:memberId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器列表",
+          "description": "List project servers",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器保存",
+          "description": "Upsert project server",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器详情",
+          "description": "Project server detail",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/:serverId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器有效权限",
+          "description": "Current user effective server access",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/:serverId/my-access",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "删除项目服务器",
+          "description": "Delete project server",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/servers/:serverId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器命令",
+          "description": "Exec on project server",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/:serverId/exec",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器只读探测",
+          "description": "SSH readonly host probe (disk/mem/load)",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/:serverId/probe",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器文件列表",
+          "description": "List remote files on server",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/:serverId/files",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器文件上传",
+          "description": "Upload file to server via SFTP",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/:serverId/files/upload",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器文件下载",
+          "description": "Download file from server via SFTP",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/:serverId/files/download",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器文件删除",
+          "description": "Delete remote file on server",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/:serverId/files/delete",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器云操作",
+          "description": "Run cloud provider action on server",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/:serverId/cloud-actions",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器分组树",
+          "description": "List server groups tree",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/server-groups/tree",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器分组创建",
+          "description": "Upsert server group",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/server-groups",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器分组更新",
+          "description": "Update server group",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/server-groups/:groupId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器分组删除",
+          "description": "Delete server group",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/server-groups/:groupId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目云账号列表",
+          "description": "List cloud accounts",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cloud-accounts",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目云账号保存",
+          "description": "Upsert cloud account",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cloud-accounts",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目云账号更新",
+          "description": "Update cloud account",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cloud-accounts/:accountId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目云账号同步",
+          "description": "Sync cloud account",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cloud-accounts/:accountId/sync",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目云账号删除",
+          "description": "Delete cloud account",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cloud-accounts/:accountId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器导入",
+          "description": "Import servers",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/import",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器导入模板",
+          "description": "Servers import template",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/import-template",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器导出",
+          "description": "Export servers",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/export",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器连通测试",
+          "description": "Test server connection",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/test",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器批量测试",
+          "description": "Batch test servers",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/test/batch",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器同步",
+          "description": "Sync servers",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/servers/sync",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务器授权列表",
+          "description": "List server access grants",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/server-access-grants",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务器授权保存",
+          "description": "Upsert server access grant",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/server-access-grants",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务器授权批量",
+          "description": "Bulk upsert server access grants",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/server-access-grants/bulk",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务器授权迁移",
+          "description": "Bootstrap server grants for members",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/server-access-grants/bootstrap",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务器授权删除",
+          "description": "Delete server access grant",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/server-access-grants/:grantId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务列表",
+          "description": "List project services",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/services",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务保存",
+          "description": "Upsert project service",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/services",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "删除项目服务",
+          "description": "Delete project service",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/services/:serviceId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务目录列表",
+          "description": "List service catalog",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/service-catalog",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务目录保存",
+          "description": "Upsert service catalog",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/service-catalog",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务目录详情",
+          "description": "Get service catalog",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/service-catalog/:catalogId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务画像",
+          "description": "Service portrait aggregate",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/service-catalog/:catalogId/portrait",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务目录删除",
+          "description": "Delete service catalog",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/service-catalog/:catalogId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务目录绑定",
+          "description": "Bind service catalog link",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/service-catalog/:catalogId/links",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "服务目录解绑",
+          "description": "Unbind service catalog link",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/service-catalog/:catalogId/links/:linkId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目变更时间线",
+          "description": "List project change events timeline",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/change-events",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志源列表",
+          "description": "List log sources",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-sources",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志源保存",
+          "description": "Upsert log source",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-sources",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "删除项目日志源",
+          "description": "Delete log source",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/log-sources/:logSourceId",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志检索",
+          "description": "Search project logs from Elasticsearch",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/search",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志概览",
+          "description": "Log overview with histogram and signatures",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/overview",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志模板",
+          "description": "List log pattern clusters",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/patterns",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志异常",
+          "description": "List log anomalies",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/anomalies",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志上下文",
+          "description": "Correlated log context with changes and alerts",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/context",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志导出",
+          "description": "Export project logs from Elasticsearch",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/export",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志保留查询",
+          "description": "Get project log retention policy",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-retention",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志保留保存",
+          "description": "Upsert project log retention policy",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/log-retention",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目日志保留删除",
+          "description": "Delete project log retention override",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/log-retention",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 引导",
+          "description": "Bootstrap loggie agent token",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/bootstrap",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 状态列表",
+          "description": "List loggie status by server",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/loggie/status",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 引导日志源预览",
+          "description": "Preview log sources for loggie bootstrap",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/loggie/bootstrap-sources",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 配置下发",
+          "description": "Deploy loggie pipeline over SSH",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/deploy",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 安装",
+          "description": "Install loggie agent over SSH",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/install",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 卸载",
+          "description": "Uninstall loggie agent and clear registration",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/uninstall",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 启动",
+          "description": "Start loggie service over SSH",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/start",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 停止",
+          "description": "Stop loggie service over SSH",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/stop",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 重启",
+          "description": "Restart loggie service over SSH",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/restart",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "Loggie 同步下发",
+          "description": "Sync pipelines from log sources and deploy",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/sync",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "集群日志规则列表",
+          "description": "List K8s cluster log rules",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cluster-log/rules",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "创建集群日志规则",
+          "description": "Create K8s cluster log rule",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cluster-log/rules",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "更新集群日志规则",
+          "description": "Update K8s cluster log rule",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cluster-log/rules/:rule_id",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "删除集群日志规则",
+          "description": "Delete K8s cluster log rule",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cluster-log/rules/:rule_id",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "集群日志 Agent 列表",
+          "description": "List K8s cluster log agents",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cluster-log/agents",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "部署集群日志采集",
+          "description": "Deploy or sync Loggie DaemonSet",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cluster-log/deploy",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "集群日志采集状态",
+          "description": "Refresh K8s cluster log DaemonSet status",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cluster-log/status",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目服务器终端 WS",
+          "description": "Server terminal websocket",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/servers/:serverId/terminal/ws",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目仓库绑定查询",
+          "description": "Get project registry binding",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/registry-binding",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目仓库绑定保存",
+          "description": "Upsert project registry binding",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/registry-binding",
+          "auth": true
+        },
+        {
+          "group": "项目管理",
+          "name": "项目仓库绑定删除",
+          "description": "Delete project registry binding",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/registry-binding",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "CI/CD",
+      "entries": [
+        {
+          "group": "CI/CD",
+          "name": "发布后验证",
+          "description": "Verify release run",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/verify",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "集群日志 Pipeline 预览",
+          "description": "Preview K8s cluster pipelines.yml",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cluster-log/pipelines/preview",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "保存集群日志 Pipeline",
+          "description": "Save or reset custom K8s cluster pipelines.yml",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cluster-log/pipelines",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "Loggie 配置下载",
+          "description": "Download loggie pipeline bundle",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/loggie/pipeline/download",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "巡检PDF静态库",
+          "description": "Serve html2canvas/jspdf for inspect HTML",
+          "method": "GET",
+          "path": "/api/v1/inspect/pdf-libs/:name",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 应用服务列表",
+          "description": "List CI/CD services",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/services",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 授权列表",
+          "description": "List CI/CD access grants",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd-access-grants",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 授权保存",
+          "description": "Upsert CI/CD access grant",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd-access-grants",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 授权批量",
+          "description": "Bulk upsert CI/CD access grants",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd-access-grants/bulk",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 授权迁移",
+          "description": "Bootstrap CI/CD grants for members",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd-access-grants/bootstrap",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 授权删除",
+          "description": "Delete CI/CD access grant",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cicd-access-grants/:grantId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 创建应用服务",
+          "description": "Create CI/CD service",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/services",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 应用服务详情",
+          "description": "Get CI/CD service",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 更新应用服务",
+          "description": "Update CI/CD service",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 删除应用服务",
+          "description": "Delete CI/CD service",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CI 配置查询",
+          "description": "Get CI config",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/ci-config",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CI 配置保存",
+          "description": "Upsert CI config",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/ci-config",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 发布配置列表",
+          "description": "List deploy configs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 创建发布配置",
+          "description": "Create deploy config",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 更新发布配置",
+          "description": "Update deploy config",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs/:configId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 删除发布配置",
+          "description": "Delete deploy config",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/deploy-configs/:configId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD MinIO 制品列表",
+          "description": "List MinIO artifacts",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/artifacts",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 下载 Helm 脚手架",
+          "description": "Download Helm chart scaffold zip",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/helm-scaffold",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 预览 Helm 脚手架",
+          "description": "Preview download Helm chart scaffold zip",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/helm-scaffold",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 触发 CI 构建",
+          "description": "Trigger CI build",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/builds",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 触发 CD 发布",
+          "description": "Trigger CD release",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/services/:serviceId/releases",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CI 打包记录列表",
+          "description": "List CI build runs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/build-runs",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CI 打包记录详情",
+          "description": "Get CI build run",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/build-runs/:runId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CI 构建日志",
+          "description": "Get CI build log",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/build-runs/:runId/log",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 删除 CI 打包记录",
+          "description": "Delete CI build run",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cicd/build-runs/:runId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 审批流查询",
+          "description": "Get CD approval flow",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/approval-flow",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 审批流保存",
+          "description": "Upsert CD approval flow",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/cicd/approval-flow",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CD 工单列表",
+          "description": "List CD release runs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/release-runs",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CD 工单详情",
+          "description": "Get CD release run detail",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 工单审批步骤",
+          "description": "List release approval steps",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/approval-steps",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 审批通过",
+          "description": "Approve release run",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/approve",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 审批驳回",
+          "description": "Reject release run",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/reject",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 执行发布",
+          "description": "Execute release run",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/execute",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 终止发布",
+          "description": "Terminate release run",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/terminate",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 批量审批通过",
+          "description": "Batch approve release runs",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/batch-approve",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 批量审批驳回",
+          "description": "Batch reject release runs",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/batch-reject",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 批量执行发布",
+          "description": "Batch execute release runs",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/batch-execute",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 批量终止发布",
+          "description": "Batch terminate release runs",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/batch-terminate",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD CD 发布日志",
+          "description": "Get CD release log",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/log",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 删除 CD 工单",
+          "description": "Delete CD release run",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 构建阶段",
+          "description": "List CI build stages",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/build-runs/:runId/stages",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 构建制品元数据",
+          "description": "List CI build artifacts meta",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/cicd/build-runs/:runId/artifacts-meta",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 平台回滚",
+          "description": "Platform rollback release",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/platform-rollback",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 渐进式晋级",
+          "description": "Promote canary or blue-green release",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/promote",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "CI/CD 渐进式中止",
+          "description": "Abort canary or blue-green release",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/cicd/release-runs/:runId/progressive/abort",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像仓库列表",
+          "description": "List container registries",
+          "method": "GET",
+          "path": "/api/v1/registries",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像仓库创建",
+          "description": "Create container registry",
+          "method": "POST",
+          "path": "/api/v1/registries",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像仓库详情",
+          "description": "Get container registry",
+          "method": "GET",
+          "path": "/api/v1/registries/:registryId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像仓库更新",
+          "description": "Update container registry",
+          "method": "PUT",
+          "path": "/api/v1/registries/:registryId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像仓库删除",
+          "description": "Delete container registry",
+          "method": "DELETE",
+          "path": "/api/v1/registries/:registryId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像仓库探测",
+          "description": "Ping container registry",
+          "method": "POST",
+          "path": "/api/v1/registries/:registryId/ping",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "Harbor 项目浏览",
+          "description": "Browse Harbor projects",
+          "method": "GET",
+          "path": "/api/v1/registries/browse/projects",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "Harbor 仓库浏览",
+          "description": "Browse Harbor repositories",
+          "method": "GET",
+          "path": "/api/v1/registries/browse/repositories",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "Harbor 制品浏览",
+          "description": "Browse Harbor artifacts",
+          "method": "GET",
+          "path": "/api/v1/registries/browse/artifacts",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "Harbor 制品删除",
+          "description": "Delete Harbor artifact",
+          "method": "POST",
+          "path": "/api/v1/registries/browse/artifacts/delete",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像清理策略列表",
+          "description": "List registry cleanup policies",
+          "method": "GET",
+          "path": "/api/v1/registries/cleanup-policies",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像清理策略创建",
+          "description": "Create registry cleanup policy",
+          "method": "POST",
+          "path": "/api/v1/registries/cleanup-policies",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像清理策略更新",
+          "description": "Update registry cleanup policy",
+          "method": "PUT",
+          "path": "/api/v1/registries/cleanup-policies/:policyId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像清理策略删除",
+          "description": "Delete registry cleanup policy",
+          "method": "DELETE",
+          "path": "/api/v1/registries/cleanup-policies/:policyId",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "镜像清理策略执行",
+          "description": "Run registry cleanup policy",
+          "method": "POST",
+          "path": "/api/v1/registries/cleanup-policies/:policyId/run",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "流水线模板列表",
+          "description": "List pipeline templates",
+          "method": "GET",
+          "path": "/api/v1/pipeline-templates",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "流水线模板创建",
+          "description": "Create pipeline template",
+          "method": "POST",
+          "path": "/api/v1/pipeline-templates",
+          "auth": true
+        },
+        {
+          "group": "CI/CD",
+          "name": "流水线模板更新",
+          "description": "Update pipeline template",
+          "method": "PUT",
+          "path": "/api/v1/pipeline-templates/:templateId",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "数据库管理",
+      "entries": [
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份实例列表",
+          "description": "List MySQL backup instances",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/mysql-backup/instances",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份实例创建",
+          "description": "Create MySQL backup instance",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/mysql-backup/instances",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份实例更新",
+          "description": "Update MySQL backup instance",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/mysql-backup/instances/:instanceId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份实例删除",
+          "description": "Delete MySQL backup instance",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/mysql-backup/instances/:instanceId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份连通测试",
+          "description": "Ping MySQL backup instance",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/mysql-backup/instances/:instanceId/ping",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL远端备份检查",
+          "description": "Check remote xtrabackup backup",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/mysql-backup/instances/:instanceId/check-remote",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL执行备份",
+          "description": "Run MySQL backup job",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/mysql-backup/instances/:instanceId/run",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份任务列表",
+          "description": "List MySQL backup jobs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/mysql-backup/jobs",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份任务停止",
+          "description": "Stop running MySQL backup job",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/mysql-backup/jobs/:jobId/stop",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份任务删除",
+          "description": "Delete MySQL backup job record",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/mysql-backup/jobs/:jobId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份预签名下载",
+          "description": "Presign MySQL backup download URL",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/mysql-backup/jobs/:jobId/presign",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "MySQL备份Dump选项",
+          "description": "List mysqldump backup options",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/mysql-backup/mysqldump-options",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库实例列表",
+          "description": "List DB instances",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库实例创建",
+          "description": "Create DB instance",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库实例详情",
+          "description": "Get DB instance",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库实例更新",
+          "description": "Update DB instance",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库实例删除",
+          "description": "Delete DB instance",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库实例探活",
+          "description": "Ping DB instance",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/ping",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库元数据库列表",
+          "description": "List databases",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/metadata/databases",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库元数据表列表",
+          "description": "List tables",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/metadata/tables",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库元数据列列表",
+          "description": "List columns",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/metadata/columns",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库只读查询",
+          "description": "Execute read-only SQL",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/query",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库写操作",
+          "description": "Execute SQL with approval",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/execute",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库SQL导入",
+          "description": "Import SQL file",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/import",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库授权列表",
+          "description": "List DB grants",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/grants",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库授权创建",
+          "description": "Create DB grant",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/grants",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库授权删除",
+          "description": "Delete DB grant",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/dbmgmt/grants/:grantId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库授权更新",
+          "description": "Update DB grant",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/dbmgmt/grants/:grantId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库SQL预检",
+          "description": "Check SQL via goInception",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/check",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单详情",
+          "description": "Get DB SQL ticket detail",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单审批步骤",
+          "description": "List DB ticket approval steps",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/steps",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单回滚SQL",
+          "description": "Get DB ticket rollback SQL",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/rollback",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单回滚预览",
+          "description": "Preview DB rollback ticket",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/rollback/preview",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单回滚提交",
+          "description": "Submit DB rollback ticket",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/rollback/submit",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单OSC列表",
+          "description": "List DB ticket OSC jobs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/osc",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单OSC进度",
+          "description": "Get DB ticket OSC percent",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/osc/:sqlsha1",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单OSC控制",
+          "description": "Control DB ticket OSC job",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/osc/:sqlsha1/control",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库有效权限",
+          "description": "Get effective DB permission",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/grants/effective",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库审批流查询",
+          "description": "Get DB approval flow",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/approval-flow",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库审批流保存",
+          "description": "Upsert DB approval flow",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/dbmgmt/approval-flow",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库权限申请列表",
+          "description": "List DB access requests",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/access-requests",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库权限申请创建",
+          "description": "Create DB access request",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/access-requests",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库权限申请通过",
+          "description": "Approve DB access request",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/access-requests/:requestId/approve",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库权限申请拒绝",
+          "description": "Reject DB access request",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/access-requests/:requestId/reject",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "应用用户权限申请列表",
+          "description": "List DB app user requests",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/app-user-requests",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "应用用户权限申请创建",
+          "description": "Create DB app user request",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/app-user-requests",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "应用用户权限申请通过",
+          "description": "Approve DB app user request",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/app-user-requests/:requestId/approve",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "应用用户权限申请拒绝",
+          "description": "Reject DB app user request",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/app-user-requests/:requestId/reject",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "实例 MySQL 用户列表",
+          "description": "List MySQL users on instance",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/mysql-users",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "实例 MySQL 用户权限查询",
+          "description": "Get MySQL user privileges for apply form",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/mysql-user-privileges",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "列脱敏规则列表",
+          "description": "List DB column mask rules",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "列脱敏规则保存",
+          "description": "Upsert DB column mask rule",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "列脱敏规则删除",
+          "description": "Delete DB column mask rule",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/column-mask-rules/:ruleId",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "实例账号密码查看",
+          "description": "Reveal platform-managed account password",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/instances/:instanceId/accounts/:accountId/password",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单列表",
+          "description": "List DB SQL tickets",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单审批通过",
+          "description": "Approve DB SQL ticket",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/approve",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单审批拒绝",
+          "description": "Reject DB SQL ticket",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/reject",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库工单执行",
+          "description": "Execute approved DB SQL ticket",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/dbmgmt/tickets/:ticketId/execute",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库执行历史",
+          "description": "List DB SQL executions",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/executions",
+          "auth": true
+        },
+        {
+          "group": "数据库管理",
+          "name": "数据库审计日志",
+          "description": "List DB audit logs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/dbmgmt/audit-logs",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "AI 能力",
+      "entries": [
+        {
+          "group": "AI 能力",
+          "name": "AI 状态查询",
+          "description": "Get AI status",
+          "method": "GET",
+          "path": "/api/v1/ai/status",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 连通测试",
+          "description": "Ping AI provider",
+          "method": "POST",
+          "path": "/api/v1/ai/ping",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 运维对话",
+          "description": "AI ops assistant chat",
+          "method": "POST",
+          "path": "/api/v1/ai/chat",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 运维对话流式",
+          "description": "AI ops assistant chat SSE progress",
+          "method": "POST",
+          "path": "/api/v1/ai/chat/stream",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 会话列表",
+          "description": "List AI chat sessions",
+          "method": "GET",
+          "path": "/api/v1/ai/sessions",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 创建会话",
+          "description": "Create AI chat session",
+          "method": "POST",
+          "path": "/api/v1/ai/sessions",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 会话详情",
+          "description": "Get AI chat session",
+          "method": "GET",
+          "path": "/api/v1/ai/sessions/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 更新会话",
+          "description": "Update AI chat session",
+          "method": "PATCH",
+          "path": "/api/v1/ai/sessions/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 删除会话",
+          "description": "Delete AI chat session",
+          "method": "DELETE",
+          "path": "/api/v1/ai/sessions/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 清空会话消息",
+          "description": "Clear AI chat session messages",
+          "method": "POST",
+          "path": "/api/v1/ai/sessions/:id/clear",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 发起调查",
+          "description": "Start AI investigation",
+          "method": "POST",
+          "path": "/api/v1/ai/investigations",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 调查列表",
+          "description": "List AI investigations",
+          "method": "GET",
+          "path": "/api/v1/ai/investigations",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 调查详情",
+          "description": "Get AI investigation",
+          "method": "GET",
+          "path": "/api/v1/ai/investigations/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Pod 排障分析",
+          "description": "AI analyze pod diagnose",
+          "method": "POST",
+          "path": "/api/v1/ai/k8s/pod-diagnose",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 生成 K8s YAML",
+          "description": "AI generate Kubernetes YAML from description",
+          "method": "POST",
+          "path": "/api/v1/ai/k8s/generate-yaml",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI CI 构建失败分析",
+          "description": "AI analyze CI build failure",
+          "method": "POST",
+          "path": "/api/v1/ai/cicd/build-fail",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 告警解释",
+          "description": "AI explain alert fingerprint delivery",
+          "method": "POST",
+          "path": "/api/v1/ai/alert/explain",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 日志分析",
+          "description": "AI analyze project logs with RCA",
+          "method": "POST",
+          "path": "/api/v1/ai/logs/analyze",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 审批列表",
+          "description": "List AI tool approvals",
+          "method": "GET",
+          "path": "/api/v1/ai/approvals",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 审批审核",
+          "description": "Review AI tool approval",
+          "method": "POST",
+          "path": "/api/v1/ai/approvals/:id/review",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 审批执行",
+          "description": "Execute approved AI tool",
+          "method": "POST",
+          "path": "/api/v1/ai/approvals/:id/execute",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 知识库同步",
+          "description": "Sync AI knowledge base to ES",
+          "method": "POST",
+          "path": "/api/v1/ai/knowledge/sync",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 知识库向量化",
+          "description": "Sync AI knowledge chunk embeddings",
+          "method": "POST",
+          "path": "/api/v1/ai/knowledge/embed",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 能力中心概览",
+          "description": "AI capability center overview",
+          "method": "GET",
+          "path": "/api/v1/ai/center/overview",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 工具运行时健康",
+          "description": "Check AI script tool runtime (python/shell)",
+          "method": "GET",
+          "path": "/api/v1/ai/center/tool-runtime-health",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 能力中心重载种子",
+          "description": "Reseed AI center from data/ai",
+          "method": "POST",
+          "path": "/api/v1/ai/center/reseed",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 列表",
+          "description": "List AI prompts",
+          "method": "GET",
+          "path": "/api/v1/ai/center/prompts",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 创建",
+          "description": "Create AI prompt",
+          "method": "POST",
+          "path": "/api/v1/ai/center/prompts",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 详情",
+          "description": "Get AI prompt",
+          "method": "GET",
+          "path": "/api/v1/ai/center/prompts/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 更新",
+          "description": "Update AI prompt",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/prompts/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 删除",
+          "description": "Delete AI prompt",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/prompts/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 版本",
+          "description": "List prompt versions",
+          "method": "GET",
+          "path": "/api/v1/ai/center/prompts/:id/versions",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 发布",
+          "description": "Publish prompt version",
+          "method": "POST",
+          "path": "/api/v1/ai/center/prompts/:id/publish",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Prompt 回滚",
+          "description": "Rollback prompt version",
+          "method": "POST",
+          "path": "/api/v1/ai/center/prompts/:id/versions/:vid/rollback",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 模型列表",
+          "description": "List LLM models",
+          "method": "GET",
+          "path": "/api/v1/ai/center/models",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 创建模型",
+          "description": "Create LLM model",
+          "method": "POST",
+          "path": "/api/v1/ai/center/models",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 更新模型",
+          "description": "Update LLM model",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/models/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 删除模型",
+          "description": "Delete LLM model",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/models/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 设默认模型",
+          "description": "Set default LLM model",
+          "method": "POST",
+          "path": "/api/v1/ai/center/models/:id/default",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Tool 列表",
+          "description": "List AI tools",
+          "method": "GET",
+          "path": "/api/v1/ai/center/tools",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Tool 创建",
+          "description": "Create AI tool",
+          "method": "POST",
+          "path": "/api/v1/ai/center/tools",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Tool 详情",
+          "description": "Get AI tool",
+          "method": "GET",
+          "path": "/api/v1/ai/center/tools/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Tool 全量更新",
+          "description": "Update AI tool",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/tools/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Tool 启停",
+          "description": "Enable/disable AI tool",
+          "method": "PATCH",
+          "path": "/api/v1/ai/center/tools/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI Tool 删除",
+          "description": "Delete AI tool",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/tools/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 故障案例",
+          "description": "List incident cases",
+          "method": "GET",
+          "path": "/api/v1/ai/center/cases",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 创建故障案例",
+          "description": "Create incident case",
+          "method": "POST",
+          "path": "/api/v1/ai/center/cases",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 故障案例详情",
+          "description": "Get incident case",
+          "method": "GET",
+          "path": "/api/v1/ai/center/cases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 更新故障案例",
+          "description": "Update incident case",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/cases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 删除故障案例",
+          "description": "Delete incident case",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/cases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI SOP 列表",
+          "description": "List SOPs",
+          "method": "GET",
+          "path": "/api/v1/ai/center/sops",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI SOP 创建",
+          "description": "Create SOP",
+          "method": "POST",
+          "path": "/api/v1/ai/center/sops",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI SOP 详情",
+          "description": "Get SOP",
+          "method": "GET",
+          "path": "/api/v1/ai/center/sops/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI SOP 更新",
+          "description": "Update SOP",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/sops/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI SOP 删除",
+          "description": "Delete SOP",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/sops/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 知识库列表",
+          "description": "List knowledge bases",
+          "method": "GET",
+          "path": "/api/v1/ai/center/knowledge-bases",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 创建知识库",
+          "description": "Create knowledge base",
+          "method": "POST",
+          "path": "/api/v1/ai/center/knowledge-bases",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 更新知识库",
+          "description": "Update knowledge base",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/knowledge-bases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 删除知识库",
+          "description": "Delete knowledge base",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/knowledge-bases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI KB 文档列表",
+          "description": "List KB documents",
+          "method": "GET",
+          "path": "/api/v1/ai/center/kb-documents",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI KB 文档创建",
+          "description": "Create KB document",
+          "method": "POST",
+          "path": "/api/v1/ai/center/kb-documents",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI KB 文档详情",
+          "description": "Get KB document",
+          "method": "GET",
+          "path": "/api/v1/ai/center/kb-documents/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI KB 文档更新",
+          "description": "Update KB document",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/kb-documents/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI KB 文档删除",
+          "description": "Delete KB document",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/kb-documents/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 评估用例",
+          "description": "List eval cases",
+          "method": "GET",
+          "path": "/api/v1/ai/center/eval/cases",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 创建评估用例",
+          "description": "Create eval case",
+          "method": "POST",
+          "path": "/api/v1/ai/center/eval/cases",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 评估用例详情",
+          "description": "Get eval case",
+          "method": "GET",
+          "path": "/api/v1/ai/center/eval/cases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 更新评估用例",
+          "description": "Update eval case",
+          "method": "PUT",
+          "path": "/api/v1/ai/center/eval/cases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 删除评估用例",
+          "description": "Delete eval case",
+          "method": "DELETE",
+          "path": "/api/v1/ai/center/eval/cases/:id",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 评估运行",
+          "description": "Run eval suite",
+          "method": "POST",
+          "path": "/api/v1/ai/center/eval/run",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 评估运行历史",
+          "description": "List eval runs",
+          "method": "GET",
+          "path": "/api/v1/ai/center/eval/runs",
+          "auth": true
+        },
+        {
+          "group": "AI 能力",
+          "name": "AI 评估运行详情",
+          "description": "Get eval run with results",
+          "method": "GET",
+          "path": "/api/v1/ai/center/eval/runs/:id",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "日志",
+      "entries": [
+        {
+          "group": "日志",
+          "name": "日志保留策略查询",
+          "description": "Get global log retention policy",
+          "method": "GET",
+          "path": "/api/v1/log-platform/retention",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志保留策略保存",
+          "description": "Upsert global log retention policy",
+          "method": "PUT",
+          "path": "/api/v1/log-platform/retention",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志保留策略列表",
+          "description": "List log retention policies",
+          "method": "GET",
+          "path": "/api/v1/log-platform/retention/list",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 存储概览",
+          "description": "Elasticsearch storage stats",
+          "method": "GET",
+          "path": "/api/v1/log-platform/es-storage",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 索引删除",
+          "description": "Delete elasticsearch index",
+          "method": "DELETE",
+          "path": "/api/v1/log-platform/es-indices/:index",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Kafka 队列观测",
+          "description": "Kafka lag and consumer stats",
+          "method": "GET",
+          "path": "/api/v1/log-platform/kafka-stats",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Kafka 配置预览",
+          "description": "Preview kafka config from dict",
+          "method": "GET",
+          "path": "/api/v1/log-platform/kafka-config",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Kafka Topic 删除",
+          "description": "Delete agent kafka topic",
+          "method": "DELETE",
+          "path": "/api/v1/log-platform/kafka-topics/:topic",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志保留手动清理",
+          "description": "Run log retention cleanup",
+          "method": "POST",
+          "path": "/api/v1/log-platform/retention/cleanup",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 配置预览",
+          "description": "Preview elasticsearch config from dict",
+          "method": "GET",
+          "path": "/api/v1/log-platform/es-config",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志平台绑定 ES 连接",
+          "description": "Bind log platform to an esmgmt connection",
+          "method": "PUT",
+          "path": "/api/v1/log-platform/es-connection",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 连接列表",
+          "description": "List Elasticsearch connections",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/connections",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 创建连接",
+          "description": "Create Elasticsearch connection",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/connections",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 从字典导入连接",
+          "description": "Import Elasticsearch connection from data dictionary",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/connections/import-from-dict",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 更新连接",
+          "description": "Update Elasticsearch connection",
+          "method": "PUT",
+          "path": "/api/v1/esmgmt/connections/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 删除连接",
+          "description": "Delete Elasticsearch connection",
+          "method": "DELETE",
+          "path": "/api/v1/esmgmt/connections/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 连接探测",
+          "description": "Ping Elasticsearch connection",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/connections/:id/ping",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 连通测试",
+          "description": "Test Elasticsearch credentials without saving",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/connections/test",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 集群健康",
+          "description": "Get Elasticsearch cluster health",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/cluster/health",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 索引列表",
+          "description": "List Elasticsearch indices",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/indices",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 创建索引",
+          "description": "Create Elasticsearch index",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/indices",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 删除索引",
+          "description": "Delete Elasticsearch index",
+          "method": "DELETE",
+          "path": "/api/v1/esmgmt/indices/:name",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 打开索引",
+          "description": "Open Elasticsearch index",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/indices/:name/open",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 关闭索引",
+          "description": "Close Elasticsearch index",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/indices/:name/close",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 节点列表",
+          "description": "List Elasticsearch nodes",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/nodes",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES REST 代理",
+          "description": "Proxy safe Elasticsearch REST calls",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/proxy",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 索引备份",
+          "description": "Backup Elasticsearch index to MinIO",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/backups",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 备份列表",
+          "description": "List Elasticsearch backup jobs",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/backups",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 备份详情",
+          "description": "Get Elasticsearch backup job",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/backups/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 备份下载",
+          "description": "Presign Elasticsearch backup download",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/backups/:id/download",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 索引恢复",
+          "description": "Restore Elasticsearch index from MinIO backup",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/restores",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 恢复列表",
+          "description": "List Elasticsearch restore jobs",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/restores",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 恢复详情",
+          "description": "Get Elasticsearch restore job",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/restores/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 备份调度列表",
+          "description": "List Elasticsearch backup schedules",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/schedules",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 创建备份调度",
+          "description": "Create Elasticsearch backup schedule",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/schedules",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 更新备份调度",
+          "description": "Update Elasticsearch backup schedule",
+          "method": "PUT",
+          "path": "/api/v1/esmgmt/schedules/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 删除备份调度",
+          "description": "Delete Elasticsearch backup schedule",
+          "method": "DELETE",
+          "path": "/api/v1/esmgmt/schedules/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 文档检索",
+          "description": "Search Elasticsearch documents",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/docs/search",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 读取文档",
+          "description": "Get Elasticsearch document",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/docs",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 写入文档",
+          "description": "Upsert Elasticsearch document",
+          "method": "PUT",
+          "path": "/api/v1/esmgmt/docs",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 删除文档",
+          "description": "Delete Elasticsearch document",
+          "method": "DELETE",
+          "path": "/api/v1/esmgmt/docs",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 模板列表",
+          "description": "List Elasticsearch index templates",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/templates",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 模板详情",
+          "description": "Get Elasticsearch index template",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/templates/detail",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 保存模板",
+          "description": "Create or update Elasticsearch index template",
+          "method": "PUT",
+          "path": "/api/v1/esmgmt/templates",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 删除模板",
+          "description": "Delete Elasticsearch index template",
+          "method": "DELETE",
+          "path": "/api/v1/esmgmt/templates",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 提交 Reindex",
+          "description": "Start Elasticsearch reindex task",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/reindex",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES Reindex 列表",
+          "description": "List Elasticsearch reindex jobs",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/reindex",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES Reindex 详情",
+          "description": "Get Elasticsearch reindex job",
+          "method": "GET",
+          "path": "/api/v1/esmgmt/reindex/:id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "ES 取消 Reindex",
+          "description": "Cancel Elasticsearch reindex task",
+          "method": "POST",
+          "path": "/api/v1/esmgmt/reindex/:id/cancel",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志字段发现",
+          "description": "Discover observable log fields from ES samples",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/fields",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Pipeline 仓库列表",
+          "description": "List Loggie pipeline repository entries",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-pipelines",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "创建 Pipeline 仓库条目",
+          "description": "Create Loggie pipeline repository entry",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-pipelines",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Pipeline 仓库详情",
+          "description": "Get Loggie pipeline repository entry",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-pipelines/:pipeline_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "更新 Pipeline 仓库条目",
+          "description": "Update Loggie pipeline repository entry",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/log-pipelines/:pipeline_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "删除 Pipeline 仓库条目",
+          "description": "Delete Loggie pipeline repository entry",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/log-pipelines/:pipeline_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "应用 Pipeline 到采集",
+          "description": "Apply pipeline repo entry to cluster Loggie",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-pipelines/:pipeline_id/apply",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "从集群同步 Pipeline",
+          "description": "Sync cluster pipelines.yml into repository",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-pipelines/sync-from-cluster",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志解析档列表",
+          "description": "List Loggie parse profile options",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-parse-profiles",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "AI 调整 Pipeline",
+          "description": "AI suggest Loggie pipeline adjustments",
+          "method": "POST",
+          "path": "/api/v1/ai/logs/pipeline-adjust",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Pipeline 版本列表",
+          "description": "List pipeline versions",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-pipelines/:pipeline_id/versions",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "Pipeline 版本回滚",
+          "description": "Rollback pipeline version",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-pipelines/:pipeline_id/versions/:version_id/rollback",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志查询收藏列表",
+          "description": "List saved log queries",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-saved-queries",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "创建日志查询收藏",
+          "description": "Create saved log query",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-saved-queries",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "删除日志查询收藏",
+          "description": "Delete saved log query",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/log-saved-queries/:query_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志排行榜",
+          "description": "Log TopN ranking by dimension",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/logs/topn",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "更新日志错误追踪",
+          "description": "Update log error-tracking issue",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/logs/anomalies/:anomaly_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "日志黑名单列表",
+          "description": "List log drop/blacklist rules",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/log-drop-rules",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "创建日志黑名单",
+          "description": "Create log drop/blacklist rule",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/log-drop-rules",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "更新日志黑名单",
+          "description": "Update log drop/blacklist rule",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/log-drop-rules/:rule_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "删除日志黑名单",
+          "description": "Delete log drop/blacklist rule",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/log-drop-rules/:rule_id",
+          "auth": true
+        },
+        {
+          "group": "日志",
+          "name": "主机自定义 Pipeline 下发",
+          "description": "Deploy custom pipelines.yml to host Loggie",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/loggie/deploy-yaml",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "Kafka",
+      "entries": [
+        {
+          "group": "Kafka",
+          "name": "Kafka 连接列表",
+          "description": "List Kafka connections",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/connections",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 创建连接",
+          "description": "Create Kafka connection",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/connections",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 从字典导入连接",
+          "description": "Import Kafka connection from data dictionary",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/connections/import-from-dict",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 更新连接",
+          "description": "Update Kafka connection",
+          "method": "PUT",
+          "path": "/api/v1/kafkamgmt/connections/:id",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 删除连接",
+          "description": "Delete Kafka connection",
+          "method": "DELETE",
+          "path": "/api/v1/kafkamgmt/connections/:id",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 连接探测",
+          "description": "Ping Kafka connection",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/connections/:id/ping",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 连通测试",
+          "description": "Test Kafka credentials without saving",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/connections/test",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka Broker 列表",
+          "description": "List Kafka brokers",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/brokers",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka Topic 列表",
+          "description": "List Kafka topics",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/topics",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka Topic 详情",
+          "description": "Get Kafka topic partitions",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/topics/detail",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka Topic 配置",
+          "description": "Get Kafka topic configs",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/topics/config",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 创建 Topic",
+          "description": "Create Kafka topic",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/topics",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 删除 Topic",
+          "description": "Delete Kafka topic",
+          "method": "DELETE",
+          "path": "/api/v1/kafkamgmt/topics",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 扩容分区",
+          "description": "Increase Kafka topic partitions",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/topics/partitions",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 生产消息",
+          "description": "Produce sample Kafka message",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/topics/produce",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 抽样消费",
+          "description": "Consume sample Kafka messages",
+          "method": "POST",
+          "path": "/api/v1/kafkamgmt/topics/consume",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 消费组列表",
+          "description": "List Kafka consumer groups",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/groups",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 消费组成员",
+          "description": "List Kafka consumer group members",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/groups/members",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 消费组 Lag",
+          "description": "Get Kafka consumer group lag",
+          "method": "GET",
+          "path": "/api/v1/kafkamgmt/groups/lag",
+          "auth": true
+        },
+        {
+          "group": "Kafka",
+          "name": "Kafka 删除消费组",
+          "description": "Delete Kafka consumer group",
+          "method": "DELETE",
+          "path": "/api/v1/kafkamgmt/groups",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "巡检",
+      "entries": [
+        {
+          "group": "巡检",
+          "name": "巡检计划查询",
+          "description": "Get project inspect plan",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/plan",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检计划更新",
+          "description": "Update project inspect plan",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/inspect/plan",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项列表",
+          "description": "List inspect items",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/items",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项创建",
+          "description": "Create inspect item",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/items",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项更新",
+          "description": "Update inspect item",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/inspect/items/:itemId",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项删除",
+          "description": "Delete inspect item",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/inspect/items/:itemId",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项同步模板",
+          "description": "Sync inspect items from global template",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/items/sync-template",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项重置模板",
+          "description": "Reset inspect items from global template",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/items/reset-template",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检项转持续告警",
+          "description": "Promote inspect item to monitor rule",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/items/:itemId/promote-alert",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检记录列表",
+          "description": "List inspect runs",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检趋势",
+          "description": "List inspect run trends",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/trends",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告迁移 MinIO",
+          "description": "Migrate local inspect reports to MinIO",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/migrate-reports-to-minio",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检立即执行",
+          "description": "Start inspect run",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/runs",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检记录详情",
+          "description": "Get inspect run",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告HTML",
+          "description": "Download inspect HTML report",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/report.html",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告PDF",
+          "description": "Download inspect PDF report",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/report.pdf",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告PDF上传",
+          "description": "Upload inspect PDF from browser",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/report.pdf",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告PDF检查",
+          "description": "Check inspect PDF exists",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/report.pdf/check",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告Excel",
+          "description": "Download inspect Excel report",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/report.xlsx",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告打印版",
+          "description": "Download inspect print HTML",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/report.print.html",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检邮件重发",
+          "description": "Resend inspect report email",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/runs/:runId/resend-email",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告模板列表",
+          "description": "List inspect report templates",
+          "method": "GET",
+          "path": "/api/v1/projects/:id/inspect/report-templates",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告模板创建",
+          "description": "Create inspect report template",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/report-templates",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告模板更新",
+          "description": "Update inspect report template",
+          "method": "PUT",
+          "path": "/api/v1/projects/:id/inspect/report-templates/:templateId",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告模板删除",
+          "description": "Delete inspect report template",
+          "method": "DELETE",
+          "path": "/api/v1/projects/:id/inspect/report-templates/:templateId",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告模板复制",
+          "description": "Copy inspect report template",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/report-templates/copy",
+          "auth": true
+        },
+        {
+          "group": "巡检",
+          "name": "巡检报告模板预览",
+          "description": "Preview inspect report template",
+          "method": "POST",
+          "path": "/api/v1/projects/:id/inspect/report-templates/preview",
+          "auth": true
+        }
+      ]
+    },
+    {
+      "title": "公开接口（无需授权）",
+      "entries": [
+        {
+          "group": "",
+          "name": "健康检查",
+          "description": "进程状态与运行信息",
+          "method": "GET",
+          "path": "/api/v1/health",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "就绪探活",
+          "description": "兼容旧探针的就绪检查",
+          "method": "GET",
+          "path": "/api/v1/ready",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "发送邮箱验证码",
+          "description": "注册/找回密码验证码",
+          "method": "POST",
+          "path": "/api/v1/auth/verification-code",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "用户名发登录验证码",
+          "description": "向绑定邮箱发送登录验证码",
+          "method": "POST",
+          "path": "/api/v1/auth/login-code",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "图形验证码",
+          "description": "获取登录图形验证码",
+          "method": "POST",
+          "path": "/api/v1/auth/password-login-code",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "用户名密码登录",
+          "description": "账号密码登录",
+          "method": "POST",
+          "path": "/api/v1/auth/login",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "邮箱验证码登录",
+          "description": "邮箱验证码登录",
+          "method": "POST",
+          "path": "/api/v1/auth/email-login",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "提交注册申请",
+          "description": "自助注册申请",
+          "method": "POST",
+          "path": "/api/v1/auth/register",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "密码策略",
+          "description": "登录页读取密码强度策略",
+          "method": "GET",
+          "path": "/api/v1/auth/password-policy",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "刷新令牌",
+          "description": "刷新访问令牌",
+          "method": "POST",
+          "path": "/api/v1/auth/refresh",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "退出登录",
+          "description": "注销当前会话",
+          "method": "POST",
+          "path": "/api/v1/auth/logout",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "WebSocket 票据",
+          "description": "换取 WebSocket 一次性票据",
+          "method": "POST",
+          "path": "/api/v1/auth/ws-ticket",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "当前用户",
+          "description": "读取当前登录用户资料",
+          "method": "GET",
+          "path": "/api/v1/auth/me",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "更新个人资料",
+          "description": "修改昵称等个人资料",
+          "method": "PUT",
+          "path": "/api/v1/auth/me",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "修改密码",
+          "description": "修改本人登录密码",
+          "method": "PUT",
+          "path": "/api/v1/auth/password",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "当前用户能力",
+          "description": "当前用户可调用的 API 能力（按钮级权限）",
+          "method": "GET",
+          "path": "/api/v1/auth/permissions",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "登录二次验证",
+          "description": "TOTP/恢复码换取会话",
+          "method": "POST",
+          "path": "/api/v1/auth/mfa/verify",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "生成 TOTP 密钥",
+          "description": "启用二次验证前生成密钥",
+          "method": "POST",
+          "path": "/api/v1/auth/mfa/setup",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "启用二次验证",
+          "description": "校验 TOTP 后启用并返回恢复码",
+          "method": "POST",
+          "path": "/api/v1/auth/mfa/enable",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "关闭二次验证",
+          "description": "校验密码与 TOTP 后关闭",
+          "method": "POST",
+          "path": "/api/v1/auth/mfa/disable",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "侧栏菜单树",
+          "description": "按角色过滤的侧栏菜单",
+          "method": "GET",
+          "path": "/api/v1/menus/tree",
+          "auth": true
+        },
+        {
+          "group": "",
+          "name": "Jenkins 回调",
+          "description": "CI/CD 流水线回调",
+          "method": "POST",
+          "path": "/api/v1/cicd/jenkins/callback",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "告警回调",
+          "description": "Alertmanager Webhook",
+          "method": "POST",
+          "path": "/api/v1/alerts/webhook/alertmanager",
+          "auth": false
+        },
+        {
+          "group": "",
+          "name": "Loggie 心跳",
+          "description": "日志采集器心跳上报",
+          "method": "POST",
+          "path": "/api/v1/loggie/heartbeat/report",
+          "auth": false
+        }
+      ]
+    }
+  ]
+}

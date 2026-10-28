@@ -15,6 +15,12 @@ type User struct {
 	Password            string         `json:"-" gorm:"size:255;not null;comment:加密后的登录密码"`
 	PasswordChangedAt   *time.Time     `json:"password_changed_at,omitempty" gorm:"comment:最近修改密码时间，用于过期策略"`
 	MustChangePassword  bool           `json:"must_change_password" gorm:"not null;default:false;comment:下次登录强制改密"`
+	// MFAEnabled 表示已启用 TOTP 二次验证；MFASecret 为 AES-GCM 加密后的 TOTP 密钥，
+	// MFARecoveryCodes 为恢复码的 bcrypt 哈希 JSON 数组，二者都不允许出现在任何 JSON 响应中。
+	MFAEnabled       bool       `json:"mfa_enabled" gorm:"not null;default:false;comment:是否启用 TOTP 二次验证"`
+	MFASecret        string     `json:"-" gorm:"size:512;not null;default:'';comment:TOTP 密钥（AES-GCM 加密）"`
+	MFARecoveryCodes string     `json:"-" gorm:"type:text;comment:TOTP 恢复码哈希（JSON 数组）"`
+	MFAEnabledAt     *time.Time `json:"mfa_enabled_at,omitempty" gorm:"comment:TOTP 启用时间"`
 	Nickname            string         `json:"nickname" gorm:"size:128;not null;comment:昵称"`
 	Status              int            `json:"status" gorm:"not null;default:1;index:idx_users_dept_status,priority:2;comment:状态 1启用 0禁用"`
 	DepartmentID        *uint          `json:"department_id" gorm:"index:idx_users_dept_status,priority:1;comment:所属部门ID"`

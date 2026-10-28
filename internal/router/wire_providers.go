@@ -201,8 +201,10 @@ func provideAuthService(
 	authCfg config.AuthConfig,
 	sender mailer.Sender,
 	appName AppDisplayName,
+	encryptionKey SecurityEncryptionKey,
 ) *service.AuthService {
-	return service.NewAuthService(userRepo, redisClient, resolvePolicy, authCfg, sender, string(appName))
+	return service.NewAuthService(userRepo, redisClient, resolvePolicy, authCfg,
+		config.SecurityConfig{EncryptionKey: string(encryptionKey)}, sender, string(appName))
 }
 
 func provideRegistrationService(

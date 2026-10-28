@@ -27,13 +27,14 @@ func NewMenuHandler(svc *service.MenuService, plugins *config.PluginsConfig, enf
 	return &MenuHandler{service: svc, plugins: plugins, enforcer: enforcer}
 }
 
-// Tree 返回菜单树；非 super-admin 时移除仅管理员可见项并按 Casbin 入口权限过滤。
+// Tree 返回菜单树；停用菜单及其子树对所有角色隐藏，非 super-admin 再按 AdminOnly 与 Casbin 入口权限过滤。
 func (h *MenuHandler) Tree(c *gin.Context) {
 	list, err := h.service.Tree(c.Request.Context())
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
+	list = filterDisabledMenus(list)
 
 	user, ok := auth.CurrentUserFromContext(c)
 	if !ok {
@@ -68,11 +69,21 @@ func (h *MenuHandler) List(c *gin.Context) {
 }
 
 func filterAdminOnlyMenus(items []model.Menu) []model.Menu {
+	return filterMenus(items, func(it model.Menu) bool { return !it.AdminOnly })
+}
+
+// filterDisabledMenus 去掉停用菜单及其子树：停用即对所有人不可见/不可直达，
+// 管理页仍通过 List 返回全量，避免管理员无法重新启用。
+func filterDisabledMenus(items []model.Menu) []model.Menu {
+	return filterMenus(items, func(it model.Menu) bool { return it.Status == model.StatusEnabled })
+}
+
+func filterMenus(items []model.Menu, keep func(model.Menu) bool) []model.Menu {
 	var filter func([]model.Menu) []model.Menu
 	filter = func(nodes []model.Menu) []model.Menu {
 		out := make([]model.Menu, 0, len(nodes))
 		for _, it := range nodes {
-			if it.AdminOnly {
+			if !keep(it) {
 				continue
 			}
 			child := it

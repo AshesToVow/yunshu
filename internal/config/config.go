@@ -124,7 +124,7 @@ type AuthConfig struct {
 type CasbinConfig struct {
 	ModelPath string `mapstructure:"model_path"`
 	// AutoLoadIntervalSeconds 多副本部署时定时从 DB 重新加载策略的间隔（秒）。
-	// <=0 表示关闭（单副本可关闭以省去周期性查询）。默认 30s。
+	// <=0 表示关闭（单副本可关闭以省去周期性查询）。未配置时：Redis 推送可用取 300s 兜底，否则 30s。
 	AutoLoadIntervalSeconds int `mapstructure:"auto_load_interval_seconds"`
 }
 

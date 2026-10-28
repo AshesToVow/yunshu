@@ -8,11 +8,11 @@ import (
 
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
-	"yunshu/internal/repository"
 	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
-	"yunshu/internal/pkg/pagination"
 	bizerrors "yunshu/internal/pkg/errors"
+	"yunshu/internal/pkg/pagination"
+	"yunshu/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -398,6 +398,19 @@ func normalizeProjectMemberRole(role string) string {
 	return "member"
 }
 
+// ensureProjectKeepsOwner 保证项目至少保留一名负责人：降级或移除最后一名 owner 时拒绝。
+func ensureProjectKeepsOwner(members []model.ProjectMember, changingMemberID uint) error {
+	for _, m := range members {
+		if m.ID == changingMemberID {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(m.Role), "owner") {
+			return nil
+		}
+	}
+	return constants.ErrBadRequestWithMsg("项目至少保留一名负责人，请先将其他成员设为负责人")
+}
+
 // ProjectMemberItem 项目成员 API 展示。
 type ProjectMemberItem struct {
 	ID        uint    `json:"id"`
@@ -512,7 +525,17 @@ func (s *ProjectMgmtService) UpdateProjectMember(ctx context.Context, projectID,
 	if m.ProjectID != projectID {
 		return nil, constants.ErrBadRequestWithMsg(constants.ErrMsg461337ef3f89)
 	}
-	m.Role = normalizeProjectMemberRole(req.Role)
+	newRole := normalizeProjectMemberRole(req.Role)
+	if strings.EqualFold(strings.TrimSpace(m.Role), "owner") && newRole != "owner" {
+		members, err := s.memberRepo.ListByProject(ctx, projectID)
+		if err != nil {
+			return nil, bizerrors.Pass(ctx, "project", "UpdateProjectMember", err)
+		}
+		if err := ensureProjectKeepsOwner(members, m.ID); err != nil {
+			return nil, err
+		}
+	}
+	m.Role = newRole
 	if err := s.memberRepo.Save(ctx, m); err != nil {
 		return nil, bizerrors.Pass(ctx, "project", "UpdateProjectMember", err)
 	}
@@ -546,6 +569,15 @@ func (s *ProjectMgmtService) RemoveProjectMember(ctx context.Context, projectID,
 	}
 	if m.ProjectID != projectID {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg461337ef3f89)
+	}
+	if strings.EqualFold(strings.TrimSpace(m.Role), "owner") {
+		members, err := s.memberRepo.ListByProject(ctx, projectID)
+		if err != nil {
+			return bizerrors.Pass(ctx, "project", "RemoveProjectMember", err)
+		}
+		if err := ensureProjectKeepsOwner(members, m.ID); err != nil {
+			return err
+		}
 	}
 	return s.memberRepo.DeleteByID(ctx, memberID)
 }

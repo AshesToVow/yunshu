@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"yunshu/internal/config"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/response"
 	"yunshu/internal/plugingate"
@@ -98,12 +99,17 @@ func (h *PolicyHandler) FixMenuEntryAPIs(c *gin.Context) {
 		response.Error(c, constants.ErrInternal)
 		return
 	}
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	roleID, err := strconv.ParseUint(c.Query("role_id"), 10, 32)
 	if err != nil || roleID == 0 {
 		response.Error(c, constants.ErrInvalidRequestParam)
 		return
 	}
-	data, err := h.governance.FixMenuEntryAPIs(c.Request.Context(), uint(roleID))
+	data, err := h.governance.FixMenuEntryAPIs(c.Request.Context(), actor, uint(roleID))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -117,12 +123,17 @@ func (h *PolicyHandler) FixDisabledPluginPolicies(c *gin.Context) {
 		response.Error(c, constants.ErrInternal)
 		return
 	}
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	roleID, err := strconv.ParseUint(c.Query("role_id"), 10, 32)
 	if err != nil || roleID == 0 {
 		response.Error(c, constants.ErrInvalidRequestParam)
 		return
 	}
-	data, err := h.governance.FixDisabledPluginPolicies(c.Request.Context(), uint(roleID))
+	data, err := h.governance.FixDisabledPluginPolicies(c.Request.Context(), actor, uint(roleID))
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -153,11 +164,16 @@ func (h *PolicyHandler) PermissionTree(c *gin.Context) {
 // @Summary Grant policy
 // @Router /api/v1/policies [post]
 func (h *PolicyHandler) Grant(c *gin.Context) {
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	ServeJSONOK(c, gin.H{"message": "granted"}, func(ctx context.Context, req service.PolicyGrantRequest) error {
 		if err := h.validatePermissionPlugin(ctx, req.PermissionID); err != nil {
 			return err
 		}
-		return h.service.Grant(ctx, req)
+		return h.service.Grant(ctx, actor, req)
 	})
 }
 
@@ -165,11 +181,16 @@ func (h *PolicyHandler) Grant(c *gin.Context) {
 // @Summary Revoke policy
 // @Router /api/v1/policies [delete]
 func (h *PolicyHandler) Revoke(c *gin.Context) {
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
 	ServeJSONOK(c, gin.H{"message": "revoked"}, func(ctx context.Context, req service.PolicyGrantRequest) error {
 		if err := h.validatePermissionPlugin(ctx, req.PermissionID); err != nil {
 			return err
 		}
-		return h.service.Revoke(ctx, req)
+		return h.service.Revoke(ctx, actor, req)
 	})
 }
 

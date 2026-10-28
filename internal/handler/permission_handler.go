@@ -39,7 +39,14 @@ func NewPermissionHandler(service *service.PermissionService, plugins *config.Pl
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/permissions [post]
 func (h *PermissionHandler) Create(c *gin.Context) {
-	ServeJSON201(c, h.service.Create)
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeJSON201(c, func(ctx context.Context, req service.PermissionCreateRequest) (*service.PermissionItem, error) {
+		return h.service.CreateByActor(ctx, actor, req)
+	})
 }
 
 // Update godoc
@@ -84,7 +91,14 @@ func (h *PermissionHandler) Update(c *gin.Context) {
 // @Failure 500 {object} response.Body "服务器内部错误"
 // @Router /api/v1/permissions/{id} [delete]
 func (h *PermissionHandler) Delete(c *gin.Context) {
-	ServeDelete(c, h.service.Delete, "")
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	ServeDelete(c, func(ctx context.Context, id uint) error {
+		return h.service.DeleteByActor(ctx, actor, id)
+	}, "")
 }
 
 // Detail godoc

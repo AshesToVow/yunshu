@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsK8s() []model.Permission {
+func k8sEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "K8s 动作码目录", Resource: "/api/v1/k8s-policies/actions", Action: "GET", Description: "List k8s scope action codes (reference)"},
 		{Name: "K8s 能力包目录", Resource: "/api/v1/k8s-policies/capabilities", Action: "GET", Description: "List k8s cluster capability catalog"},

@@ -1,10 +1,19 @@
 package dictmask
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
+
+// ValueHash 返回字典值（去首尾空白后）的 SHA-256 十六进制摘要，用于 (dict_type, value) 唯一约束。
+// 字典值可能是 MEDIUMTEXT 级 kubeconfig，无法直接建唯一索引，因此索引摘要。
+func ValueHash(value string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(value)))
+	return hex.EncodeToString(sum[:])
+}
 
 // SensitiveDictType 判断字典类型是否应按「敏感凭据」脱敏（options 不落明文）。
 func SensitiveDictType(dictType string) bool {

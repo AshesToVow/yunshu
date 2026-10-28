@@ -40,6 +40,9 @@ type DictEntryListQuery struct {
 	Status   *int   `form:"status"`
 	Page     int    `form:"page"`
 	PageSize int    `form:"page_size"`
+	// ExcludeSensitive 由 handler 按调用者权限注入，不接收客户端参数：
+	// 无敏感字典权限时列表自动剔除敏感类型，避免关键词模糊匹配探测明文。
+	ExcludeSensitive bool `form:"-"`
 }
 
 type DictEntryCreateRequest struct {

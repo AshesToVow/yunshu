@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsProject() []model.Permission {
+func projectEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "项目列表", Resource: "/api/v1/projects", Action: "GET", Description: "List projects"},
 		{Name: "创建项目", Resource: "/api/v1/projects", Action: "POST", Description: "Create project"},

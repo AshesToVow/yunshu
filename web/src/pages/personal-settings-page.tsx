@@ -1,13 +1,15 @@
-import { Alert, Card, Form, Input, Menu, Button, message } from "antd";
+import { Alert, Card, Form, Input, Menu, Button, Space, Tag, Typography, message } from "antd";
 import type { MenuProps } from "antd";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/auth-context";
-import { changePassword, getPasswordPolicy, updateProfile } from "../services/auth";
+import { changePassword, disableMfa, enableMfa, getPasswordPolicy, setupMfa, updateProfile } from "../services/auth";
+import type { MfaSetupResult } from "../services/auth";
+import { extractApiErrorMessage } from "../services/http";
 import { clearAuthStorage } from "../services/storage";
 import type { PasswordPolicy } from "../types/api";
 
-type SettingsTab = "basic" | "password";
+type SettingsTab = "basic" | "password" | "security";
 
 export function PersonalSettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -25,12 +27,23 @@ export function PersonalSettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [mfaPassword, setMfaPassword] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaSetup, setMfaSetup] = useState<MfaSetupResult | null>(null);
+  const [mfaRecoveryCodes, setMfaRecoveryCodes] = useState<string[] | null>(null);
+  const [mfaLoading, setMfaLoading] = useState(false);
+
+  const mfaEnabled = Boolean(user?.mfa_enabled);
+
   const menuItems = useMemo<MenuProps["items"]>(() => {
     const items: MenuProps["items"] = [];
     if (!forcePassword) {
       items.push({ key: "basic", label: "基本设置" });
     }
     items.push({ key: "password", label: "修改密码" });
+    if (!forcePassword) {
+      items.push({ key: "security", label: "账号安全" });
+    }
     return items;
   }, [forcePassword]);
 
@@ -62,6 +75,15 @@ export function PersonalSettingsPage() {
       passwordForm.resetFields();
     }
   }, [tab, passwordForm]);
+
+  useEffect(() => {
+    if (tab !== "security") {
+      setMfaPassword("");
+      setMfaCode("");
+      setMfaSetup(null);
+      setMfaRecoveryCodes(null);
+    }
+  }, [tab]);
 
   async function submitProfile() {
     const values = await profileForm.validateFields();
@@ -117,6 +139,200 @@ export function PersonalSettingsPage() {
     }
   }, [oldPassword, newPassword, confirmPassword, navigate, policy?.min_length]);
 
+  async function handleMfaSetup() {
+    if (!mfaPassword) {
+      message.error("请输入当前密码");
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      const result = await setupMfa(mfaPassword);
+      setMfaSetup(result);
+      setMfaRecoveryCodes(null);
+      setMfaCode("");
+    } catch (err) {
+      message.error(extractApiErrorMessage(err, "生成二次验证密钥失败"));
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
+  async function handleMfaEnable() {
+    if (!mfaSetup) {
+      message.error("请先生成二次验证密钥");
+      return;
+    }
+    if (!/^\d{6}$/.test(mfaCode.trim())) {
+      message.error("请输入认证器 App 中的 6 位验证码");
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      const result = await enableMfa(mfaCode.trim());
+      setMfaRecoveryCodes(result.recovery_codes ?? []);
+      setMfaSetup(null);
+      setMfaPassword("");
+      setMfaCode("");
+      await refreshUser();
+      message.success("二次验证已启用");
+    } catch (err) {
+      message.error(extractApiErrorMessage(err, "启用二次验证失败"));
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
+  async function handleMfaDisable() {
+    if (!mfaPassword) {
+      message.error("请输入当前密码");
+      return;
+    }
+    if (!mfaCode.trim()) {
+      message.error("请输入认证器验证码或恢复码");
+      return;
+    }
+    setMfaLoading(true);
+    try {
+      await disableMfa({ password: mfaPassword, code: mfaCode.trim() });
+      setMfaPassword("");
+      setMfaCode("");
+      setMfaRecoveryCodes(null);
+      await refreshUser();
+      message.success("二次验证已关闭");
+    } catch (err) {
+      message.error(extractApiErrorMessage(err, "关闭二次验证失败"));
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
+  function renderMfaPanel() {
+    return (
+      <div>
+        <h3 className="personal-settings__title">
+          账号安全
+          <Tag color={mfaEnabled ? "green" : "default"} style={{ marginLeft: 12 }}>
+            {mfaEnabled ? "已启用二次验证" : "未启用二次验证"}
+          </Tag>
+        </h3>
+
+        {mfaRecoveryCodes ? (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="请立即保存恢复码（仅展示一次）"
+            description={
+              <Space wrap size={[8, 8]}>
+                {mfaRecoveryCodes.map((code) => (
+                  <Typography.Text key={code} code>
+                    {code}
+                  </Typography.Text>
+                ))}
+              </Space>
+            }
+          />
+        ) : null}
+
+        {mfaEnabled ? (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="关闭二次验证需要同时校验当前密码与认证器验证码（或恢复码）。"
+            />
+            <Form layout="vertical" className="personal-settings__form" autoComplete="off">
+              <Form.Item label="当前密码" required>
+                <Input.Password
+                  value={mfaPassword}
+                  onChange={(e) => setMfaPassword(e.target.value)}
+                  placeholder="请输入当前密码"
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+              <Form.Item label="验证码" required extra="认证器 App 生成的 6 位数字，或任一未使用的恢复码">
+                <Input
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value)}
+                  placeholder="6 位验证码或恢复码"
+                  maxLength={32}
+                  autoComplete="one-time-code"
+                />
+              </Form.Item>
+              <Button danger loading={mfaLoading} onClick={() => void handleMfaDisable()}>
+                关闭二次验证
+              </Button>
+            </Form>
+          </>
+        ) : mfaSetup ? (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="使用认证器 App 扫码或手动录入密钥，然后输入生成的验证码完成启用。"
+            />
+            <Form layout="vertical" className="personal-settings__form" autoComplete="off">
+              <Form.Item label="密钥（手动录入）">
+                <Input value={mfaSetup.secret} readOnly />
+              </Form.Item>
+              <Form.Item label="otpauth 链接">
+                <Typography.Text copyable style={{ wordBreak: "break-all" }}>
+                  {mfaSetup.otpauth_url}
+                </Typography.Text>
+              </Form.Item>
+              <Form.Item label="验证码" required extra="输入认证器 App 中显示的 6 位数字">
+                <Input
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value)}
+                  placeholder="6 位验证码"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                />
+              </Form.Item>
+              <Space>
+                <Button type="primary" loading={mfaLoading} onClick={() => void handleMfaEnable()}>
+                  启用二次验证
+                </Button>
+                <Button
+                  onClick={() => {
+                    setMfaSetup(null);
+                    setMfaCode("");
+                  }}
+                >
+                  取消
+                </Button>
+              </Space>
+            </Form>
+          </>
+        ) : (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="启用后登录时除密码外还需输入认证器 App 生成的 6 位验证码。"
+            />
+            <Form layout="vertical" className="personal-settings__form" autoComplete="off">
+              <Form.Item label="当前密码" required>
+                <Input.Password
+                  value={mfaPassword}
+                  onChange={(e) => setMfaPassword(e.target.value)}
+                  placeholder="请输入当前密码"
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+              <Button type="primary" loading={mfaLoading} onClick={() => void handleMfaSetup()}>
+                生成二次验证密钥
+              </Button>
+            </Form>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <Card className="table-card personal-settings-card">
       <div className="personal-settings">
@@ -160,6 +376,8 @@ export function PersonalSettingsPage() {
                 </Button>
               </Form>
             </div>
+          ) : tab === "security" && !forcePassword ? (
+            renderMfaPanel()
           ) : (
             <div>
               <h3 className="personal-settings__title">修改密码</h3>

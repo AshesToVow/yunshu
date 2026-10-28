@@ -1,8 +1,8 @@
-package cmd
+package permcatalog
 
 import "yunshu/internal/model"
 
-func seedPermissionsInspect() []model.Permission {
+func inspectEntries() []model.Permission {
 	return []model.Permission{
 		{Name: "巡检计划查询", Resource: "/api/v1/projects/:id/inspect/plan", Action: "GET", Description: "Get project inspect plan"},
 		{Name: "巡检计划更新", Resource: "/api/v1/projects/:id/inspect/plan", Action: "PUT", Description: "Update project inspect plan"},

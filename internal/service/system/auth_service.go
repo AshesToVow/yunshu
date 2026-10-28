@@ -37,8 +37,10 @@ type AuthService struct {
 	redis         *redis.Client
 	resolvePolicy PasswordPolicyResolver
 	cfg           config.AuthConfig
+	security      config.SecurityConfig
 	mailer        mailer.Sender
 	appName       string
+	now           func() time.Time
 }
 
 type repositoryAuthReader interface {
@@ -57,6 +59,7 @@ func NewAuthService(
 	redisClient *redis.Client,
 	resolvePolicy PasswordPolicyResolver,
 	cfg config.AuthConfig,
+	security config.SecurityConfig,
 	emailSender mailer.Sender,
 	appName string,
 ) *AuthService {
@@ -65,8 +68,10 @@ func NewAuthService(
 		redis:         redisClient,
 		resolvePolicy: resolvePolicy,
 		cfg:           cfg,
+		security:      security,
 		mailer:        emailSender,
 		appName:       appName,
+		now:           time.Now,
 	}
 }
 
@@ -217,6 +222,9 @@ func (s *AuthService) Login(ctx context.Context, req LoginRequest) (*LoginRespon
 	s.clearPasswordLoginCode(ctx, req.CaptchaKey)
 	s.clearLoginFailures(ctx, user.ID)
 
+	if user.MFAEnabled {
+		return s.beginMFA(ctx, user, model.LoginSourcePassword)
+	}
 	return s.issueLoginResponse(ctx, user)
 }
 
@@ -244,6 +252,9 @@ func (s *AuthService) EmailLogin(ctx context.Context, req EmailLoginRequest) (*L
 	s.clearEmailCode(ctx, emailCodeSceneLogin, email)
 	s.clearLoginFailures(ctx, user.ID)
 
+	if user.MFAEnabled {
+		return s.beginMFA(ctx, user, model.LoginSourceEmail)
+	}
 	return s.issueLoginResponse(ctx, user)
 }
 

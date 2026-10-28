@@ -78,3 +78,36 @@ export function listAllPermissions() {
     return list;
   })();
 }
+
+export type PermissionCatalogEntry = {
+  group: string;
+  name: string;
+  description: string;
+  method: string;
+  path: string;
+  auth: boolean;
+  registered: boolean;
+  live: boolean;
+};
+
+export type PermissionCatalog = {
+  groups: { title: string; entries: PermissionCatalogEntry[] }[];
+  missing: number;
+  unregistered_routes: string[] | null;
+};
+
+/** 后端以路由注册表 + 权限目录（permcatalog）生成的接口目录，前端不再维护静态副本。 */
+export function getPermissionCatalog() {
+  return getData<PermissionCatalog>(http.get("/permissions/catalog"));
+}
+
+export type RoutePermissionSyncResult = {
+  created: number;
+  skipped: number;
+  total: number;
+};
+
+/** 按实际注册路由补齐权限表（接口下线不会在此处生成条目）。 */
+export function syncRoutePermissions() {
+  return getData<RoutePermissionSyncResult>(http.post("/permissions/sync-routes"));
+}

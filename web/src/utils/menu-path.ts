@@ -127,13 +127,19 @@ export function flattenMenuItems(menus: MenuItem[]): MenuItem[] {
   return out;
 }
 
+/** 后端 status 缺省视为启用（历史缓存数据没有该字段），仅显式 0 表示停用。 */
+export function isMenuEnabled(menu: MenuItem): boolean {
+  return menu.status !== 0;
+}
+
 /**
  * 按当前 URL 在已授权菜单树中查找节点。
+ * 停用菜单（status=0）不参与匹配：后端 /menus/tree 已过滤，这里兜底旧缓存/竞态数据。
  * 先精确匹配；再按「带 component 的叶子」做最长前缀匹配（支持 /page/:id 等子路由）。
  */
 export function findMenuByPath(menus: MenuItem[], pathname: string): MenuItem | undefined {
   const p = normalizeMenuPath(pathname);
-  const flat = flattenMenuItems(menus);
+  const flat = flattenMenuItems(menus).filter(isMenuEnabled);
   const exact = flat.find((m) => normalizeMenuPath(m.path) === p);
   if (exact) return exact;
 

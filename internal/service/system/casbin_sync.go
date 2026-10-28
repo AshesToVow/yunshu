@@ -12,6 +12,21 @@ func UserSubject(userID uint) string {
 	return fmt.Sprintf("user:%d", userID)
 }
 
+// policyChangeHook 策略变更通知（多副本 Redis 推送），由启动装配注入；
+// 未注入（CLI/单测）时为空操作，轮询兜底仍然生效。
+var policyChangeHook func()
+
+// SetPolicyChangeHook 注册策略变更回调。
+func SetPolicyChangeHook(fn func()) {
+	policyChangeHook = fn
+}
+
+func notifyPolicyChange() {
+	if policyChangeHook != nil {
+		policyChangeHook()
+	}
+}
+
 // SyncUserRoles 重建用户的角色分组关系。已禁用的角色不写入 Casbin，
 // 避免禁用角色仍被 Enforce 命中（角色重新启用时由 EnableRoleGroupings 补回）。
 func SyncUserRoles(enforcer *casbin.SyncedEnforcer, userID uint, roles []model.Role) error {
@@ -27,6 +42,7 @@ func SyncUserRoles(enforcer *casbin.SyncedEnforcer, userID uint, roles []model.R
 			return err
 		}
 	}
+	notifyPolicyChange()
 	return nil
 }
 
@@ -42,6 +58,7 @@ func DisableRoleGroupings(enforcer *casbin.SyncedEnforcer, roleCode string) erro
 			return err
 		}
 	}
+	notifyPolicyChange()
 	return nil
 }
 
@@ -52,6 +69,7 @@ func EnableRoleGroupings(enforcer *casbin.SyncedEnforcer, roleCode string, userI
 			return err
 		}
 	}
+	notifyPolicyChange()
 	return nil
 }
 
@@ -85,6 +103,7 @@ func ReplaceRoleCode(enforcer *casbin.SyncedEnforcer, oldCode, newCode string) e
 			return resyncOnError(enforcer, err)
 		}
 	}
+	notifyPolicyChange()
 	return nil
 }
 
@@ -109,6 +128,7 @@ func RemoveRolePolicies(enforcer *casbin.SyncedEnforcer, roleCode string) error 
 	if _, err := enforcer.RemoveFilteredGroupingPolicy(1, roleCode); err != nil {
 		return err
 	}
+	notifyPolicyChange()
 	return nil
 }
 
@@ -129,12 +149,16 @@ func ReplacePermissionResource(enforcer *casbin.SyncedEnforcer, oldResource, old
 			return resyncOnError(enforcer, err)
 		}
 	}
+	notifyPolicyChange()
 	return nil
 }
 
 func RemovePermissionPolicies(enforcer *casbin.SyncedEnforcer, resource, action string) error {
-	_, err := enforcer.RemoveFilteredPolicy(1, resource, action)
-	return err
+	if _, err := enforcer.RemoveFilteredPolicy(1, resource, action); err != nil {
+		return err
+	}
+	notifyPolicyChange()
+	return nil
 }
 
 // AddRolePolicies 批量写入角色 API 授权（已存在的策略会被 Casbin 跳过）。
@@ -146,6 +170,9 @@ func AddRolePolicies(enforcer *casbin.SyncedEnforcer, roleCode string, perms []m
 	for i, p := range perms {
 		rules[i] = []string{roleCode, p.Resource, p.Action}
 	}
-	_, err := enforcer.AddPolicies(rules)
-	return err
+	if _, err := enforcer.AddPolicies(rules); err != nil {
+		return err
+	}
+	notifyPolicyChange()
+	return nil
 }

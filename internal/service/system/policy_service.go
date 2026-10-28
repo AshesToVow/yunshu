@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"errors"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -73,7 +74,7 @@ func (s *PolicyService) List(ctx context.Context) ([]PolicyItemResponse, error) 
 }
 
 // Grant 执行对应的业务逻辑。
-func (s *PolicyService) Grant(ctx context.Context, req PolicyGrantRequest) error {
+func (s *PolicyService) Grant(ctx context.Context, actor *auth.CurrentUser, req PolicyGrantRequest) error {
 	role, err := s.roleRepo.GetByID(ctx, req.RoleID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -88,6 +89,10 @@ func (s *PolicyService) Grant(ctx context.Context, req PolicyGrantRequest) error
 			return constants.ErrPermissionNotFound
 		}
 		return bizerrors.Pass(ctx, "policy", "Grant", err)
+	}
+
+	if err := authorizeRolePolicyChange(actor, role.Code, actorHoldsPermission(s.enforcer, actor, permission.Resource, permission.Action)); err != nil {
+		return err
 	}
 
 	added, err := s.enforcer.AddPolicy(role.Code, permission.Resource, permission.Action)
@@ -97,11 +102,12 @@ func (s *PolicyService) Grant(ctx context.Context, req PolicyGrantRequest) error
 	if !added {
 		return constants.ErrPolicyAlreadyGranted
 	}
+	notifyPolicyChange()
 	return nil
 }
 
 // Revoke 执行对应的业务逻辑。
-func (s *PolicyService) Revoke(ctx context.Context, req PolicyGrantRequest) error {
+func (s *PolicyService) Revoke(ctx context.Context, actor *auth.CurrentUser, req PolicyGrantRequest) error {
 	role, err := s.roleRepo.GetByID(ctx, req.RoleID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -118,6 +124,10 @@ func (s *PolicyService) Revoke(ctx context.Context, req PolicyGrantRequest) erro
 		return bizerrors.Pass(ctx, "policy", "Revoke", err)
 	}
 
+	if err := authorizeRolePolicyChange(actor, role.Code, actorHoldsPermission(s.enforcer, actor, permission.Resource, permission.Action)); err != nil {
+		return err
+	}
+
 	removed, err := s.enforcer.RemovePolicy(role.Code, permission.Resource, permission.Action)
 	if err != nil {
 		return bizerrors.Pass(ctx, "policy", "Revoke", err)
@@ -125,5 +135,6 @@ func (s *PolicyService) Revoke(ctx context.Context, req PolicyGrantRequest) erro
 	if !removed {
 		return constants.ErrPolicyNotGranted
 	}
+	notifyPolicyChange()
 	return nil
 }
