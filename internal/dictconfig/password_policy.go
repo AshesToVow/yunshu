@@ -125,7 +125,8 @@ func ResolvePasswordExpiryDays(ctx context.Context, db *gorm.DB) int {
 	if db == nil {
 		return expiryDays
 	}
-	if v, ok := FetchEnabledDictValue(ctx, db, DefaultPasswordPolicyDictTypes().ExpiryDays); ok {
+	// 鉴权中间件每请求调用，走 30s TTL 缓存避免每请求一次字典查询。
+	if v, ok := FetchEnabledDictValueCached(ctx, db, DefaultPasswordPolicyDictTypes().ExpiryDays); ok {
 		if n, ok2 := ParseIntLoose(v); ok2 && n >= 0 {
 			return n
 		}

@@ -38,6 +38,7 @@ func (f *fakeClusterAccess) ListForPack(context.Context, k8sauth.PrincipalPack, 
 func (f *fakeClusterAccess) DeleteByPrincipalCluster(context.Context, string, string, uint) error {
 	return nil
 }
+func (f *fakeClusterAccess) DeleteByPrincipal(context.Context, string, string) error { return nil }
 func (f *fakeClusterAccess) EffectiveTier(_ context.Context, _ k8sauth.PrincipalPack, clusterID uint) int {
 	if f == nil || f.rankByCluster == nil {
 		return 0

@@ -291,7 +291,7 @@ func (s *PolicyGovernanceService) Conflicts(ctx context.Context, roleID uint) (*
 				MenuName:   m.Name,
 				Resource:   ep.Resource,
 				Action:     strings.ToUpper(strings.TrimSpace(ep.Action)),
-				SuggestFix: "点击「一键补齐入口 API」或手动勾选对应 GET 权限",
+				SuggestFix: "点击「一键补齐入口 API」或手动勾选对应入口权限",
 			}
 			if p, ok := permByKey[permissionLookupKey(ep.Resource, ep.Action)]; ok {
 				item.Permission = p.Name
@@ -517,7 +517,7 @@ func (s *PolicyGovernanceService) FixDisabledPluginPolicies(ctx context.Context,
 func (s *PolicyGovernanceService) PermissionTree(ctx context.Context, roleID uint) (*PermissionTreeResponse, error) {
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, bizerrors.Pass(ctx, "policy", "Conflicts", err)
+		return nil, bizerrors.Pass(ctx, "policy", "PermissionTree", err)
 	}
 	menus, err := s.menuRepo.Tree(ctx)
 	if err != nil {

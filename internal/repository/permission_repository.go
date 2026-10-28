@@ -46,6 +46,34 @@ func (r *PermissionRepository) GetByResourceAction(ctx context.Context, resource
 	return &permission, nil
 }
 
+// GetSoftDeletedByResourceAction 查同键的软删除权限行。
+// 唯一键 idx_perm_resource_action 不含 deleted_at，软删除行仍会阻塞重新 Create。
+func (r *PermissionRepository) GetSoftDeletedByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error) {
+	var permission model.Permission
+	resource = strings.TrimSpace(resource)
+	action = strings.ToUpper(strings.TrimSpace(action))
+	err := r.db.WithContext(ctx).Unscoped().
+		Where("resource = ? AND UPPER(action) = ? AND deleted_at IS NOT NULL", resource, action).
+		Order("id ASC").
+		First(&permission).Error
+	if err != nil {
+		return nil, err
+	}
+	return &permission, nil
+}
+
+// Restore 复活软删除的权限行（清空 deleted_at），并同步最近一次同步写入的名称/描述。
+func (r *PermissionRepository) Restore(ctx context.Context, id uint, name, description, action string) error {
+	return r.db.WithContext(ctx).Unscoped().Model(&model.Permission{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"name":        name,
+			"description": description,
+			"action":      strings.ToUpper(strings.TrimSpace(action)),
+			"deleted_at":  nil,
+		}).Error
+}
+
 func (r *PermissionRepository) Save(ctx context.Context, permission *model.Permission) error {
 	permission.Resource = strings.TrimSpace(permission.Resource)
 	permission.Action = strings.ToUpper(strings.TrimSpace(permission.Action))

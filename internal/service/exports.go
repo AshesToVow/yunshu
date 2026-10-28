@@ -67,6 +67,7 @@ var (
 	NewUserService             = system.NewUserService
 	NewDepartmentService       = system.NewDepartmentService
 	NewRoleService             = system.NewRoleService
+	NewPrincipalGrantCleaner   = system.NewPrincipalGrantCleaner
 	NewPermissionService       = system.NewPermissionService
 	NewPolicyService           = system.NewPolicyService
 	NewPolicyGovernanceService = system.NewPolicyGovernanceService

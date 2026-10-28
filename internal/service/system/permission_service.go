@@ -100,10 +100,12 @@ func (s *PermissionService) Update(ctx context.Context, id uint, req PermissionU
 		permission.K8sScopeEnabled = *req.K8sScopeEnabled
 	}
 
-	if err = s.permissionRepo.Save(ctx, permission); err != nil {
+	// Casbin 改写先于落库：Save 失败时重试同一请求即可收敛；
+	// 反过来 DB 先提交、Casbin 失败会留下旧资源策略孤儿，重试也无法清除。
+	if err = ReplacePermissionResource(s.enforcer, oldResource, oldAction, permission.Resource, permission.Action); err != nil {
 		return nil, bizerrors.Pass(ctx, "permission", "Update", err)
 	}
-	if err = ReplacePermissionResource(s.enforcer, oldResource, oldAction, permission.Resource, permission.Action); err != nil {
+	if err = s.permissionRepo.Save(ctx, permission); err != nil {
 		return nil, bizerrors.Pass(ctx, "permission", "Update", err)
 	}
 	response := NewPermissionItem(*permission)
@@ -165,10 +167,12 @@ func (s *PermissionService) Delete(ctx context.Context, id uint) error {
 		return bizerrors.Pass(ctx, "permission", "Delete", err)
 	}
 
-	if err = s.permissionRepo.Delete(ctx, permission); err != nil {
+	// Casbin 清理先于落库：失败时权限行仍在、可重试；反过来会留下指向
+	// 已删除权限的策略孤儿（有活跃路由映射时 ReclaimOrphans 不会回收）。
+	if err = RemovePermissionPolicies(s.enforcer, permission.Resource, permission.Action); err != nil {
 		return bizerrors.Pass(ctx, "permission", "Delete", err)
 	}
-	return RemovePermissionPolicies(s.enforcer, permission.Resource, permission.Action)
+	return s.permissionRepo.Delete(ctx, permission)
 }
 
 // Detail 查询详情相关的业务逻辑。

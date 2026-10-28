@@ -28,6 +28,7 @@ type K8sClusterAccessRepo interface {
 	ListByRoleCode(ctx context.Context, roleCode string) ([]model.K8sClusterAccessGrant, error)
 	ListForPack(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) ([]model.K8sClusterAccessGrant, error)
 	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) error
+	DeleteByPrincipal(ctx context.Context, principalKind string, principalRef string) error
 	GetByID(ctx context.Context, id uint) (*model.K8sClusterAccessGrant, error)
 	DeleteByID(ctx context.Context, id uint) error
 	EffectiveTier(ctx context.Context, pack k8sauth.PrincipalPack, clusterID uint) int
@@ -48,6 +49,7 @@ type K8sNamespaceAllowRepo interface {
 	Create(ctx context.Context, it *model.K8sNamespaceAllowRule) error
 	DeleteByID(ctx context.Context, id uint) error
 	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) error
+	DeleteByPrincipal(ctx context.Context, principalKind string, principalRef string) error
 }
 
 var _ K8sNamespaceAllowRepo = (*K8sNamespaceAllowRepository)(nil)
@@ -60,6 +62,7 @@ type K8sNamespaceDenyRepo interface {
 	Create(ctx context.Context, it *model.K8sNamespaceDenyRule) error
 	DeleteByID(ctx context.Context, id uint) error
 	DeleteByPrincipalCluster(ctx context.Context, principalKind string, principalRef string, clusterID uint) error
+	DeleteByPrincipal(ctx context.Context, principalKind string, principalRef string) error
 }
 
 var _ K8sNamespaceDenyRepo = (*K8sNamespaceDenyRepository)(nil)

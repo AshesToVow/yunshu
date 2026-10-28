@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"yunshu/internal/model"
 
@@ -87,6 +88,7 @@ type LoginLogRepo interface {
 	List(ctx context.Context, p LoginLogListParams) ([]model.LoginLog, int64, error)
 	DeleteByID(ctx context.Context, id uint) error
 	DeleteByIDs(ctx context.Context, ids []uint) error
+	DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 var _ LoginLogRepo = (*LoginLogRepository)(nil)

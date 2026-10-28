@@ -159,11 +159,19 @@ func (b *Builder) WithRedis() *Builder {
 	}
 
 	cfg := b.app.Config.Redis
+	// 显式收紧超时：go-redis 默认拨号重试在黑洞场景下单操作可挂 ~20s，
+	// 而认证中间件每个请求都会同步访问 Redis，必须快速失败。
+	// PubSub Receive(0) 与阻塞命令走各自的超时路径，不受此影响。
 	b.app.Redis = redis.NewClient(&redis.Options{
-		Addr:     cfg.Addr,
-		Password: cfg.Password,
-		DB:       cfg.DB,
-		PoolSize: cfg.PoolSize,
+		Addr:         cfg.Addr,
+		Password:     cfg.Password,
+		DB:           cfg.DB,
+		PoolSize:     cfg.PoolSize,
+		DialTimeout:  2 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+		PoolTimeout:  4 * time.Second,
+		MaxRetries:   1,
 	})
 	if err := b.app.Redis.Ping(context.Background()).Err(); err != nil {
 		b.err = fmt.Errorf("redis ping: %w", err)
@@ -315,6 +323,7 @@ func (b *Builder) WithGin() *Builder {
 	}
 	engine.Use(middleware.SecurityHeaders(cspOn))
 	engine.Use(middleware.RequestLogger(b.app.Logger))
+	engine.Use(middleware.RequestBudget(time.Duration(b.app.Config.HTTP.RequestBudgetSeconds) * time.Second))
 	engine.Use(middleware.ErrorHandler())
 	middleware.RegisterOpsEndpoints(engine, b.app.DB, b.app.Redis, time.Now())
 	b.app.Engine = engine

@@ -108,6 +108,21 @@ func (r *K8sClusterAccessRepository) DeleteByPrincipalCluster(ctx context.Contex
 		Delete(&model.K8sClusterAccessGrant{}).Error
 }
 
+// DeleteByPrincipal 删除某主体（role/user/group）的全部集群档位授权，
+// 用于角色/用户组删除时的级联清理：主体编码软删后可复用，遗留授权会被新主体继承。
+func (r *K8sClusterAccessRepository) DeleteByPrincipal(ctx context.Context, principalKind, principalRef string) error {
+	if r == nil || r.db == nil {
+		return gorm.ErrInvalidDB
+	}
+	k := strings.TrimSpace(principalKind)
+	ref := strings.TrimSpace(principalRef)
+	if k == "" || ref == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).Where("principal_kind = ? AND principal_ref = ?", k, ref).
+		Delete(&model.K8sClusterAccessGrant{}).Error
+}
+
 func principalPackQuery(q *gorm.DB, pack k8sauth.PrincipalPack) *gorm.DB {
 	rows := pack.PrincipalRows()
 	if len(rows) == 0 {

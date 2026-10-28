@@ -142,6 +142,7 @@ func RegisterCoreRoutes(api *gin.RouterGroup, d CoreRouteDeps) {
 	operationLogs.Use(d.AuthMiddleware(), d.Authorize(), d.OpAudit())
 	operationLogs.GET("/export", d.OperationLogHandler().Export)
 	operationLogs.GET("", d.OperationLogHandler().List)
+	operationLogs.GET("/:id/detail", d.OperationLogHandler().Detail)
 	operationLogs.POST("/delete", d.OperationLogHandler().BatchDelete)
 	operationLogs.DELETE("/:id", d.OperationLogHandler().Delete)
 

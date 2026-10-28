@@ -21,6 +21,7 @@ import (
 	"yunshu/internal/repository"
 	"yunshu/internal/router"
 	"yunshu/internal/service"
+	"yunshu/internal/service/system"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/spf13/cobra"
@@ -74,6 +75,17 @@ var serverCmd = &cobra.Command{
 
 		bgWorkersCtx, bgWorkersCancel := context.WithCancel(context.Background())
 		defer bgWorkersCancel()
+
+		// 审计日志保留期清理（audit.retention_days>0 时启用），随 bgWorkersCtx 停机退出。
+		if app.Config.Audit.RetentionDays > 0 {
+			retentionDays := app.Config.Audit.RetentionDays
+			lifecycle.Go("audit.retention", func() {
+				system.RunAuditRetentionWorker(bgWorkersCtx,
+					repository.NewOperationLogRepository(app.DB),
+					repository.NewLoginLogRepository(app.DB),
+					retentionDays)
+			})
+		}
 
 		k8sEventForwardMgr, err := router.Register(app, bgWorkersCtx)
 		if err != nil {

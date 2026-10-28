@@ -114,6 +114,8 @@ func (s *LoginLogService) Export(ctx context.Context, actor *auth.CurrentUser, q
 	if err != nil {
 		return err
 	}
+	// 导出走不限页取数；行数上限由上面的 total 校验兜底。
+	params.Unbounded = true
 	list, total, err := s.repo.List(ctx, params)
 	if err != nil {
 		return bizerrors.Pass(ctx, "login-log", "Export", err)

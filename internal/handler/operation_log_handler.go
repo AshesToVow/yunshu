@@ -30,8 +30,10 @@ func NewOperationLogHandler(svc *service.OperationLogService) *OperationLogHandl
 // @Produce json
 // @Security BearerAuth
 // @Param method query string false "HTTP method"
-// @Param path query string false "Path contains"
+// @Param path query string false "Path prefix"
 // @Param status_code query int false "HTTP status"
+// @Param start query string false "Start time (2006-01-02 15:04:05 or 2006-01-02), default 7 days ago"
+// @Param end query string false "End time, default now"
 // @Param page query int false "Page"
 // @Param page_size query int false "Page size"
 // @Success 200 {object} response.Body
@@ -45,6 +47,35 @@ func (h *OperationLogHandler) List(c *gin.Context) {
 	ServeQuery(c, func(ctx context.Context, query service.OperationLogListQuery) (*pagination.Result[model.OperationLog], error) {
 		return h.svc.List(ctx, actor, query)
 	})
+}
+
+// Detail godoc
+// @Summary Get operation log detail
+// @Tags OperationLog
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Log ID"
+// @Success 200 {object} response.Body{data=model.OperationLog} "success"
+// @Failure 403 {object} response.Body "仅可查看自己的操作日志详情"
+// @Failure 404 {object} response.Body "操作日志不存在"
+// @Router /api/v1/operation-logs/{id}/detail [get]
+func (h *OperationLogHandler) Detail(c *gin.Context) {
+	actor, ok := auth.CurrentUserFromContext(c)
+	if !ok || actor == nil {
+		response.Error(c, constants.ErrUnauthorized)
+		return
+	}
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	item, err := h.svc.Detail(c.Request.Context(), actor, id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, item)
 }
 
 // BatchDelete godoc
@@ -99,8 +130,10 @@ func (h *OperationLogHandler) Delete(c *gin.Context) {
 // @Produce application/octet-stream
 // @Security BearerAuth
 // @Param method query string false "HTTP method"
-// @Param path query string false "Path contains"
+// @Param path query string false "Path prefix"
 // @Param status_code query int false "HTTP status"
+// @Param start query string false "Start time (2006-01-02 15:04:05 or 2006-01-02), default 7 days ago"
+// @Param end query string false "End time, default now"
 // @Router /api/v1/operation-logs/export [get]
 func (h *OperationLogHandler) Export(c *gin.Context) {
 	actor, ok := auth.CurrentUserFromContext(c)

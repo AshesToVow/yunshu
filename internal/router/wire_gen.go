@@ -49,7 +49,8 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v14 := alert.NewAlertRuleAssigneeService(v11, v12, v13, v5, v10, v9)
 	v15 := provideUserService(v5, v8, v9, syncedEnforcer, v10, v14, v6, client)
 	v16 := system.NewDepartmentService(v9, v5, v14)
-	v17 := system.NewRoleService(v8, v5, syncedEnforcer)
+	principalGrantCleaner := system.NewPrincipalGrantCleaner(routerRouteRepositories.K8sClusterAccess, routerRouteRepositories.K8sNsAllow, routerRouteRepositories.K8sNsDeny, routerRouteRepositories.Dbmgmt)
+	v17 := system.NewRoleService(v8, v5, syncedEnforcer, principalGrantCleaner)
 	v18 := routerRouteRepositories.Permission
 	v19 := system.NewPermissionService(v18, syncedEnforcer)
 	v20 := system.NewPolicyService(v8, v18, syncedEnforcer)
@@ -65,7 +66,7 @@ func InitializeRouteDeps(app *bootstrap.App) (*RouteDeps, error) {
 	v29 := k8s.NewK8sNamespaceDenyService(v24)
 	v30 := k8s.NewK8sNamespaceAllowService(v25)
 	v31 := routerRouteRepositories.Project
-	v32 := system.NewUserGroupService(v26, v5, v10, v31)
+	v32 := system.NewUserGroupService(v26, v5, v10, v31, principalGrantCleaner)
 	v33 := routerRouteRepositories.RegRequest
 	v34 := provideRegistrationService(v33, v5, client, v6, authConfig, sender, appDisplayName)
 	v35 := system.NewMenuService(v21, v18)

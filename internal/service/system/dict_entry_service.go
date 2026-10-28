@@ -134,6 +134,10 @@ func (s *DictEntryService) Update(ctx context.Context, id uint, req DictEntryUpd
 	if isBuiltinDictEntry(oldType, oldLabel) && (item.DictType != oldType || item.Label != oldLabel) {
 		return nil, constants.ErrBadRequestWithMsg("内置字典项不允许修改字典类型或标签，可调整值、状态或备注")
 	}
+	// 敏感→普通迁移会把库中明文凭据暴露在普通字典列表里，一律拒绝；反向（普通→敏感）允许。
+	if oldSensitive && !dictmask.SensitiveDictType(item.DictType) {
+		return nil, constants.ErrBadRequestWithMsg("敏感字典项不允许迁移为普通字典类型，请新建普通条目并停用原条目")
+	}
 	if item.DictType != oldType && isSingletonDictType(item.DictType) {
 		if exists, err2 := s.repo.ExistsByType(ctx, item.DictType, item.ID); err2 == nil && exists {
 			return nil, constants.ErrBadRequestWithMsg("该字典类型为单值型，仅允许一条记录")

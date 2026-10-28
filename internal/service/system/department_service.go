@@ -319,8 +319,10 @@ func (s *DepartmentService) Update(ctx context.Context, id uint, req DepartmentU
 			return bizerrors.Pass(ctx, "department", "Update", err)
 		}
 		if levelDiff != 0 {
+			// 上一条 UPDATE 已把子孙 ancestors 改写为 newPrefix 前缀，这里必须按新前缀匹配，
+			// 否则匹配 0 行、子孙 level 永不更新（ListAll 按 level 排序会乱序）。
 			if err := tx.Model(&model.Department{}).
-				Where("ancestors LIKE ?", oldPrefix+"%").
+				Where("ancestors LIKE ?", newPrefix+"%").
 				Update("level", gorm.Expr("level + ?", levelDiff)).Error; err != nil {
 				return bizerrors.Pass(ctx, "department", "Update", err)
 			}

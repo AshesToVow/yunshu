@@ -85,7 +85,8 @@ export function LoginLogsPage() {
     if (exporting) return;
     setExporting(true);
     try {
-      const res = await exportLoginLogs({ username: filters.username, status: filters.status, source: filters.source });
+      // 导出跟随列表已应用的查询条件（query），而非未点查询的草稿输入（filters）。
+      const res = await exportLoginLogs({ username: query.username, status: query.status, source: query.source });
       const blob = res;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");

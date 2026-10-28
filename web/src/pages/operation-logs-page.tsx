@@ -2,6 +2,7 @@ import { DeleteOutlined, EyeOutlined, ReloadOutlined, SearchOutlined } from "@an
 import {
   Button,
   Card,
+  DatePicker,
   Input,
   InputNumber,
   Modal,
@@ -13,10 +14,12 @@ import {
   Typography,
   message,
 } from "antd";
+import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useRef, useState } from "react";
 import {
   batchDeleteOperationLogs,
   deleteOperationLog,
+  getOperationLogDetail,
   getOperationLogs,
   exportOperationLogs,
 } from "../services/operation-logs";
@@ -26,6 +29,20 @@ import { formatDateTime } from "../utils/format";
 
 const defaultQuery: OperationLogQuery = { page: 1, page_size: 10 };
 const MAX_BODY_LENGTH = 20000;
+const TIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
+
+// 与后端默认时间窗（最近 7 天）保持一致，避免首屏即全量扫描。
+function defaultRange(): [Dayjs, Dayjs] {
+  return [dayjs().subtract(7, "day"), dayjs()];
+}
+
+function rangeToQuery(range: [Dayjs, Dayjs] | null): Pick<OperationLogQuery, "start" | "end"> {
+  if (!range || !range[0] || !range[1]) return {};
+  return {
+    start: range[0].format(TIME_FORMAT),
+    end: range[1].format(TIME_FORMAT),
+  };
+}
 
 function maskPhoneNumbers(text: string): string {
   return text.replace(/(^|[^\d])(1[3-9]\d)(\d{4})(\d{4})(?!\d)/g, "$1$2****$4");
@@ -76,8 +93,14 @@ export function OperationLogsPage() {
   const [query, setQuery] = useState<OperationLogQuery>(defaultQuery);
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
-  const [filters, setFilters] = useState({ method: "", path: "", status_code: undefined as number | undefined });
+  const [filters, setFilters] = useState({
+    method: "",
+    path: "",
+    status_code: undefined as number | undefined,
+    range: defaultRange() as [Dayjs, Dayjs] | null,
+  });
   const [bodyModal, setBodyModal] = useState<{ title: string; content: string } | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [deletingId, setDeletingId] = useState<number>();
   const [exporting, setExporting] = useState(false);
@@ -105,12 +128,36 @@ export function OperationLogsPage() {
   }
 
   function handleSearch() {
-    setQuery({ ...filters, page: 1, page_size: query.page_size });
+    setQuery({
+      method: filters.method,
+      path: filters.path,
+      status_code: filters.status_code,
+      ...rangeToQuery(filters.range),
+      page: 1,
+      page_size: query.page_size,
+    });
   }
 
   function handleReset() {
-    setFilters({ method: "", path: "", status_code: undefined });
+    setFilters({ method: "", path: "", status_code: undefined, range: defaultRange() });
     setQuery(defaultQuery);
+  }
+
+  // 列表已不再携带请求/响应体，查看时按 id 拉取详情。
+  async function openBody(id: number, title: "请求体" | "响应体") {
+    if (detailLoading) return;
+    setDetailLoading(true);
+    setBodyModal({ title, content: "加载中…" });
+    try {
+      const detail = await getOperationLogDetail(id);
+      const field = title === "请求体" ? detail.request_body : detail.response_body;
+      setBodyModal({ title, content: maskSensitiveBody(field || "（空）") });
+    } catch (e: unknown) {
+      setBodyModal(null);
+      message.error(extractApiErrorMessage(e, "加载日志详情失败"));
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   async function handleBatchDelete() {
@@ -140,6 +187,7 @@ export function OperationLogsPage() {
         method: filters.method,
         path: filters.path,
         status_code: filters.status_code,
+        ...rangeToQuery(filters.range),
       });
       const blob = res;
       const url = window.URL.createObjectURL(blob);
@@ -194,7 +242,7 @@ export function OperationLogsPage() {
             />
             <Input
               allowClear
-              placeholder="请求路径"
+              placeholder="路径前缀，如 /api/v1/users"
               style={{ width: 220 }}
               value={filters.path}
               onChange={(e) => setFilters((p) => ({ ...p, path: e.target.value }))}
@@ -207,6 +255,17 @@ export function OperationLogsPage() {
               onChange={(v) => setFilters((p) => ({ ...p, status_code: v ?? undefined }))}
               min={100}
               max={599}
+            />
+            <DatePicker.RangePicker
+              showTime
+              value={filters.range}
+              style={{ width: 360 }}
+              onChange={(v) =>
+                setFilters((p) => ({
+                  ...p,
+                  range: v?.[0] && v?.[1] ? [v[0], v[1]] : null,
+                }))
+              }
             />
             <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
               查询
@@ -288,40 +347,32 @@ export function OperationLogsPage() {
             {
               title: "请求体",
               width: 100,
-              render: (_: unknown, r: OperationLogItem) =>
-                r.request_body ? (
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() =>
-                      setBodyModal({ title: "请求体", content: maskSensitiveBody(r.request_body || "") })
-                    }
-                  >
-                    查看
-                  </Button>
-                ) : (
-                  "-"
-                ),
+              render: (_: unknown, r: OperationLogItem) => (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  loading={detailLoading}
+                  onClick={() => void openBody(r.id, "请求体")}
+                >
+                  查看
+                </Button>
+              ),
             },
             {
               title: "响应体",
               width: 100,
-              render: (_: unknown, r: OperationLogItem) =>
-                r.response_body ? (
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<EyeOutlined />}
-                    onClick={() =>
-                      setBodyModal({ title: "响应体", content: maskSensitiveBody(r.response_body || "") })
-                    }
-                  >
-                    查看
-                  </Button>
-                ) : (
-                  "-"
-                ),
+              render: (_: unknown, r: OperationLogItem) => (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  loading={detailLoading}
+                  onClick={() => void openBody(r.id, "响应体")}
+                >
+                  查看
+                </Button>
+              ),
             },
             {
               title: "操作时间",

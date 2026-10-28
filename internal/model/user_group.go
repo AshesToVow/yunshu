@@ -11,13 +11,14 @@ import (
 type UserGroup struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	Name        string         `json:"name" gorm:"size:64;not null;comment:显示名称"`
-	Code        string         `json:"code" gorm:"size:64;not null;uniqueIndex;comment:唯一编码"`
+	Code        string         `json:"code" gorm:"size:64;not null;uniqueIndex:idx_user_groups_code_deleted,priority:1;comment:唯一编码"`
 	Description string         `json:"description" gorm:"size:255;comment:说明"`
 	ScopeProjectID *uint       `json:"scope_project_id,omitempty" gorm:"index;comment:可选：绑定业务项目ID，非空时仅项目成员可维护该组"`
 	Status      int            `json:"status" gorm:"not null;default:1;comment:1启用 0停用"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	// deleted_at 参与编码唯一索引：软删除后编码可复用（NULL 视为不同值）。
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:idx_user_groups_code_deleted,priority:2"`
 }
 
 func (UserGroup) TableName() string { return "user_groups" }

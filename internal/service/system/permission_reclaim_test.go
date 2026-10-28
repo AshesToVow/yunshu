@@ -2,8 +2,11 @@ package system
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"yunshu/internal/config"
 	"yunshu/internal/interfaces"
@@ -191,8 +194,14 @@ func (p *reclaimGatePlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{APIPrefixes: []string{"/api/v1/reclaim-gate"}}
 }
 
+var reclaimGateOnce sync.Once
+
+func registerReclaimGatePlugin() {
+	reclaimGateOnce.Do(func() { plugin.Register(&reclaimGatePlugin{}) })
+}
+
 func TestReclaimOrphansSkipsDisabledPluginPaths(t *testing.T) {
-	plugin.Register(&reclaimGatePlugin{})
+	registerReclaimGatePlugin()
 	engine := newReclaimEngine(t, [2]string{"GET", "/api/v1/users"})
 	repo := &fakePermissionRepo{rows: []model.Permission{
 		{ID: 1, Resource: "/api/v1/reclaim-gate/things", Action: "GET", Description: apiroute.AutoSyncDescription("reclaim-gate-test")},
@@ -210,6 +219,30 @@ func TestReclaimOrphansSkipsDisabledPluginPaths(t *testing.T) {
 	}
 	if len(repo.deleted) != 0 {
 		t.Fatalf("must not delete disabled plugin permission, deleted %v", repo.deleted)
+	}
+}
+
+// 插件 Manifest 前缀只有登记项、没有同名路由；回收删掉后下一轮同步会重建，撞唯一键。
+func TestReclaimOrphansKeepsPluginManifestPrefix(t *testing.T) {
+	registerReclaimGatePlugin()
+	engine := newReclaimEngine(t, [2]string{"GET", "/api/v1/users"})
+	repo := &fakePermissionRepo{rows: []model.Permission{
+		{ID: 1, Resource: "/api/v1/reclaim-gate", Action: "GET", Description: apiroute.AutoSyncDescription("reclaim-gate-test")},
+		{ID: 2, Resource: "/api/v1/legacy", Action: "GET", Description: apiroute.AutoSyncDescription("core")},
+	}}
+	svc := &PermissionSyncService{
+		permissionRepo: repo,
+		plugins:        &config.PluginsConfig{Enabled: []string{"core", "reclaim-gate-test"}},
+	}
+	result, err := svc.ReclaimOrphans(context.Background(), engine, nil)
+	if err != nil {
+		t.Fatalf("reclaim: %v", err)
+	}
+	if result.DeletedPermissions != 1 || result.Skipped != 1 {
+		t.Fatalf("manifest prefix must be kept, got %+v", result)
+	}
+	if got := fmt.Sprint(repo.deleted); got != "[2]" {
+		t.Fatalf("deleted ids = %s, want [2]", got)
 	}
 }
 
@@ -246,5 +279,77 @@ func TestUpsertRoutePermissionFallsBackToAutoName(t *testing.T) {
 	}
 	if row.Name != apiroute.DefaultName("GET", "/api/v1/not-in-catalog") {
 		t.Fatalf("unexpected fallback name: %q", row.Name)
+	}
+}
+
+// duplicatePermissionRepo 模拟唯一键冲突：活跃行查不到，但存在同键软删除行。
+type duplicatePermissionRepo struct {
+	interfaces.PermissionRepository
+	deleted      *model.Permission
+	restoredID   uint
+	restoredName string
+	restoredAct  string
+}
+
+func (f *duplicatePermissionRepo) Create(context.Context, *model.Permission) error {
+	return errors.New("Error 1062 (23000): Duplicate entry for key 'idx_perm_resource_action'")
+}
+
+func (f *duplicatePermissionRepo) GetByResourceAction(context.Context, string, string) (*model.Permission, error) {
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (f *duplicatePermissionRepo) GetSoftDeletedByResourceAction(context.Context, string, string) (*model.Permission, error) {
+	if f.deleted == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return f.deleted, nil
+}
+
+func (f *duplicatePermissionRepo) Restore(_ context.Context, id uint, name, _ string, action string) error {
+	f.restoredID = id
+	f.restoredName = name
+	f.restoredAct = action
+	return nil
+}
+
+func TestUpsertRoutePermissionRevivesSoftDeletedRow(t *testing.T) {
+	t.Parallel()
+	repo := &duplicatePermissionRepo{
+		deleted: &model.Permission{
+			ID:        42,
+			Resource:  "/api/v1/users",
+			Action:    "get",
+			DeletedAt: gorm.DeletedAt{Time: time.Now(), Valid: true},
+		},
+	}
+	svc := &PermissionSyncService{permissionRepo: repo}
+	created, err := svc.upsertRoutePermission(context.Background(), "GET", "/api/v1/users", "core")
+	if err != nil {
+		t.Fatalf("upsert must revive instead of failing: %v", err)
+	}
+	if !created {
+		t.Fatal("revived row should count as created")
+	}
+	if repo.restoredID != 42 {
+		t.Fatalf("restored id = %d, want 42", repo.restoredID)
+	}
+	if repo.restoredName != "用户列表" {
+		t.Fatalf("restore must apply catalog name, got %q", repo.restoredName)
+	}
+	if repo.restoredAct != "GET" {
+		t.Fatalf("restore must normalize action, got %q", repo.restoredAct)
+	}
+}
+
+func TestUpsertRoutePermissionReportsUnrelatedCreateError(t *testing.T) {
+	t.Parallel()
+	repo := &duplicatePermissionRepo{}
+	svc := &PermissionSyncService{permissionRepo: repo}
+	if _, err := svc.upsertRoutePermission(context.Background(), "GET", "/api/v1/users", "core"); err == nil {
+		t.Fatal("create error without a soft-deleted row must surface")
+	}
+	if repo.restoredID != 0 {
+		t.Fatalf("must not restore on unrelated failure, restored %d", repo.restoredID)
 	}
 }

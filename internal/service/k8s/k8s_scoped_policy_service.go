@@ -314,8 +314,9 @@ func (s *K8sScopedPolicyService) ensureGrantActorAllowed(
 	requestedRank int,
 ) error {
 	u, ok := auth.RequestUserFromContext(ctx)
+	// 无 actor 一律拒绝：该函数只出现在 HTTP 入口，缺 actor 说明鉴权链路异常，放行即越权。
 	if !ok || u == nil {
-		return nil
+		return constants.ErrUnauthorized
 	}
 	if auth.IsSuperAdminRole(u.RoleCodes) {
 		return nil
@@ -526,6 +527,11 @@ func (s *K8sScopedPolicyService) DeleteClusterGrant(ctx context.Context, id uint
 	if err != nil {
 		return bizerrors.Pass(ctx, "k8s.policy", "DeleteClusterGrant", err)
 	}
+	// 回收与下发同闸门：非超管不能回收超出自身档位的授权，也不能动自己/自己角色/组的授权。
+	if err := s.ensureGrantActorAllowed(ctx, g.PrincipalKind, g.PrincipalRef, []uint{g.ClusterID},
+		k8srole.RankFromGrants([]model.K8sClusterAccessGrant{*g})); err != nil {
+		return err
+	}
 	if err := s.accessRepo.DeleteByID(ctx, id); err != nil {
 		return err
 	}
@@ -550,6 +556,10 @@ func (s *K8sScopedPolicyService) DeleteClusterGrantsBatch(ctx context.Context, i
 		g, e := s.accessRepo.GetByID(ctx, id)
 		if e != nil {
 			return deleted, bizerrors.Pass(ctx, "k8s.policy", "DeleteClusterGrantsBatch", e)
+		}
+		if e := s.ensureGrantActorAllowed(ctx, g.PrincipalKind, g.PrincipalRef, []uint{g.ClusterID},
+			k8srole.RankFromGrants([]model.K8sClusterAccessGrant{*g})); e != nil {
+			return deleted, e
 		}
 		if e := s.accessRepo.DeleteByID(ctx, id); e != nil {
 			return deleted, e

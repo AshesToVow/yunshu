@@ -357,6 +357,10 @@ func (s *UserService) UpdateByActor(ctx context.Context, actor *auth.CurrentUser
 	if err := s.ensureTargetManageable(actor, target); err != nil {
 		return nil, err
 	}
+	// 不能通过用户管理禁用自己的账号：避免管理员自锁，账号停用统一由其他管理员操作。
+	if actor.ID == target.ID && req.Status != nil && *req.Status == model.StatusDisabled {
+		return nil, constants.ErrForbiddenWithMsg("不能禁用自己的账号")
+	}
 	if target.ID != actor.ID && req.Email != nil && !auth.IsSuperAdminRole(actor.RoleCodes) {
 		desired := normalizeEmail(*req.Email)
 		if desired != "" && desired != userEmailValue(target) {
@@ -435,6 +439,10 @@ func (s *UserService) DeleteByActor(ctx context.Context, actor *auth.CurrentUser
 	}
 	if err := s.ensureTargetManageable(actor, target); err != nil {
 		return err
+	}
+	// 不能删除自己的账号：避免管理员误删自锁，删除统一由其他管理员操作。
+	if actor.ID == target.ID {
+		return constants.ErrForbiddenWithMsg("不能删除自己的账号")
 	}
 	return s.Delete(ctx, id)
 }
@@ -651,6 +659,7 @@ func (s *UserService) ListAllByActor(ctx context.Context, actor *auth.CurrentUse
 	params := repository.UserListParams{
 		Page:     1,
 		PageSize: 100000,
+		Unbounded: true,
 	}
 	if actor.DepartmentID == nil || *actor.DepartmentID == 0 {
 		uid := actor.ID

@@ -27,6 +27,7 @@ type DbmgmtRepo interface {
 	GetGrantBySourceRequest(ctx context.Context, projectID, requestID uint) (*model.DbAccessGrant, error)
 	ListGrants(ctx context.Context, projectID, instanceID uint) ([]model.DbAccessGrant, error)
 	ListGrantsForPrincipal(ctx context.Context, projectID, instanceID uint, kind, ref string) ([]model.DbAccessGrant, error)
+	DeleteGrantsByPrincipal(ctx context.Context, kind, ref string) error
 
 	CreateAccessRequest(ctx context.Context, req *model.DbAccessRequest) error
 	UpdateAccessRequest(ctx context.Context, req *model.DbAccessRequest) error

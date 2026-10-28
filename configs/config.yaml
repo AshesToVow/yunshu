@@ -158,9 +158,18 @@ cicd:
 
 http:
   read_header_timeout_seconds: 5
-  read_timeout_seconds: 0
-  write_timeout_seconds: 0
+  # 0 或不配置时走安全默认（读 30s / 写 310s / 预算 60s），不再允许无限挂起
+  read_timeout_seconds: 30
+  # 覆盖 AI 会话等最长 300s 的流式响应；导出/SSE/WS 端点由请求预算白名单豁免
+  write_timeout_seconds: 310
   idle_timeout_seconds: 120
+  # 非流式请求 context 总预算：外部组件不可用时按时取消并释放 DB 连接
+  request_budget_seconds: 60
+
+audit:
+  # 审计日志（操作历史/登录日志）保留天数；0 = 永久保留（取证数据默认不清）。
+  # 开启后每天分批清理超过保留期的记录，避免 operation_logs 无界增长拖慢列表查询
+  retention_days: 0
 
 log:
   level: debug
@@ -182,8 +191,8 @@ mysql:
   db_name: yunshu
   charset: utf8mb4
   loc: Asia%2FShanghai
-  max_idle_conns: 5
-  max_open_conns: 20
+  max_idle_conns: 10
+  max_open_conns: 50
   conn_max_lifetime_seconds: 3600
   # auto_migrate: 未配置时按环境推断（非 prod 开 / prod 关）。生产请保持关，用 migrate 子命令。
   # auto_migrate: false

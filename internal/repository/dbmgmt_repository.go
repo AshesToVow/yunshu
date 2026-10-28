@@ -212,6 +212,22 @@ func (r *DbmgmtRepository) ListGrantsForPrincipal(ctx context.Context, projectID
 	return list, err
 }
 
+// DeleteGrantsByPrincipal 删除以某主体（user/role/group）为授权对象的全部实例授权，
+// 用于角色/用户组删除时的级联清理：主体编码软删后可复用，遗留授权会被新主体继承。
+func (r *DbmgmtRepository) DeleteGrantsByPrincipal(ctx context.Context, kind, ref string) error {
+	if r == nil || r.db == nil {
+		return gorm.ErrInvalidDB
+	}
+	k := strings.TrimSpace(kind)
+	ref = strings.TrimSpace(ref)
+	if k == "" || ref == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).
+		Where("principal_kind = ? AND principal_ref = ?", k, ref).
+		Delete(&model.DbAccessGrant{}).Error
+}
+
 // --- Access Request ---
 
 func (r *DbmgmtRepository) CreateAccessRequest(ctx context.Context, req *model.DbAccessRequest) error {

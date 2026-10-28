@@ -23,6 +23,11 @@ func bootstrapPreMigrate(db *gorm.DB) error {
 	if err := dropLegacyRoleUniqueIndexes(db); err != nil {
 		return err
 	}
+	// users/user_groups/departments 同样存在软删除行占用唯一键的问题：
+	// 先删不含 deleted_at 的旧唯一索引，AutoMigrate 才能按模型重建为复合索引。
+	if err := dropLegacySoftDeleteUniqueIndexes(db); err != nil {
+		return err
+	}
 	if err := dropLegacyRegistrationUniqueIndexes(db); err != nil {
 		return err
 	}
@@ -54,6 +59,30 @@ func dropLegacyRoleUniqueIndexes(db *gorm.DB) error {
 	}
 	for _, idx := range []string{"idx_roles_name", "idx_roles_code"} {
 		if err := dropIndexIfPresent(db, "roles", idx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// dropLegacySoftDeleteUniqueIndexes 删除 users/user_groups/departments 上不含 deleted_at 的旧唯一索引：
+// 软删除行会永久占用用户名/编码，导致同名/同编码无法再次创建。
+// AutoMigrate 不会删除模型中已移除的索引，必须启动期显式清理。
+func dropLegacySoftDeleteUniqueIndexes(db *gorm.DB) error {
+	targets := []struct {
+		model any
+		table string
+		index string
+	}{
+		{model.User{}, "users", "idx_users_username"},
+		{model.UserGroup{}, "user_groups", "idx_user_groups_code"},
+		{model.Department{}, "departments", "idx_departments_code"},
+	}
+	for _, t := range targets {
+		if !db.Migrator().HasTable(t.model) {
+			continue
+		}
+		if err := dropIndexIfPresent(db, t.table, t.index); err != nil {
 			return err
 		}
 	}

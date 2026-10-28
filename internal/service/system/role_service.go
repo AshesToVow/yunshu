@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"yunshu/internal/pkg/auth"
 	"yunshu/internal/pkg/constants"
 	bizerrors "yunshu/internal/pkg/errors"
 
@@ -17,17 +18,19 @@ import (
 )
 
 type RoleService struct {
-	roleRepo interfaces.RoleRepository
-	userRepo interfaces.UserRepository
-	enforcer *casbin.SyncedEnforcer
+	roleRepo     interfaces.RoleRepository
+	userRepo     interfaces.UserRepository
+	enforcer     *casbin.SyncedEnforcer
+	grantCleaner PrincipalGrantCleaner
 }
 
 // NewRoleService 创建相关逻辑。
-func NewRoleService(roleRepo interfaces.RoleRepository, userRepo interfaces.UserRepository, enforcer *casbin.SyncedEnforcer) *RoleService {
+func NewRoleService(roleRepo interfaces.RoleRepository, userRepo interfaces.UserRepository, enforcer *casbin.SyncedEnforcer, grantCleaner PrincipalGrantCleaner) *RoleService {
 	return &RoleService{
-		roleRepo: roleRepo,
-		userRepo: userRepo,
-		enforcer: enforcer,
+		roleRepo:     roleRepo,
+		userRepo:     userRepo,
+		enforcer:     enforcer,
+		grantCleaner: grantCleaner,
 	}
 }
 
@@ -71,6 +74,11 @@ func (s *RoleService) Update(ctx context.Context, id uint, req RoleUpdateRequest
 			return nil, constants.ErrRoleNotFound
 		}
 		return nil, bizerrors.Pass(ctx, "role", "Update", err)
+	}
+	// 按旧编码校验目标：非超管不得改动内置超管角色（哪怕只改名称/描述），也不得改动自己所属角色。
+	actor, _ := auth.RequestUserFromContext(ctx)
+	if err := authorizeRoleTarget(actor, role.Code); err != nil {
+		return nil, err
 	}
 
 	oldCode := role.Code
@@ -153,10 +161,24 @@ func (s *RoleService) Delete(ctx context.Context, id uint) error {
 	if isBuiltinSuperAdminRole(role.Code) {
 		return constants.ErrForbiddenWithMsg("内置超级管理员角色不可删除")
 	}
-	if err = s.roleRepo.Delete(ctx, role); err != nil {
+	// 非超管不得删除自己所属角色（自锁死），也不得触碰内置超管角色（上面已拦）。
+	actor, _ := auth.RequestUserFromContext(ctx)
+	if err := authorizeRoleTarget(actor, role.Code); err != nil {
+		return err
+	}
+	// 先清各授权域中以角色编码为主体的授权再删角色：编码软删后可复用，
+	// 遗留授权会被新建同编码角色继承；清理失败则中止删除，重试可收敛。
+	if s.grantCleaner != nil {
+		if err := s.grantCleaner.CleanupPrincipalGrants(ctx, model.K8sPrincipalRole, role.Code); err != nil {
+			return bizerrors.Pass(ctx, "role", "Delete", err)
+		}
+	}
+	// Casbin 清理先于落库：失败时角色行仍在、可重试；反过来会留下指向
+	// 已删除角色的孤儿策略（ReclaimOrphans 只回收无路由映射的策略）。
+	if err = RemoveRolePolicies(s.enforcer, role.Code); err != nil {
 		return bizerrors.Pass(ctx, "role", "Delete", err)
 	}
-	return RemoveRolePolicies(s.enforcer, role.Code)
+	return s.roleRepo.Delete(ctx, role)
 }
 
 // Detail 查询详情相关的业务逻辑。

@@ -9,10 +9,10 @@ import (
 	"yunshu/internal/interfaces"
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/apiroute"
-	"yunshu/internal/pkg/permcatalog"
 	bizerrors "yunshu/internal/pkg/errors"
-	"yunshu/internal/plugingate"
+	"yunshu/internal/pkg/permcatalog"
 	"yunshu/internal/plugin"
+	"yunshu/internal/plugingate"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -78,10 +78,7 @@ func (s *PermissionSyncService) ensurePseudoPermissions(ctx context.Context) err
 			return err
 		}
 		row := p
-		if err := s.permissionRepo.Create(ctx, &row); err != nil {
-			if existing, getErr := s.permissionRepo.GetByResourceAction(ctx, p.Resource, p.Action); getErr == nil && existing != nil {
-				continue
-			}
+		if _, err := s.createOrRevivePermission(ctx, &row); err != nil {
 			return err
 		}
 	}
@@ -109,10 +106,40 @@ func (s *PermissionSyncService) upsertRoutePermission(ctx context.Context, metho
 		row.Name = entry.Name
 		row.Description = entry.Description
 	}
-	if err := s.permissionRepo.Create(ctx, &row); err != nil {
-		if existing, getErr := s.permissionRepo.GetByResourceAction(ctx, path, method); getErr == nil && existing != nil {
+	return s.createOrRevivePermission(ctx, &row)
+}
+
+// createOrRevivePermission 新建权限行；唯一键含软删除行，冲突时尝试复活旧行而不是报错。
+func (s *PermissionSyncService) createOrRevivePermission(ctx context.Context, row *model.Permission) (created bool, err error) {
+	if createErr := s.permissionRepo.Create(ctx, row); createErr != nil {
+		// 并发创建：其它副本/启动同步已写入活跃行。
+		if existing, getErr := s.permissionRepo.GetByResourceAction(ctx, row.Resource, row.Action); getErr == nil && existing != nil {
 			return false, nil
 		}
+		revived, reviveErr := s.reviveSoftDeletedPermission(ctx, row)
+		if reviveErr != nil {
+			return false, reviveErr
+		}
+		if revived {
+			return true, nil
+		}
+		return false, createErr
+	}
+	return true, nil
+}
+
+func (s *PermissionSyncService) reviveSoftDeletedPermission(ctx context.Context, row *model.Permission) (bool, error) {
+	deleted, err := s.permissionRepo.GetSoftDeletedByResourceAction(ctx, row.Resource, row.Action)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	if deleted == nil {
+		return false, nil
+	}
+	if err := s.permissionRepo.Restore(ctx, deleted.ID, row.Name, row.Description, row.Action); err != nil {
 		return false, err
 	}
 	return true, nil

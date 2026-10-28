@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"yunshu/internal/model"
 )
@@ -24,6 +25,8 @@ var _ RoleRepo = (*RoleRepository)(nil)
 type PermissionRepo interface {
 	Create(ctx context.Context, permission *model.Permission) (error)
 	GetByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error)
+	GetSoftDeletedByResourceAction(ctx context.Context, resource, action string) (*model.Permission, error)
+	Restore(ctx context.Context, id uint, name, description, action string) (error)
 	Save(ctx context.Context, permission *model.Permission) (error)
 	Delete(ctx context.Context, permission *model.Permission) (error)
 	GetByID(ctx context.Context, id uint) (*model.Permission, error)
@@ -57,8 +60,10 @@ var _ MenuRepo = (*MenuRepository)(nil)
 type OperationLogRepo interface {
 	Create(ctx context.Context, log *model.OperationLog) (error)
 	List(ctx context.Context, p OperationLogListParams) ([]model.OperationLog, int64, error)
+	GetByID(ctx context.Context, id uint) (*model.OperationLog, error)
 	DeleteByID(ctx context.Context, id uint) (error)
 	DeleteByIDs(ctx context.Context, ids []uint) (error)
+	DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }
 
 var _ OperationLogRepo = (*OperationLogRepository)(nil)

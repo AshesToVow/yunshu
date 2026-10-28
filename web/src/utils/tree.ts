@@ -100,21 +100,44 @@ export function buildPermissionTreeData(permissions: PermissionItem[], opts?: Pe
     }));
 }
 
+export type TreeKey = string | number;
+
+// 与后端 PermissionTree 的 "perm:N"/"menu:N" 字符串 key 不同，
+// API 节点直接使用权限 ID 作为 key，才能与 checkedKeys（数字 ID）对上。
 export function buildUnifiedPermissionTreeData(nodes: PermissionTreeNode[]): AppTreeData {
-  const walk = (items: PermissionTreeNode[]): AppTreeData =>
-    items.map((node) => {
-      const isAPI = node.node_type === "api";
+  const seenPermissions = new Set<number>();
+  const walk = (items: PermissionTreeNode[]): AppTreeData => {
+    const out: AppTreeData = [];
+    for (const node of items) {
       const suffix = node.plugin_disabled ? "（插件未启用）" : "";
-      const grantedTag = node.granted ? " ✓" : "";
-      return {
+      if (node.node_type === "api") {
+        // 同一入口 API 可能绑定多个菜单，重复出现会导致 key 冲突与勾选联动错乱
+        if (!node.permission_id || seenPermissions.has(node.permission_id)) {
+          continue;
+        }
+        seenPermissions.add(node.permission_id);
+        out.push({
+          key: node.permission_id,
+          title: `${node.title}${suffix}`,
+          selectable: false,
+          disableCheckbox: !!node.plugin_disabled,
+        });
+        continue;
+      }
+      const children = node.children?.length ? walk(node.children) : [];
+      if (children.length === 0) {
+        continue;
+      }
+      out.push({
         key: node.key,
-        title: `${node.title}${suffix}${grantedTag}`,
+        title: `${node.title}${suffix}`,
         selectable: false,
-        disableCheckbox: !isAPI || !!node.plugin_disabled,
-        value: isAPI ? node.permission_id : undefined,
-        children: node.children?.length ? walk(node.children) : undefined,
-      };
-    });
+        disableCheckbox: true,
+        children,
+      });
+    }
+    return out;
+  };
   return walk(nodes);
 }
 
@@ -135,6 +158,27 @@ export function collectGrantedPermissionIds(nodes: PermissionTreeNode[]): number
 export function normalizeCheckedKeys(checkedKeys: Parameters<NonNullable<TreeProps["onCheck"]>>[0]): number[] {
   const rawKeys = Array.isArray(checkedKeys) ? checkedKeys : checkedKeys.checked;
   return rawKeys.map((item) => Number(item)).filter((item) => Number.isInteger(item));
+}
+
+export function collectTreeDataKeys(data: AppTreeData): TreeKey[] {
+  const keys: TreeKey[] = [];
+  const walk = (nodes: AppTreeData) => {
+    for (const node of nodes) {
+      keys.push(node.key as TreeKey);
+      if (node.children?.length) {
+        walk(node.children);
+      }
+    }
+  };
+  walk(data);
+  return keys;
+}
+
+// antd Tree 的 onCheck 只返回当前树里存在的 key；两棵树共享同一份勾选状态时，
+// 不在当前树里的已勾选 ID 必须显式保留，否则会被同步误回收。
+export function mergeTreeCheckedKeys(current: number[], treeChecked: number[], treeIds: Set<number>): number[] {
+  const outOfTree = current.filter((id) => !treeIds.has(id));
+  return [...new Set([...outOfTree, ...treeChecked])];
 }
 
 function getModuleName(resource: string) {

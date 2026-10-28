@@ -37,7 +37,7 @@ import {
   syncRoutePermissions,
 } from "../services/permissions";
 import { getRoleOptions } from "../services/roles";
-import { grantPolicy } from "../services/policies";
+import { getPolicies, grantPolicy, revokePolicy } from "../services/policies";
 import type { PermissionItem, PermissionPayload, PermissionQuery, RoleItem } from "../types/api";
 import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
@@ -83,6 +83,8 @@ export function PermissionsPage() {
   const [assignTarget, setAssignTarget] = useState<PermissionItem | null>(null);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [checkedRoleIds, setCheckedRoleIds] = useState<number[]>([]);
+  // 打开弹窗时已持有该权限的角色，提交时仅做增量授予/回收。
+  const [grantedRoleIds, setGrantedRoleIds] = useState<number[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<PermissionItem | null>(null);
   const [detailSubmitting, setDetailSubmitting] = useState(false);
@@ -197,17 +199,39 @@ export function PermissionsPage() {
   function openAssignRoles(record: PermissionItem) {
     setAssignTarget(record);
     setCheckedRoleIds([]);
+    setGrantedRoleIds([]);
     setAssignOpen(true);
+    void (async () => {
+      try {
+        const policies = await getPolicies();
+        const holderIds = Array.from(
+          new Set(policies.filter((p) => p.permission_id === record.id).map((p) => p.role_id)),
+        );
+        setGrantedRoleIds(holderIds);
+        setCheckedRoleIds(holderIds);
+      } catch (e: unknown) {
+        message.error(extractApiErrorMessage(e, "加载已授权角色失败"));
+      }
+    })();
   }
 
   async function submitAssignRoles() {
     if (!assignTarget) return;
     setSubmitting(true);
     try {
-      const promises = checkedRoleIds.map((roleId) => grantPolicy({ role_id: roleId, permission_id: assignTarget.id }));
-      await Promise.all(promises);
+      // 相对当前授权状态做增量：已授予的不再重复授（后端会拒绝重复策略），取消勾选的回收。
+      const granted = new Set(grantedRoleIds);
+      const checked = new Set(checkedRoleIds);
+      const toGrant = checkedRoleIds.filter((id) => !granted.has(id));
+      const toRevoke = grantedRoleIds.filter((id) => !checked.has(id));
+      await Promise.all([
+        ...toGrant.map((roleId) => grantPolicy({ role_id: roleId, permission_id: assignTarget.id })),
+        ...toRevoke.map((roleId) => revokePolicy({ role_id: roleId, permission_id: assignTarget.id })),
+      ]);
       message.success("角色权限已更新");
       setAssignOpen(false);
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "角色权限更新失败"));
     } finally {
       setSubmitting(false);
     }

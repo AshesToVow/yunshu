@@ -235,14 +235,34 @@ func (s *RegistrationService) validateEmailCode(ctx context.Context, scene, emai
 		return bizerrors.Pass(ctx, "registration", "validateEmailCode", err)
 	}
 	if val != code {
-		return constants.ErrCaptchaIncorrect
+		return s.burnEmailCodeOnVerifyFailure(ctx, scene, email)
 	}
 	return nil
+}
+
+// burnEmailCodeOnVerifyFailure 累计校验失败次数；达到上限作废验证码，防在线爆破注册验证码。
+func (s *RegistrationService) burnEmailCodeOnVerifyFailure(ctx context.Context, scene, email string) error {
+	failKey := store.EmailCodeVerifyFailKey(scene, email)
+	n, err := s.redis.Incr(ctx, failKey).Result()
+	if err == nil {
+		if n == 1 {
+			ttl := 10 * time.Minute
+			if s.authCfg.EmailCodeTTLSeconds > 0 {
+				ttl = time.Duration(s.authCfg.EmailCodeTTLSeconds) * time.Second
+			}
+			s.redis.Expire(ctx, failKey, ttl)
+		}
+		if n >= emailCodeMaxVerifyFailures {
+			s.redis.Del(ctx, store.EmailCodeKey(scene, email), failKey)
+			return constants.ErrBadRequestWithMsg("验证码错误次数过多，请重新获取")
+		}
+	}
+	return constants.ErrCaptchaIncorrect
 }
 
 func (s *RegistrationService) clearEmailCode(ctx context.Context, scene, email string) {
 	if s.redis == nil {
 		return
 	}
-	s.redis.Del(ctx, store.EmailCodeKey(scene, email))
+	s.redis.Del(ctx, store.EmailCodeKey(scene, email), store.EmailCodeVerifyFailKey(scene, email))
 }

@@ -9,6 +9,7 @@ import (
 	"yunshu/internal/pkg/apiroute"
 	bizerrors "yunshu/internal/pkg/errors"
 	"yunshu/internal/pkg/permcatalog"
+	"yunshu/internal/plugin"
 	"yunshu/internal/plugingate"
 
 	"github.com/casbin/casbin/v2"
@@ -169,6 +170,7 @@ func (s *PermissionSyncService) ReclaimOrphans(ctx context.Context, engine *gin.
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "permission.sync", "ReclaimOrphans", err)
 	}
+	manifestPrefixes := s.pluginManifestPrefixes()
 	permissionKeys := make(map[string]struct{}, len(perms))
 	stale := make([]model.Permission, 0)
 	for _, p := range perms {
@@ -177,6 +179,11 @@ func (s *PermissionSyncService) ReclaimOrphans(ctx context.Context, engine *gin.
 		key := permcatalog.Key(action, resource)
 		permissionKeys[key] = struct{}{}
 		if !strings.HasPrefix(resource, "/api/v1") || permcatalog.IsPseudoResource(resource) {
+			continue
+		}
+		if _, ok := manifestPrefixes[resource]; ok {
+			// 插件 Manifest 前缀只有登记项、没有同名路由，删了下次同步还会重建。
+			out.Skipped++
 			continue
 		}
 		if _, ok := live[key]; ok {
@@ -206,6 +213,9 @@ func (s *PermissionSyncService) ReclaimOrphans(ctx context.Context, engine *gin.
 			resource := strings.TrimSpace(rule[1])
 			action := strings.ToUpper(strings.TrimSpace(rule[2]))
 			if !strings.HasPrefix(resource, "/api/v1") || permcatalog.IsPseudoResource(resource) {
+				continue
+			}
+			if _, ok := manifestPrefixes[resource]; ok {
 				continue
 			}
 			key := permcatalog.Key(action, resource)
@@ -266,4 +276,23 @@ func (s *PermissionSyncService) ReclaimOrphans(ctx context.Context, engine *gin.
 		notifyPolicyChange()
 	}
 	return out, nil
+}
+
+// pluginManifestPrefixes 已启用插件声明的 API 前缀。
+// 这些前缀只作为权限分组入口登记（无同名路由），回收时必须跳过，否则每轮启动都会删了又建。
+func (s *PermissionSyncService) pluginManifestPrefixes() map[string]struct{} {
+	out := make(map[string]struct{})
+	if s == nil {
+		return out
+	}
+	for _, m := range plugin.FilterEnabled(s.plugins) {
+		for _, prefix := range plugin.ResolveManifest(m).APIPrefixes {
+			prefix = strings.TrimSpace(prefix)
+			if prefix == "" {
+				continue
+			}
+			out[prefix] = struct{}{}
+		}
+	}
+	return out
 }

@@ -2,11 +2,13 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"yunshu/internal/model"
 	"yunshu/internal/pkg/auth"
+	"yunshu/internal/pkg/constants"
 	"yunshu/internal/pkg/k8sauth"
 	"yunshu/internal/pkg/k8scaps"
 	"yunshu/internal/pkg/k8srole"
@@ -15,6 +17,7 @@ import (
 
 type fakeGrantAccessRepo struct {
 	grants []model.K8sClusterAccessGrant
+	byID   *model.K8sClusterAccessGrant
 	calls  int
 }
 
@@ -37,8 +40,9 @@ func (f *fakeGrantAccessRepo) ListForPack(context.Context, k8sauth.PrincipalPack
 func (f *fakeGrantAccessRepo) DeleteByPrincipalCluster(context.Context, string, string, uint) error {
 	return nil
 }
+func (f *fakeGrantAccessRepo) DeleteByPrincipal(context.Context, string, string) error { return nil }
 func (f *fakeGrantAccessRepo) GetByID(context.Context, uint) (*model.K8sClusterAccessGrant, error) {
-	return nil, nil
+	return f.byID, nil
 }
 func (f *fakeGrantAccessRepo) DeleteByID(context.Context, uint) error { return nil }
 func (f *fakeGrantAccessRepo) EffectiveTier(context.Context, k8sauth.PrincipalPack, uint) int {
@@ -134,11 +138,12 @@ func TestEnsureGrantActorAllowedSuperAdminBypass(t *testing.T) {
 	}
 }
 
-func TestEnsureGrantActorAllowedNoActorSkips(t *testing.T) {
+func TestEnsureGrantActorAllowedNoActorDenied(t *testing.T) {
 	t.Parallel()
 	svc, _ := newGrantActorService(nil)
-	if err := svc.ensureGrantActorAllowed(context.Background(), model.K8sPrincipalUser, "9", []uint{0}, k8scaps.RankAdmin); err != nil {
-		t.Fatalf("background context should skip actor checks, got %v", err)
+	err := svc.ensureGrantActorAllowed(context.Background(), model.K8sPrincipalUser, "9", []uint{0}, k8scaps.RankAdmin)
+	if !errors.Is(err, constants.ErrUnauthorized) {
+		t.Fatalf("missing actor should be denied, got %v", err)
 	}
 }
 
@@ -157,5 +162,56 @@ func TestGrantPresetRejectsActorAboveOwnRank(t *testing.T) {
 	}
 	if repo.calls == 0 {
 		t.Fatal("expected actor rank lookup")
+	}
+}
+
+func TestDeleteClusterGrantEnforcesActorGate(t *testing.T) {
+	t.Parallel()
+	readonlyGrants := []model.K8sClusterAccessGrant{{Preset: k8srole.ClusterReadonly}}
+	svc, repo := newGrantActorService(readonlyGrants)
+	repo.byID = &model.K8sClusterAccessGrant{
+		ID: 5, PrincipalKind: model.K8sPrincipalUser, PrincipalRef: "9",
+		ClusterID: 3, Preset: k8srole.ClusterAdmin,
+	}
+	ctx := grantActorCtx(7, []string{"dev"}, nil)
+
+	if err := svc.DeleteClusterGrant(ctx, 5); err == nil || !strings.Contains(err.Error(), "超过自身权限档位") {
+		t.Fatalf("expected rank ceiling rejection on delete, got %v", err)
+	}
+
+	repo.byID.Preset = k8srole.ClusterReadonly
+	if err := svc.DeleteClusterGrant(ctx, 5); err != nil {
+		t.Fatalf("same-rank delete should pass, got %v", err)
+	}
+}
+
+func TestDeleteClusterGrantRejectsSelfGrant(t *testing.T) {
+	t.Parallel()
+	svc, repo := newGrantActorService(nil)
+	repo.byID = &model.K8sClusterAccessGrant{
+		ID: 6, PrincipalKind: model.K8sPrincipalUser, PrincipalRef: "7",
+		ClusterID: 3, Preset: k8srole.ClusterReadonly,
+	}
+	ctx := grantActorCtx(7, []string{"dev"}, nil)
+	if err := svc.DeleteClusterGrant(ctx, 6); err == nil || !strings.Contains(err.Error(), "不能给自己") {
+		t.Fatalf("expected self-grant delete rejection, got %v", err)
+	}
+}
+
+func TestDeleteClusterGrantsBatchRejectsBeyondRank(t *testing.T) {
+	t.Parallel()
+	readonlyGrants := []model.K8sClusterAccessGrant{{Preset: k8srole.ClusterReadonly}}
+	svc, repo := newGrantActorService(readonlyGrants)
+	repo.byID = &model.K8sClusterAccessGrant{
+		ID: 8, PrincipalKind: model.K8sPrincipalUser, PrincipalRef: "9",
+		ClusterID: 3, Preset: k8srole.ClusterAdmin,
+	}
+	ctx := grantActorCtx(7, []string{"dev"}, nil)
+	deleted, err := svc.DeleteClusterGrantsBatch(ctx, []uint{8})
+	if err == nil || !strings.Contains(err.Error(), "超过自身权限档位") {
+		t.Fatalf("expected batch rejection, got deleted=%d err=%v", deleted, err)
+	}
+	if deleted != 0 {
+		t.Fatalf("no grant should be deleted, deleted=%d", deleted)
 	}
 }

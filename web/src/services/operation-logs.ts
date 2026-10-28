@@ -20,12 +20,18 @@ export interface OperationLogQuery {
   method?: string;
   path?: string;
   status_code?: number;
+  start?: string;
+  end?: string;
   page?: number;
   page_size?: number;
 }
 
 export function getOperationLogs(params: OperationLogQuery) {
   return getData<PageData<OperationLogItem>>(http.get("/operation-logs", { params }));
+}
+
+export function getOperationLogDetail(id: number) {
+  return getData<OperationLogItem>(http.get(`/operation-logs/${id}/detail`));
 }
 
 export function deleteOperationLog(id: number) {

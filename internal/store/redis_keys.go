@@ -17,6 +17,11 @@ func EmailCodeCooldownKey(scene, email string) string {
 	return "auth:email_code_cooldown:" + strings.TrimSpace(scene) + ":" + normalizeEmailKey(email)
 }
 
+// EmailCodeVerifyFailKey 邮箱验证码连续校验失败计数键，用于错误次数达上限后作废验证码。
+func EmailCodeVerifyFailKey(scene, email string) string {
+	return "auth:email_code_verify_fail:" + strings.TrimSpace(scene) + ":" + normalizeEmailKey(email)
+}
+
 // PasswordLoginCodeKey 密码登录图形验证码缓存键，按验证码 key（captchaKey）索引。
 func PasswordLoginCodeKey(captchaKey string) string {
 	return "auth:password_login_code:" + strings.TrimSpace(captchaKey)

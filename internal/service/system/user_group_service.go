@@ -59,10 +59,11 @@ type UserGroupService struct {
 	userRepo    interfaces.UserRepository
 	memberRepo  interfaces.ProjectMemberRepository
 	projectRepo interfaces.ProjectRepository
+	grantCleaner PrincipalGrantCleaner
 }
 
-func NewUserGroupService(repo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, projectRepo interfaces.ProjectRepository) *UserGroupService {
-	return &UserGroupService{repo: repo, userRepo: userRepo, memberRepo: memberRepo, projectRepo: projectRepo}
+func NewUserGroupService(repo interfaces.UserGroupRepository, userRepo interfaces.UserRepository, memberRepo interfaces.ProjectMemberRepository, projectRepo interfaces.ProjectRepository, grantCleaner PrincipalGrantCleaner) *UserGroupService {
+	return &UserGroupService{repo: repo, userRepo: userRepo, memberRepo: memberRepo, projectRepo: projectRepo, grantCleaner: grantCleaner}
 }
 
 func (s *UserGroupService) ensureProjectAdmin(ctx context.Context, projectID uint) error {
@@ -295,8 +296,9 @@ func (s *UserGroupService) Update(ctx context.Context, id uint, req UserGroupUpd
 	if req.ScopeProjectID != nil {
 		if *req.ScopeProjectID == 0 {
 			if g.ScopeProjectID != nil && *g.ScopeProjectID > 0 {
-				if err := s.ensureProjectAdmin(ctx, *g.ScopeProjectID); err != nil {
-					return nil, bizerrors.Pass(ctx, "user-group", "Update", err)
+				// 项目组提升为全局组会把授权作用域扩大到全系统，仅超管可执行。
+				if err := s.ensureGlobalPromotionAllowed(ctx); err != nil {
+					return nil, err
 				}
 			}
 			g.ScopeProjectID = nil
@@ -335,10 +337,29 @@ func (s *UserGroupService) Delete(ctx context.Context, id uint) error {
 	if err := s.ensureGroupManageable(ctx, g); err != nil {
 		return bizerrors.Pass(ctx, "user-group", "Delete", err)
 	}
+	// 先清各授权域中以组编码为主体的授权再删组：编码软删后可复用，
+	// 遗留授权会被新建同编码组继承；清理失败则中止删除，重试可收敛。
+	if s.grantCleaner != nil {
+		if err := s.grantCleaner.CleanupPrincipalGrants(ctx, model.K8sPrincipalGroup, g.Code); err != nil {
+			return bizerrors.Pass(ctx, "user-group", "Delete", err)
+		}
+	}
 	if err := s.repo.ReplaceMemberUserIDs(ctx, id, nil); err != nil {
 		return bizerrors.Pass(ctx, "user-group", "Delete", err)
 	}
 	return s.repo.Delete(ctx, g)
+}
+
+// ensureGlobalPromotionAllowed 项目组提升为全局组仅超管可执行。
+func (s *UserGroupService) ensureGlobalPromotionAllowed(ctx context.Context) error {
+	u, ok := auth.RequestUserFromContext(ctx)
+	if !ok || u == nil {
+		return constants.ErrUnauthorized
+	}
+	if !auth.IsSuperAdminRole(u.RoleCodes) {
+		return constants.ErrForbiddenWithMsg("仅超级管理员可将项目用户组提升为全局组")
+	}
+	return nil
 }
 
 func (s *UserGroupService) AssignUsers(ctx context.Context, id uint, req UserGroupAssignUsersRequest) error {

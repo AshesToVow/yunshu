@@ -20,6 +20,7 @@ type Config struct {
 	Swagger         SwaggerConfig         `mapstructure:"swagger"`
 	Alert           AlertConfig           `mapstructure:"alert"`
 	K8sEventForward K8sEventForwardConfig `mapstructure:"k8s_event_forward"`
+	Audit           AuditConfig           `mapstructure:"audit"`
 	Security        SecurityConfig        `mapstructure:"security"`
 	Plugins         PluginsConfig         `mapstructure:"plugins"`
 	Cicd            CicdConfig            `mapstructure:"cicd"`
@@ -36,16 +37,48 @@ type AppConfig struct {
 	Port int    `mapstructure:"port"`
 }
 
+// AuditConfig 审计日志治理：保留期默认 0 = 永久保留（取证数据默认不清）。
+type AuditConfig struct {
+	RetentionDays int `mapstructure:"retention_days"`
+}
+
 type HTTPConfig struct {
 	ReadHeaderTimeoutSeconds int `mapstructure:"read_header_timeout_seconds"`
 	ReadTimeoutSeconds       int `mapstructure:"read_timeout_seconds"`
 	WriteTimeoutSeconds      int `mapstructure:"write_timeout_seconds"`
 	IdleTimeoutSeconds       int `mapstructure:"idle_timeout_seconds"`
+	// RequestBudgetSeconds 常规请求 context 总预算（0 用默认 60s）；
+	// 导出/SSE/WS 等长端点由中间件白名单豁免。
+	RequestBudgetSeconds int `mapstructure:"request_budget_seconds"`
 	// ShutdownTimeoutSeconds 优雅关闭 HTTP Server 的最长等待。
 	ShutdownTimeoutSeconds int `mapstructure:"shutdown_timeout_seconds"`
 	// TrustedProxies 允许设置 X-Forwarded-For 的反向代理 IP/CIDR 列表。
 	// 未配置时仅信任回环地址；显式配置空列表表示完全不信任转发头。
 	TrustedProxies []string `mapstructure:"trusted_proxies"`
+}
+
+// ApplyDefaults HTTP 超时未配置或显式为 0 时落到安全默认值。
+// 历史 0 值语义（=不限时）会把挂起的 handler/goroutine 永久留在进程里，不再允许。
+func (cfg *HTTPConfig) ApplyDefaults() {
+	if cfg.ReadHeaderTimeoutSeconds <= 0 {
+		cfg.ReadHeaderTimeoutSeconds = 5
+	}
+	if cfg.ReadTimeoutSeconds <= 0 {
+		cfg.ReadTimeoutSeconds = 30
+	}
+	if cfg.WriteTimeoutSeconds <= 0 {
+		// 需覆盖 AI 会话等最长 300s 的流式响应；流式端点自身由白名单豁免请求预算。
+		cfg.WriteTimeoutSeconds = 310
+	}
+	if cfg.IdleTimeoutSeconds <= 0 {
+		cfg.IdleTimeoutSeconds = 120
+	}
+	if cfg.RequestBudgetSeconds <= 0 {
+		cfg.RequestBudgetSeconds = 60
+	}
+	if cfg.ShutdownTimeoutSeconds <= 0 {
+		cfg.ShutdownTimeoutSeconds = 15
+	}
 }
 
 type LogConfig struct {
@@ -215,6 +248,7 @@ func Load(path string) (*Config, error) {
 // applyLoadedDefaults 按域补齐零值；依赖 viper.IsSet 的项在此统一处理。
 func (cfg *Config) applyLoadedDefaults(v *viper.Viper) {
 	cfg.Auth.ApplyDefaults(cfg.App.Env)
+	cfg.HTTP.ApplyDefaults()
 	if !v.IsSet("http.trusted_proxies") {
 		cfg.HTTP.TrustedProxies = []string{"127.0.0.1", "::1"}
 	}
@@ -309,8 +343,10 @@ func bindEnv(v *viper.Viper) error {
 		"http.read_timeout_seconds":                nil,
 		"http.write_timeout_seconds":               nil,
 		"http.idle_timeout_seconds":                nil,
+		"http.request_budget_seconds":              nil,
 		"http.shutdown_timeout_seconds":            nil,
 		"http.trusted_proxies":                     nil,
+		"audit.retention_days":                     nil,
 		"log.level":                                nil,
 		"log.format":                               nil,
 		"log.output":                               nil,

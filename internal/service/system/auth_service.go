@@ -99,10 +99,12 @@ func (s *AuthService) SendEmailCode(ctx context.Context, req SendEmailCodeReques
 	cooldownTTL := s.emailCodeCooldown()
 	codeKey := store.EmailCodeKey(scene, email)
 	cooldownKey := store.EmailCodeCooldownKey(scene, email)
+	failKey := store.EmailCodeVerifyFailKey(scene, email)
 
 	pipe := s.redis.Pipeline()
 	pipe.Set(ctx, codeKey, code, codeTTL)
 	pipe.Set(ctx, cooldownKey, "1", cooldownTTL)
+	pipe.Del(ctx, failKey)
 	if _, err = pipe.Exec(ctx); err != nil {
 		return nil, bizerrors.Pass(ctx, "auth", "SendEmailCode", err)
 	}
@@ -753,6 +755,9 @@ func (s *AuthService) ensureEmailCodeCooldown(ctx context.Context, scene, email 
 	return nil
 }
 
+// emailCodeMaxVerifyFailures 验证码连续校验失败上限：达到后作废验证码，防在线爆破。
+const emailCodeMaxVerifyFailures = 5
+
 func (s *AuthService) validateEmailCode(ctx context.Context, scene, email, code string) error {
 	if s.redis == nil {
 		return bizerrors.InternalMsg(ctx, "auth", "api", constants.ErrMsgaf4823214b6e)
@@ -767,17 +772,37 @@ func (s *AuthService) validateEmailCode(ctx context.Context, scene, email, code 
 	}
 
 	if strings.TrimSpace(code) != storedCode {
-		return constants.ErrBadRequestWithMsg(constants.ErrMsg4f8238574720)
+		return s.burnEmailCodeOnVerifyFailure(ctx, scene, email)
 	}
 
 	return nil
+}
+
+// burnEmailCodeOnVerifyFailure 累计校验失败次数；达到上限作废验证码并要求重新获取。
+func (s *AuthService) burnEmailCodeOnVerifyFailure(ctx context.Context, scene, email string) error {
+	failKey := store.EmailCodeVerifyFailKey(scene, email)
+	n, err := s.redis.Incr(ctx, failKey).Result()
+	if err == nil {
+		if n == 1 {
+			s.redis.Expire(ctx, failKey, s.emailCodeTTL())
+		}
+		if n >= emailCodeMaxVerifyFailures {
+			_ = s.redis.Del(ctx, store.EmailCodeKey(scene, email), failKey).Err()
+			return constants.ErrBadRequestWithMsg("验证码错误次数过多，请重新获取")
+		}
+	}
+	return constants.ErrBadRequestWithMsg(constants.ErrMsg4f8238574720)
 }
 
 func (s *AuthService) clearEmailCode(ctx context.Context, scene, email string) {
 	if s.redis == nil {
 		return
 	}
-	_ = s.redis.Del(ctx, store.EmailCodeKey(scene, email), store.EmailCodeCooldownKey(scene, email)).Err()
+	_ = s.redis.Del(ctx,
+		store.EmailCodeKey(scene, email),
+		store.EmailCodeCooldownKey(scene, email),
+		store.EmailCodeVerifyFailKey(scene, email),
+	).Err()
 }
 
 func (s *AuthService) ensureUserDoesNotExist(ctx context.Context, username, email string) error {

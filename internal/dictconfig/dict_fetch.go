@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
+	"time"
 
 	"yunshu/internal/model"
 
@@ -36,6 +38,34 @@ func FetchEnabledDictValueNonEmpty(ctx context.Context, db *gorm.DB, dictType st
 		return "", false
 	}
 	return v, true
+}
+
+// hotDictCacheTTL 每请求热点路径的字典值缓存时长。
+const hotDictCacheTTL = 30 * time.Second
+
+type hotDictEntry struct {
+	value   string
+	ok      bool
+	expires time.Time
+}
+
+var hotDictCache sync.Map // key: lower(dict_type) -> hotDictEntry
+
+// FetchEnabledDictValueCached 带 30s TTL 进程内缓存的 FetchEnabledDictValue。
+// 仅用于鉴权中间件等每请求热点路径；管理界面的强一致读写仍走无缓存版本。
+func FetchEnabledDictValueCached(ctx context.Context, db *gorm.DB, dictType string) (string, bool) {
+	key := strings.ToLower(strings.TrimSpace(dictType))
+	if key == "" || db == nil {
+		return "", false
+	}
+	if raw, hit := hotDictCache.Load(key); hit {
+		if e, ok := raw.(hotDictEntry); ok && time.Now().Before(e.expires) {
+			return e.value, e.ok
+		}
+	}
+	value, ok := FetchEnabledDictValue(ctx, db, dictType)
+	hotDictCache.Store(key, hotDictEntry{value: value, ok: ok, expires: time.Now().Add(hotDictCacheTTL)})
+	return value, ok
 }
 
 // FetchEnabledDictValues 批量读取多个 dict_type 的启用值，仅一次 IN 查询。

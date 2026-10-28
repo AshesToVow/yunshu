@@ -446,6 +446,9 @@ export function K8sScopedPoliciesPage() {
                   const k = v as SubjectKind;
                   setSubjectKind(k);
                   resetGrantForms();
+                  // 立即清空上一主体的授权/拦截列表，避免新主体数据加载期间展示陈旧授权。
+                  setAccessGrants([]);
+                  setDenyRules([]);
                   void (async () => {
                     if (k === "role") {
                       const rid = selectedRoleId ?? roles[0]?.id;
@@ -489,6 +492,8 @@ export function K8sScopedPoliciesPage() {
                   onChange={(v) => {
                     setSelectedRoleId(v);
                     resetGrantForms();
+                    setAccessGrants([]);
+                    setDenyRules([]);
                     void refreshAccessGrants("role", v, undefined, undefined);
                     const rc = roles.find((r) => r.id === v)?.code ?? "";
                     void refreshDenyRules("role", rc);
@@ -505,6 +510,8 @@ export function K8sScopedPoliciesPage() {
                   onChange={(v) => {
                     setSelectedUserId(v);
                     resetGrantForms();
+                    setAccessGrants([]);
+                    setDenyRules([]);
                     void refreshAccessGrants("user", undefined, undefined, v);
                     void refreshDenyRules("user", String(v));
                   }}
@@ -521,6 +528,8 @@ export function K8sScopedPoliciesPage() {
                   onChange={(v) => {
                     setSelectedGroupId(v);
                     resetGrantForms();
+                    setAccessGrants([]);
+                    setDenyRules([]);
                     void refreshAccessGrants("group", undefined, v, undefined);
                     const gc = groups.find((g) => g.id === v)?.code ?? "";
                     void refreshDenyRules("group", gc);

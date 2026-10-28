@@ -108,8 +108,9 @@ type MenuUpdatePayload struct {
 }
 
 type MenuBatchStatusPayload struct {
-	IDs    []uint `json:"ids" binding:"required,min=1,dive,gt=0"`
-	Status int    `json:"status" binding:"oneof=0 1"`
+	IDs []uint `json:"ids" binding:"required,min=1,dive,gt=0"`
+	// Status 用指针承接：int 零值 0 合法（禁用），缺省字段时无法与 0 区分，会导致静默批量禁用。
+	Status *int `json:"status" binding:"required,oneof=0 1"`
 }
 
 // Tree 获取树形数据相关的业务逻辑。
@@ -348,7 +349,10 @@ func (s *MenuService) BatchSetStatus(ctx context.Context, payload MenuBatchStatu
 	if len(payload.IDs) == 0 {
 		return constants.ErrBadRequestWithMsg(constants.ErrMsg83ecd70cfd99)
 	}
-	if err := s.menuRepo.BatchUpdateStatus(ctx, payload.IDs, payload.Status); err != nil {
+	if payload.Status == nil {
+		return constants.ErrBadRequestWithMsg("status 不能为空")
+	}
+	if err := s.menuRepo.BatchUpdateStatus(ctx, payload.IDs, *payload.Status); err != nil {
 		return bizerrors.Pass(ctx, "menu", "BatchSetStatus", err)
 	}
 	s.invalidateCache()

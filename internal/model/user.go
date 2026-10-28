@@ -9,7 +9,7 @@ import (
 // User 系统用户：登录名、邮箱、密码哈希、昵称、启用状态及关联角色（多对多）。
 type User struct {
 	ID           uint           `json:"id" gorm:"primaryKey;comment:主键ID"`
-	Username     string         `json:"username" gorm:"size:64;not null;uniqueIndex;comment:用户名"`
+	Username     string         `json:"username" gorm:"size:64;not null;uniqueIndex:idx_users_username_deleted,priority:1;comment:用户名"`
 	Email        *string        `json:"email" gorm:"size:128;index;comment:邮箱"`
 	Phone        string         `json:"phone" gorm:"size:20;not null;default:'';index;comment:手机号，用于钉钉/企微@等告警触达"`
 	Password            string         `json:"-" gorm:"size:255;not null;comment:加密后的登录密码"`
@@ -29,5 +29,7 @@ type User struct {
 	Groups              []UserGroup    `json:"groups,omitempty" gorm:"many2many:user_group_users;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	CreatedAt           time.Time      `json:"created_at" gorm:"comment:创建时间"`
 	UpdatedAt           time.Time      `json:"updated_at" gorm:"comment:更新时间"`
-	DeletedAt           gorm.DeletedAt `json:"-" gorm:"index;comment:删除时间"`
+	// deleted_at 参与用户名唯一索引：软删除后用户名可复用（NULL 视为不同值），
+	// 活跃行重复由服务层 ensureUserUnique 判重兜底。
+	DeletedAt           gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:idx_users_username_deleted,priority:2;comment:删除时间"`
 }

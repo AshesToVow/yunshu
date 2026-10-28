@@ -160,7 +160,27 @@ func (r *K8sNamespaceAllowRepository) DeleteByPrincipalCluster(ctx context.Conte
 	if r == nil || r.db == nil {
 		return gorm.ErrInvalidDB
 	}
+	k := strings.TrimSpace(principalKind)
+	ref := strings.TrimSpace(principalRef)
+	if k == "" || ref == "" {
+		return nil
+	}
 	return r.db.WithContext(ctx).
-		Where("principal_kind = ? AND principal_ref = ? AND cluster_id = ?", principalKind, principalRef, clusterID).
+		Where("principal_kind = ? AND principal_ref = ? AND cluster_id = ?", k, ref, clusterID).
+		Delete(&model.K8sNamespaceAllowRule{}).Error
+}
+
+// DeleteByPrincipal 删除某主体（role/user/group）的全部命名空间放行规则，用于主体删除级联清理。
+func (r *K8sNamespaceAllowRepository) DeleteByPrincipal(ctx context.Context, principalKind, principalRef string) error {
+	if r == nil || r.db == nil {
+		return gorm.ErrInvalidDB
+	}
+	k := strings.TrimSpace(principalKind)
+	ref := strings.TrimSpace(principalRef)
+	if k == "" || ref == "" {
+		return nil
+	}
+	return r.db.WithContext(ctx).
+		Where("principal_kind = ? AND principal_ref = ?", k, ref).
 		Delete(&model.K8sNamespaceAllowRule{}).Error
 }

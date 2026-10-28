@@ -11,7 +11,7 @@ type Department struct {
 	ID        uint           `json:"id" gorm:"primaryKey;comment:主键ID"`
 	ParentID  *uint          `json:"parent_id" gorm:"index;index:idx_departments_parent_sort_deleted,priority:1;comment:父部门ID"`
 	Name      string         `json:"name" gorm:"size:128;not null;comment:部门名称"`
-	Code      string         `json:"code" gorm:"size:64;not null;uniqueIndex;comment:部门编码"`
+	Code      string         `json:"code" gorm:"size:64;not null;uniqueIndex:idx_departments_code_deleted,priority:1;comment:部门编码"`
 	Ancestors string         `json:"ancestors" gorm:"size:512;not null;default:'/';index;comment:祖先路径，如 /1/3/"`
 	Level     int            `json:"level" gorm:"not null;default:1;comment:层级，根节点为1"`
 	Sort      int            `json:"sort" gorm:"not null;default:0;index:idx_departments_parent_sort_deleted,priority:2;comment:同级排序"`
@@ -22,7 +22,8 @@ type Department struct {
 	Remark    string         `json:"remark" gorm:"size:512;comment:备注"`
 	CreatedAt time.Time      `json:"created_at" gorm:"comment:创建时间"`
 	UpdatedAt time.Time      `json:"updated_at" gorm:"comment:更新时间"`
-	DeletedAt gorm.DeletedAt `json:"-" gorm:"index;index:idx_departments_parent_sort_deleted,priority:3;comment:删除时间"`
+	// deleted_at 参与编码唯一索引：软删除后编码可复用（NULL 视为不同值）。
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:idx_departments_code_deleted,priority:2;index:idx_departments_parent_sort_deleted,priority:3;comment:删除时间"`
 	Children  []Department   `json:"children,omitempty" gorm:"-"`
 }
 

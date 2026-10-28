@@ -562,6 +562,7 @@ var ServiceSet = wire.NewSet(
 	providePasswordPolicyResolver,
 	service.NewDepartmentService,
 	service.NewRoleService,
+	service.NewPrincipalGrantCleaner,
 	service.NewPermissionService,
 	service.NewPolicyService,
 	service.NewK8sScopedPolicyService,

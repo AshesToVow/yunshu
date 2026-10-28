@@ -6,6 +6,7 @@ import {
   Empty,
   Input,
   InputNumber,
+  Modal,
   Select,
   Space,
   Table,
@@ -34,11 +35,14 @@ import type { PermissionItem, PermissionTreeNode, PolicyConflictItem, PolicyItem
 import {
   buildPermissionTreeData,
   buildUnifiedPermissionTreeData,
-  collectGrantedPermissionIds,
+  collectTreeDataKeys,
+  mergeTreeCheckedKeys,
   normalizeCheckedKeys,
+  type TreeKey,
 } from "../utils/tree";
 import { isAPIResourceAllowedByPlugins } from "../modules/plugin-path";
 import { usePlugins } from "../contexts/plugin-context";
+import { extractApiErrorMessage } from "../services/http";
 
 export function PoliciesPage() {
   const { isPluginEnabled } = usePlugins();
@@ -55,6 +59,8 @@ export function PoliciesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState<number>();
   const [checkedPermissionIds, setCheckedPermissionIds] = useState<number[]>([]);
+  const [unifiedExpandedKeys, setUnifiedExpandedKeys] = useState<TreeKey[]>([]);
+  const [apiExpandedKeys, setApiExpandedKeys] = useState<TreeKey[]>([]);
   const [roleKeyword, setRoleKeyword] = useState("");
   const [permissionKeyword, setPermissionKeyword] = useState("");
   const [roleStatus, setRoleStatus] = useState<number | undefined>();
@@ -84,6 +90,22 @@ export function PoliciesPage() {
     [list, selectedRoleId],
   );
   const unifiedTreeData = useMemo(() => buildUnifiedPermissionTreeData(unifiedTree), [unifiedTree]);
+  const unifiedTreeIds = useMemo(
+    () => new Set(collectTreeDataKeys(unifiedTreeData).filter((key): key is number => typeof key === "number")),
+    [unifiedTreeData],
+  );
+  const apiTreeIds = useMemo(
+    () => new Set(collectTreeDataKeys(permissionTreeData).filter((key): key is number => typeof key === "number")),
+    [permissionTreeData],
+  );
+
+  useEffect(() => {
+    setUnifiedExpandedKeys(collectTreeDataKeys(unifiedTreeData));
+  }, [unifiedTreeData]);
+
+  useEffect(() => {
+    setApiExpandedKeys(collectTreeDataKeys(permissionTreeData));
+  }, [permissionTreeData]);
   const filteredRoles = useMemo(() => {
     const key = roleKeyword.trim().toLowerCase();
     return roles.filter((role) => {
@@ -139,7 +161,8 @@ export function PoliciesPage() {
       const [conflictData, treeData] = await Promise.all([getPolicyConflicts(roleId), getPermissionTree(roleId)]);
       setConflicts(conflictData.items ?? []);
       setUnifiedTree(treeData.tree ?? []);
-    } catch {
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "冲突分析与菜单授权树加载失败"));
       setConflicts([]);
       setUnifiedTree([]);
     }
@@ -159,7 +182,7 @@ export function PoliciesPage() {
       );
       await Promise.all([bootstrap(selectedRoleId), loadRoleExtras(selectedRoleId)]);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e, "补齐入口 API 失败"));
     } finally {
       setSubmitting(false);
     }
@@ -180,7 +203,7 @@ export function PoliciesPage() {
       message.success(`已清理禁用插件策略：撤销 ${result.revoked}，跳过 ${result.skipped}（共扫描 ${result.total}）`);
       await Promise.all([bootstrap(selectedRoleId), loadRoleExtras(selectedRoleId)]);
     } catch (e: unknown) {
-      message.error(String((e as Error)?.message ?? e));
+      message.error(extractApiErrorMessage(e, "清理禁用插件策略失败"));
     } finally {
       setSubmitting(false);
     }
@@ -222,7 +245,7 @@ export function PoliciesPage() {
     setCheckedPermissionIds(getRolePermissionIds(list, value).filter((id) => id > 0));
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!selectedRoleId) {
       message.warning("请先选择一个角色模板");
       return;
@@ -244,18 +267,31 @@ export function PoliciesPage() {
       return;
     }
 
+    Modal.confirm({
+      title: "确认同步授权？",
+      content: `本次变更：新增授权 ${toGrant.length} 项，回收授权 ${toRevoke.length} 项。`,
+      okText: "同步",
+      cancelText: "取消",
+      onOk: () => syncPolicies(selectedRoleId, toGrant, toRevoke),
+    });
+  }
+
+  async function syncPolicies(roleId: number, toGrant: number[], toRevoke: number[]) {
     setSubmitting(true);
     try {
       await Promise.all([
-        ...toGrant.map((permissionId) => grantPolicy({ role_id: selectedRoleId, permission_id: permissionId })),
-        ...toRevoke.map((permissionId) => revokePolicy({ role_id: selectedRoleId, permission_id: permissionId })),
+        ...toGrant.map((permissionId) => grantPolicy({ role_id: roleId, permission_id: permissionId })),
+        ...toRevoke.map((permissionId) => revokePolicy({ role_id: roleId, permission_id: permissionId })),
       ]);
-      message.success("授权编排已同步");
-      await bootstrap(selectedRoleId);
-      await loadRoleExtras(selectedRoleId);
-      if (linkNext === "k8s" && selectedRoleId) {
-        navigateToK8s(selectedRoleId);
+      message.success(`授权已同步：新增 ${toGrant.length} 项，回收 ${toRevoke.length} 项`);
+      await bootstrap(roleId);
+      await loadRoleExtras(roleId);
+      if (linkNext === "k8s") {
+        navigateToK8s(roleId);
       }
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "授权同步失败，已刷新为服务端最新状态"));
+      await bootstrap(roleId);
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +316,8 @@ export function PoliciesPage() {
         method: simulateMethod,
       });
       setSimulateResult(JSON.stringify(result, null, 2));
-    } catch {
+    } catch (e: unknown) {
+      message.error(extractApiErrorMessage(e, "策略模拟失败"));
       setSimulateResult("");
     }
   }
@@ -296,7 +333,7 @@ export function PoliciesPage() {
           closable
           style={{ marginBottom: 12 }}
           message={`用户「${linkUsername}」已绑定角色，请为角色模板勾选 API 权限`}
-          description="勾选完成后点击「同步权限」保存；侧栏菜单可见性将随入口 GET 权限联动。"
+          description="勾选完成后点击「同步权限」保存；侧栏菜单可见性将随入口 API 权限联动。"
           action={
             linkNext === "k8s" && selectedRoleId ? (
               <Button size="small" onClick={() => navigateToK8s(selectedRoleId)}>
@@ -406,7 +443,8 @@ export function PoliciesPage() {
             extra={
               selectedRole ? (
                 <Typography.Text className="inline-muted">
-                  当前模板：{selectedRole.name}（树中已选 {checkedPermissionIds.length} 项）
+                  当前模板：{selectedRole.name}（已授权 {currentRolePolicies.length} 项 / 当前勾选{" "}
+                  {checkedPermissionIds.length} 项）
                 </Typography.Text>
               ) : null
             }
@@ -422,24 +460,34 @@ export function PoliciesPage() {
                     children: (
                       <div className="auth-tab-pane auth-tab-pane--tree">
                         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                          按侧栏菜单分组展示入口 API；勾选后点击「同步权限」写入 Casbin。
+                          按侧栏菜单分组展示各菜单的入口 API；完整接口列表请到「API 权限树」勾选。勾选后点击「同步权限」写入
+                          Casbin。
                         </Typography.Paragraph>
                         <div className="tree-shell auth-tree-shell">
                           <Tree
                             checkable
-                            defaultExpandAll
+                            expandedKeys={unifiedExpandedKeys}
+                            onExpand={(keys) => setUnifiedExpandedKeys(keys as TreeKey[])}
                             checkedKeys={checkedPermissionIds}
                             treeData={unifiedTreeData}
                             onCheck={(checkedKeys) => {
-                              const nextIds = normalizeCheckedKeys(checkedKeys).filter((id) => permissionIdSet.has(id));
-                              setCheckedPermissionIds(nextIds);
+                              const treeChecked = normalizeCheckedKeys(checkedKeys).filter((id) =>
+                                permissionIdSet.has(id),
+                              );
+                              setCheckedPermissionIds(
+                                mergeTreeCheckedKeys(checkedPermissionIds, treeChecked, unifiedTreeIds),
+                              );
                             }}
                           />
                         </div>
                         <Button
                           size="small"
                           style={{ marginTop: 8 }}
-                          onClick={() => setCheckedPermissionIds(collectGrantedPermissionIds(unifiedTree))}
+                          onClick={() =>
+                            setCheckedPermissionIds(
+                              getRolePermissionIds(list, selectedRoleId ?? 0).filter((id) => id > 0),
+                            )
+                          }
                         >
                           重置为当前已授权
                         </Button>
@@ -452,17 +500,20 @@ export function PoliciesPage() {
                     children: (
                       <div className="auth-tab-pane auth-tab-pane--tree">
                         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                          叶子节点为可授权 API；未启用插件的菜单已从树中移除。
+                          按模块分组展示全部可授权 API；未启用插件的接口已置灰不可勾选。
                         </Typography.Paragraph>
                         <div className="tree-shell auth-tree-shell">
                           <Tree
                             checkable
-                            defaultExpandAll
+                            expandedKeys={apiExpandedKeys}
+                            onExpand={(keys) => setApiExpandedKeys(keys as TreeKey[])}
                             checkedKeys={checkedPermissionIds}
                             treeData={filteredPermissionTree}
                             onCheck={(checkedKeys) => {
-                              const nextIds = normalizeCheckedKeys(checkedKeys).filter((id) => permissionIdSet.has(id));
-                              setCheckedPermissionIds(nextIds);
+                              const treeChecked = normalizeCheckedKeys(checkedKeys).filter((id) =>
+                                permissionIdSet.has(id),
+                              );
+                              setCheckedPermissionIds(mergeTreeCheckedKeys(checkedPermissionIds, treeChecked, apiTreeIds));
                             }}
                           />
                         </div>
@@ -504,7 +555,8 @@ export function PoliciesPage() {
                                 重新分析
                               </Button>
                               <Typography.Text type="secondary">
-                                menu_needs_entry_api：补齐入口 GET；plugin_disabled_*：撤销未启用插件上的 Casbin 策略。
+                                menu_needs_entry_api：补齐菜单入口 API；plugin_disabled_*：撤销未启用插件上的 Casbin
+                                策略。
                               </Typography.Text>
                             </Space>
                             <Table

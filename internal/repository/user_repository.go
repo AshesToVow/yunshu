@@ -21,6 +21,8 @@ type UserListParams struct {
 	OnlyUserID    *uint
 	Page          int
 	PageSize      int
+	// Unbounded 跳过 MaxPageSize 钳制，仅导出路径可置 true。
+	Unbounded bool
 }
 
 func NewUserRepository(db *gorm.DB) UserRepo {
@@ -111,7 +113,13 @@ func (r *UserRepository) List(ctx context.Context, params UserListParams) ([]mod
 
 	var users []model.User
 	query = query.Preload("Roles").Preload("Groups").Preload("Department")
-	total, err := listWithPagination(query, params.Page, params.PageSize, "id DESC", &users)
+	var total int64
+	var err error
+	if params.Unbounded {
+		total, err = listWithPaginationRaw(query, params.Page, params.PageSize, "id DESC", &users)
+	} else {
+		total, err = listWithPagination(query, params.Page, params.PageSize, "id DESC", &users)
+	}
 	if err != nil {
 		return nil, 0, err
 	}

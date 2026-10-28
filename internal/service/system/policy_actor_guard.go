@@ -10,7 +10,8 @@ import (
 )
 
 // authorizeRoleTarget 校验操作者能否改动目标角色的策略：超管放行，
-// 其余操作者不得改动自己所属的角色，避免给自己提权。
+// 其余操作者不得改动自己所属的角色，避免给自己提权；
+// 内置超管角色的策略对非超管只读，防止被逐步清空造成管理员锁死。
 func authorizeRoleTarget(actor *auth.CurrentUser, targetRoleCode string) error {
 	if actor == nil {
 		return constants.ErrUnauthorized
@@ -21,6 +22,9 @@ func authorizeRoleTarget(actor *auth.CurrentUser, targetRoleCode string) error {
 	target := strings.TrimSpace(targetRoleCode)
 	if target == "" {
 		return constants.ErrBadRequestWithMsg("目标角色编码为空")
+	}
+	if target == auth.SuperAdminRoleCode {
+		return constants.ErrForbiddenWithMsg("内置超级管理员角色的策略仅超级管理员可修改")
 	}
 	for _, code := range actor.RoleCodes {
 		if strings.TrimSpace(code) == target {
