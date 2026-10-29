@@ -47,6 +47,16 @@ func ensureLogIndexTemplateWithClient(ctx context.Context, cli *esclient.Client)
 					"containername":  map[string]any{"type": "keyword", "ignore_above": 256},
 					"file_path":      map[string]any{"type": "keyword", "ignore_above": 512},
 					"host":           map[string]any{"type": "keyword", "ignore_above": 256},
+					"status":         map[string]any{"type": "keyword", "ignore_above": 16},
+					// nginx_access 产出的耗时是字符串秒数，不显式声明会被动态映射成 text，
+					// 延迟聚合（avg/percentiles）会整分片失败，Nginx 访问统计随之全为 0。
+					"request_time": map[string]any{
+						"type":             "double",
+						"ignore_malformed": true,
+						"fields": map[string]any{
+							"keyword": map[string]any{"type": "keyword", "ignore_above": 64},
+						},
+					},
 					"fields": map[string]any{
 						"properties": map[string]any{
 							"level":          map[string]any{"type": "keyword", "ignore_above": 32},

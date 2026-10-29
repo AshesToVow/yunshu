@@ -1,6 +1,9 @@
 package logplatform
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseURIFromRequest(t *testing.T) {
 	t.Parallel()
@@ -85,5 +88,60 @@ func TestNginxAccessStatsAggBodyHasKeys(t *testing.T) {
 		if _, exists := aggs[key]; !exists {
 			t.Fatalf("missing agg key %s", key)
 		}
+	}
+}
+
+func TestNginxAccessStatsRuntimeLatencyFallback(t *testing.T) {
+	t.Parallel()
+	body := nginxAccessStatsAggBody(
+		map[string]any{"match_all": map[string]any{}},
+		"@timestamp", "1h", 5,
+		[]string{"remote.keyword"},
+		[]string{"status.keyword"},
+		[]string{"uri.keyword"},
+		[]string{"request.keyword"},
+		[]string{"request_time_num"},
+	)
+	body["runtime_mappings"] = nginxAccessLatencyRuntimeMapping()
+	runtime, ok := body["runtime_mappings"].(map[string]any)
+	if !ok {
+		t.Fatal("missing runtime_mappings")
+	}
+	field, ok := runtime["request_time_num"].(map[string]any)
+	if !ok || field["type"] != "double" {
+		t.Fatalf("unexpected runtime field: %#v", runtime)
+	}
+	aggs, _ := body["aggs"].(map[string]any)
+	pct, _ := aggs["latency_pct"].(map[string]any)
+	percentiles, _ := pct["percentiles"].(map[string]any)
+	if percentiles["field"] != "request_time_num" {
+		t.Fatalf("latency field=%v want request_time_num", percentiles["field"])
+	}
+}
+
+func TestShardFailureReason(t *testing.T) {
+	t.Parallel()
+	partial := map[string]any{
+		"_shards": map[string]any{
+			"failed": float64(2),
+			"failures": []any{
+				map[string]any{"reason": map[string]any{
+					"type":   "illegal_argument_exception",
+					"reason": "Text fields are not optimised for operations that require per-document field data",
+				}},
+			},
+		},
+	}
+	if got := shardFailureReason(partial); !strings.Contains(got, "Text fields") {
+		t.Fatalf("unexpected reason: %q", got)
+	}
+	if got := shardFailureReason(map[string]any{"_shards": map[string]any{"failed": float64(0)}}); got != "" {
+		t.Fatalf("healthy response should return empty, got %q", got)
+	}
+	if got := shardFailureReason(map[string]any{}); got != "" {
+		t.Fatalf("missing _shards should return empty, got %q", got)
+	}
+	if got := shardFailureReason(map[string]any{"_shards": map[string]any{"failed": float64(1)}}); got == "" {
+		t.Fatal("count-only failure should be detected")
 	}
 }

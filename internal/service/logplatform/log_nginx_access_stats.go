@@ -3,6 +3,7 @@ package logplatform
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strconv"
@@ -79,33 +80,46 @@ func (s *LogSearchService) NginxAccessStats(ctx context.Context, q NginxAccessSt
 	intervalSec := histogramIntervalSeconds(interval)
 	query := prep.boolQuery()
 
-	attempts := []map[string]any{
-		nginxAccessStatsAggBody(query, tsField, interval, topN,
-			[]string{"remote.keyword", "remote", "fields.remote.keyword", "fields.remote"},
-			[]string{"status.keyword", "status", "fields.status.keyword", "fields.status"},
-			[]string{"uri.keyword", "uri", "fields.uri.keyword", "fields.uri"},
-			[]string{"request.keyword", "request", "fields.request.keyword", "fields.request"},
-			[]string{"request_time", "fields.request_time"},
-		),
-		nginxAccessStatsAggBody(query, tsField, interval, topN,
-			[]string{"remote"},
-			[]string{"status"},
-			[]string{"uri"},
-			[]string{"request"},
-			[]string{"request_time"},
-		),
-		nginxAccessStatsAggBody(query, tsField, interval, topN, nil, nil, nil, nil, nil),
-	}
+	remoteFields := []string{"remote.keyword", "remote", "fields.remote.keyword", "fields.remote"}
+	statusFields := []string{"status.keyword", "status", "fields.status.keyword", "fields.status"}
+	uriFields := []string{"uri.keyword", "uri", "fields.uri.keyword", "fields.uri"}
+	requestFields := []string{"request.keyword", "request", "fields.request.keyword", "fields.request"}
+
+	// 第 1 次：索引模板已把 request_time 建成 double，直接聚合最快。
+	directLatency := nginxAccessStatsAggBody(query, tsField, interval, topN,
+		remoteFields, statusFields, uriFields, requestFields,
+		[]string{"request_time", "fields.request_time"})
+	// 第 2 次：老索引里 request_time 是动态映射出的 text，percentiles 会让整个分片失败，
+	// 改用 runtime field 从 request_time.keyword 解析成 double。
+	runtimeLatency := nginxAccessStatsAggBody(query, tsField, interval, topN,
+		remoteFields, statusFields, uriFields, requestFields,
+		[]string{"request_time_num"})
+	runtimeLatency["runtime_mappings"] = nginxAccessLatencyRuntimeMapping()
+	// 第 3 次：放弃延迟指标，保证 PV/UV/状态码/TOP URI 仍有数据。
+	noLatency := nginxAccessStatsAggBody(query, tsField, interval, topN,
+		remoteFields, statusFields, uriFields, requestFields, nil)
+	// 第 4 次：连 keyword 子字段都没有的极端情况，只出 PV 与时序。
+	bare := nginxAccessStatsAggBody(query, tsField, interval, topN, nil, nil, nil, nil, nil)
 
 	var raw map[string]any
 	var lastErr error
-	for _, body := range attempts {
-		raw, lastErr = cli.Search(ctx, prep.indices, body)
-		if lastErr == nil {
-			break
+	for _, body := range []map[string]any{directLatency, runtimeLatency, noLatency, bare} {
+		resp, err := cli.Search(ctx, prep.indices, body)
+		if err != nil {
+			lastErr = err
+			continue
 		}
+		raw, lastErr = resp, nil
+		if reason := shardFailureReason(resp); reason != "" {
+			// 部分分片失败时 ES 仍返回 200，失败分片的数据既不计入 hits.total 也不进聚合，
+			// 照单全收只会得到"全 0"的正常响应。
+			slog.Default().With("component", "lognginx").Warn(
+				"nginx access stats aggregation partially failed, falling back", "reason", reason)
+			continue
+		}
+		break
 	}
-	if lastErr != nil {
+	if raw == nil {
 		return nil, constants.ErrBadRequestWithMsg(fmt.Sprintf("Nginx 访问统计聚合失败: %v", lastErr))
 	}
 
@@ -253,6 +267,42 @@ func nginxAccessStatsAggBody(
 		"query":            query,
 		"aggs":             aggs,
 	}
+}
+
+// nginxAccessLatencyRuntimeMapping 用 runtime field 把 request_time 统一成 double。
+// 老索引里该字段由动态映射建成 text，直接做 percentiles 会让整个分片失败；
+// 新索引按模板建成 double + keyword 子字段。两种形态下 request_time.keyword 都存在，
+// 因此统一从 keyword 子字段解析，避免触碰 text 的 fielddata。
+func nginxAccessLatencyRuntimeMapping() map[string]any {
+	return map[string]any{
+		"request_time_num": map[string]any{
+			"type": "double",
+			"script": map[string]any{
+				"source": "if (doc.containsKey('request_time.keyword') && !doc['request_time.keyword'].empty) " +
+					"{ try { emit(Double.parseDouble(doc['request_time.keyword'].value)); } catch (Exception e) { } }",
+			},
+		},
+	}
+}
+
+// shardFailureReason 提取 _shards.failed 的首条失败原因；全部分片成功时返回空串。
+func shardFailureReason(raw map[string]any) string {
+	shards, _ := raw["_shards"].(map[string]any)
+	failed, _ := shards["failed"].(float64)
+	if failed <= 0 {
+		return ""
+	}
+	failures, _ := shards["failures"].([]any)
+	if len(failures) > 0 {
+		if fm, ok := failures[0].(map[string]any); ok {
+			if reason, ok := fm["reason"].(map[string]any); ok {
+				if text, ok := reason["reason"].(string); ok && text != "" {
+					return truncateString(text, 300)
+				}
+			}
+		}
+	}
+	return fmt.Sprintf("%d shard(s) failed", int(failed))
 }
 
 func parseCardinalityAgg(raw map[string]any, name string) int64 {
