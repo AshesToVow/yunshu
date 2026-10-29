@@ -295,6 +295,11 @@ func (p pipelineParseProfile) renderTransformerActions() string {
 	b.WriteString("    interceptors:\n")
 	b.WriteString("      - type: transformer\n")
 	b.WriteString("        actions:\n")
+	// Loggie 的 regex(body) 解析成功后会 Del(e, body) 清空原始正文（action/regex.go），
+	// 没有 message 分组的 profile（nginx_access）最终只剩解析字段，检索页正文为空。
+	// 先复制原始行到 message：正则若捕获 message 会覆盖它，否则作为正文兜底。
+	b.WriteString("          - action: copy(body, message)\n")
+	b.WriteString("            ignoreError: true\n")
 	b.WriteString("          - action: regex(body)\n")
 	fmt.Fprintf(&b, "            pattern: '%s'\n", p.regexPattern)
 	b.WriteString("            ignoreError: true\n")

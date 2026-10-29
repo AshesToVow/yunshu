@@ -81,6 +81,18 @@ func TestDetectParseProfile_CityEyes(t *testing.T) {
 	}
 }
 
+func TestRenderTransformerActions_PreservesRawBody(t *testing.T) {
+	actions := profileNginxAccess().renderTransformerActions()
+	copyIdx := strings.Index(actions, "action: copy(body, message)")
+	regexIdx := strings.Index(actions, "action: regex(body)")
+	if copyIdx < 0 {
+		t.Fatalf("expected copy(body, message) to keep raw line, got:\n%s", actions)
+	}
+	if regexIdx < 0 || copyIdx > regexIdx {
+		t.Fatalf("copy(body, message) must precede regex(body), got:\n%s", actions)
+	}
+}
+
 func TestDetectParseProfile_CRI(t *testing.T) {
 	p := detectParseProfile("/var/log/pods/kube-system_metrics-server-*/metrics-server/*.log", nil)
 	if p.name != "cri" {
