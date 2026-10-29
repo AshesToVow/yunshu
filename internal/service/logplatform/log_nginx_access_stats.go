@@ -80,30 +80,40 @@ func (s *LogSearchService) NginxAccessStats(ctx context.Context, q NginxAccessSt
 	intervalSec := histogramIntervalSeconds(interval)
 	query := prep.boolQuery()
 
-	remoteFields := []string{"remote.keyword", "remote", "fields.remote.keyword", "fields.remote"}
-	statusFields := []string{"status.keyword", "status", "fields.status.keyword", "fields.status"}
-	uriFields := []string{"uri.keyword", "uri", "fields.uri.keyword", "fields.uri"}
-	requestFields := []string{"request.keyword", "request", "fields.request.keyword", "fields.request"}
+	// 聚合只能落在可聚合类型上：任一 text 字段参与 terms/percentiles 都会让整个请求 400 分片失败，
+	// 所以不能把同一指标的候选字段一起发出去。先查 _field_caps，为每个指标挑一个在所有索引里
+	// 类型都可聚合的字段；同一字段老索引 text、新索引 keyword 时必须退回 .keyword 子字段。
+	caps, capsErr := cli.FieldCaps(ctx, prep.indices, nginxAccessFieldCandidates())
+	if capsErr != nil {
+		slog.Default().With("component", "lognginx").Warn(
+			"nginx access field caps failed, using keyword-only candidates", "error", capsErr)
+	}
+	choice := resolveNginxAccessFields(caps)
+	choices := []nginxAccessFieldChoice{choice}
+	if caps == nil {
+		// _field_caps 不可用：动态映射索引靠 .keyword 子字段，模板索引的 status 是裸 keyword，
+		// 两种约定各试一次，取第一个真正产出分桶的结果。
+		choices = append(choices, nginxAccessFieldChoice{
+			Remote: "remote", Status: "status", URI: "uri", Request: "request", Latency: "request_time",
+		})
+	}
 
-	// 第 1 次：索引模板已把 request_time 建成 double，直接聚合最快。
-	directLatency := nginxAccessStatsAggBody(query, tsField, interval, topN,
-		remoteFields, statusFields, uriFields, requestFields,
-		[]string{"request_time", "fields.request_time"})
-	// 第 2 次：老索引里 request_time 是动态映射出的 text，percentiles 会让整个分片失败，
-	// 改用 runtime field 从 request_time.keyword 解析成 double。
-	runtimeLatency := nginxAccessStatsAggBody(query, tsField, interval, topN,
-		remoteFields, statusFields, uriFields, requestFields,
-		[]string{"request_time_num"})
-	runtimeLatency["runtime_mappings"] = nginxAccessLatencyRuntimeMapping()
-	// 第 3 次：放弃延迟指标，保证 PV/UV/状态码/TOP URI 仍有数据。
-	noLatency := nginxAccessStatsAggBody(query, tsField, interval, topN,
-		remoteFields, statusFields, uriFields, requestFields, nil)
-	// 第 4 次：连 keyword 子字段都没有的极端情况，只出 PV 与时序。
-	bare := nginxAccessStatsAggBody(query, tsField, interval, topN, nil, nil, nil, nil, nil)
+	attempts := make([]map[string]any, 0, len(choices)+2)
+	for _, c := range choices {
+		attempts = append(attempts, nginxAccessStatsAggBody(query, tsField, interval, topN, c))
+		if c.Latency != "" {
+			// 延迟聚合仍可能因个别索引的类型/权限失败，去掉它再试一次，保住 PV/UV/状态码/TOP URI。
+			noLatency := c
+			noLatency.Latency, noLatency.RuntimeLatency = "", false
+			attempts = append(attempts, nginxAccessStatsAggBody(query, tsField, interval, topN, noLatency))
+		}
+	}
+	// 最后兜底：只出 PV 与时序，保证页面不至于全空。
+	attempts = append(attempts, nginxAccessStatsAggBody(query, tsField, interval, topN, nginxAccessFieldChoice{}))
 
 	var raw map[string]any
 	var lastErr error
-	for _, body := range []map[string]any{directLatency, runtimeLatency, noLatency, bare} {
+	for _, body := range attempts {
 		resp, err := cli.Search(ctx, prep.indices, body)
 		if err != nil {
 			lastErr = err
@@ -117,6 +127,10 @@ func (s *LogSearchService) NginxAccessStats(ctx context.Context, q NginxAccessSt
 				"nginx access stats aggregation partially failed, falling back", "reason", reason)
 			continue
 		}
+		if caps == nil && parseTotalHits(resp) > 0 && nginxAccessAggsEmpty(resp) {
+			// 字段名选错时聚合空但无报错；换另一种映射约定再试。
+			continue
+		}
 		break
 	}
 	if raw == nil {
@@ -126,9 +140,10 @@ func (s *LogSearchService) NginxAccessStats(ctx context.Context, q NginxAccessSt
 	pv := parseTotalHits(raw)
 	uv := parseCardinalityAgg(raw, "uv")
 	hist := parseDateHistogram(raw, "access_histogram")
-	statusCounts := mergeTermsAggs(raw, "status_terms_0", "status_terms_1", "status_terms_2", "status_terms_3")
-	uriTerms := mergeTermsAggs(raw, "uri_terms_0", "uri_terms_1", "uri_terms_2", "uri_terms_3")
-	reqTerms := mergeTermsAggs(raw, "request_terms_0", "request_terms_1", "request_terms_2", "request_terms_3")
+	statusCounts := parseTermsAgg(raw, "status_terms_0")
+	// URI 区分大小写，不能走会统一转大写的 parseTermsAgg
+	uriTerms := parseTermsAggPreserveCase(raw, "uri_terms_0")
+	reqTerms := parseTermsAggPreserveCase(raw, "request_terms_0")
 
 	classCounts := classifyHTTPStatusCounts(statusCounts)
 	rates := statusClassRates(classCounts, pv)
@@ -194,11 +209,107 @@ func nginxAccessDocFilter() map[string]any {
 	}
 }
 
+// nginxAccessFieldChoice 每个指标最终只选一个可聚合字段；空串表示该指标不可用。
+type nginxAccessFieldChoice struct {
+	Remote         string
+	Status         string
+	URI            string
+	Request        string
+	Latency        string
+	RuntimeLatency bool
+}
+
+// nginxAccessFieldCandidates 参与 _field_caps 探测的候选字段（固定列表，不含用户输入）。
+func nginxAccessFieldCandidates() []string {
+	return []string{
+		"remote.keyword", "remote", "fields.remote.keyword", "fields.remote",
+		"status.keyword", "status", "fields.status.keyword", "fields.status",
+		"uri.keyword", "uri", "fields.uri.keyword", "fields.uri",
+		"request.keyword", "request", "fields.request.keyword", "fields.request",
+		"request_time", "fields.request_time",
+		"request_time.keyword", "fields.request_time.keyword",
+	}
+}
+
+// nginxAggregatableTypes 能安全用于 terms/cardinality/avg/percentiles 的类型。
+var nginxAggregatableTypes = map[string]struct{}{
+	"keyword": {}, "constant_keyword": {}, "wildcard": {}, "ip": {},
+	"integer": {}, "long": {}, "short": {}, "byte": {}, "unsigned_long": {},
+	"double": {}, "float": {}, "half_float": {}, "scaled_float": {},
+	"boolean": {}, "date": {},
+}
+
+func capTypes(caps map[string][]string, field string) []string {
+	return caps[field]
+}
+
+// fieldAggregatable 要求字段在所有索引里的类型都可聚合：
+// 同一字段老索引是 text、新索引是 keyword 时，仍会有一部分分片失败。
+func fieldAggregatable(types []string) bool {
+	if len(types) == 0 {
+		return false
+	}
+	for _, t := range types {
+		if _, ok := nginxAggregatableTypes[t]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func pickAggregatableField(caps map[string][]string, candidates ...string) string {
+	for _, field := range candidates {
+		if fieldAggregatable(capTypes(caps, field)) {
+			return field
+		}
+	}
+	return ""
+}
+
+// pickLatencyField 优先用数值型主字段；主字段被动态映射成 text 时，
+// 退回 keyword 子字段并经 runtime field 转 double（text 上做 percentiles 会分片失败）。
+func pickLatencyField(caps map[string][]string) (string, bool) {
+	for _, field := range []string{"request_time", "fields.request_time"} {
+		if fieldAggregatable(capTypes(caps, field)) {
+			return field, false
+		}
+	}
+	for _, field := range []string{"request_time.keyword", "fields.request_time.keyword"} {
+		if fieldAggregatable(capTypes(caps, field)) {
+			return field, true
+		}
+	}
+	return "", false
+}
+
+func resolveNginxAccessFields(caps map[string][]string) nginxAccessFieldChoice {
+	if caps == nil {
+		// _field_caps 不可用时按映射约定退化：status 由索引模板显式建成 keyword，
+		// remote/uri/request 走动态映射的 .keyword 子字段，request_time 只能取 keyword。
+		return nginxAccessFieldChoice{
+			Remote:         "remote.keyword",
+			Status:         "status",
+			URI:            "uri.keyword",
+			Request:        "request.keyword",
+			Latency:        "request_time.keyword",
+			RuntimeLatency: true,
+		}
+	}
+	choice := nginxAccessFieldChoice{
+		Remote:  pickAggregatableField(caps, "remote.keyword", "fields.remote.keyword", "remote", "fields.remote"),
+		Status:  pickAggregatableField(caps, "status", "status.keyword", "fields.status", "fields.status.keyword"),
+		URI:     pickAggregatableField(caps, "uri.keyword", "fields.uri.keyword", "uri", "fields.uri"),
+		Request: pickAggregatableField(caps, "request.keyword", "fields.request.keyword", "request", "fields.request"),
+	}
+	choice.Latency, choice.RuntimeLatency = pickLatencyField(caps)
+	return choice
+}
+
 func nginxAccessStatsAggBody(
 	query any,
 	tsField, interval string,
 	topN int,
-	remoteFields, statusFields, uriFields, requestFields, latencyFields []string,
+	choice nginxAccessFieldChoice,
 ) map[string]any {
 	dh := map[string]any{
 		"field":          tsField,
@@ -210,77 +321,71 @@ func nginxAccessStatsAggBody(
 			"date_histogram": dh,
 		},
 	}
-	for _, field := range remoteFields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
+	if choice.Remote != "" {
 		aggs["uv"] = map[string]any{
-			"cardinality": map[string]any{"field": field},
-		}
-		break
-	}
-	for i, field := range statusFields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
-		aggs[fmt.Sprintf("status_terms_%d", i)] = map[string]any{
-			"terms": map[string]any{"field": field, "size": 50},
+			"cardinality": map[string]any{"field": choice.Remote},
 		}
 	}
-	for i, field := range uriFields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
-		aggs[fmt.Sprintf("uri_terms_%d", i)] = map[string]any{
-			"terms": map[string]any{"field": field, "size": topN * 3},
+	if choice.Status != "" {
+		aggs["status_terms_0"] = map[string]any{
+			"terms": map[string]any{"field": choice.Status, "size": 50},
 		}
 	}
-	for i, field := range requestFields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
-		aggs[fmt.Sprintf("request_terms_%d", i)] = map[string]any{
-			"terms": map[string]any{"field": field, "size": topN * 5},
+	if choice.URI != "" {
+		aggs["uri_terms_0"] = map[string]any{
+			"terms": map[string]any{"field": choice.URI, "size": topN * 3},
 		}
 	}
-	if len(latencyFields) > 0 {
-		lf := strings.TrimSpace(latencyFields[0])
-		if lf != "" {
-			aggs["latency_avg"] = map[string]any{
-				"avg": map[string]any{"field": lf},
-			}
-			aggs["latency_pct"] = map[string]any{
-				"percentiles": map[string]any{
-					"field":    lf,
-					"percents": []float64{95, 99},
-				},
-			}
+	if choice.Request != "" {
+		aggs["request_terms_0"] = map[string]any{
+			"terms": map[string]any{"field": choice.Request, "size": topN * 5},
 		}
 	}
-	return map[string]any{
+	latencyField := choice.Latency
+	runtime := map[string]any{}
+	if latencyField != "" && choice.RuntimeLatency {
+		latencyField = nginxAccessLatencyRuntimeField
+		runtime = nginxAccessLatencyRuntimeMapping(choice.Latency)
+	}
+	if latencyField != "" {
+		aggs["latency_avg"] = map[string]any{
+			"avg": map[string]any{"field": latencyField},
+		}
+		aggs["latency_pct"] = map[string]any{
+			"percentiles": map[string]any{
+				"field":    latencyField,
+				"percents": []float64{95, 99},
+			},
+		}
+	}
+	body := map[string]any{
 		"size":             0,
 		"track_total_hits": true,
 		"query":            query,
 		"aggs":             aggs,
 	}
+	if len(runtime) > 0 {
+		body["runtime_mappings"] = runtime
+	}
+	return body
 }
 
-// nginxAccessLatencyRuntimeMapping 用 runtime field 把 request_time 统一成 double。
-// 老索引里该字段由动态映射建成 text，直接做 percentiles 会让整个分片失败；
-// 新索引按模板建成 double + keyword 子字段。两种形态下 request_time.keyword 都存在，
-// 因此统一从 keyword 子字段解析，避免触碰 text 的 fielddata。
-func nginxAccessLatencyRuntimeMapping() map[string]any {
+const nginxAccessLatencyRuntimeField = "request_time_num"
+
+// nginxAccessLatencyRuntimeMapping 用 runtime field 把 keyword 形态的 request_time 转成 double。
+// 老索引按动态映射把该字段建成 text + keyword 子字段，percentiles 只能走 keyword。
+func nginxAccessLatencyRuntimeMapping(keywordField string) map[string]any {
+	keywordField = strings.TrimSpace(keywordField)
+	if keywordField == "" {
+		keywordField = "request_time.keyword"
+	}
+	source := fmt.Sprintf(
+		"if (doc.containsKey('%s') && !doc['%s'].empty) { try { emit(Double.parseDouble(doc['%s'].value)); } catch (Exception e) { } }",
+		keywordField, keywordField, keywordField)
 	return map[string]any{
-		"request_time_num": map[string]any{
-			"type": "double",
-			"script": map[string]any{
-				"source": "if (doc.containsKey('request_time.keyword') && !doc['request_time.keyword'].empty) " +
-					"{ try { emit(Double.parseDouble(doc['request_time.keyword'].value)); } catch (Exception e) { } }",
-			},
+		nginxAccessLatencyRuntimeField: map[string]any{
+			"type":   "double",
+			"script": map[string]any{"source": source},
 		},
 	}
 }
@@ -303,6 +408,21 @@ func shardFailureReason(raw map[string]any) string {
 		}
 	}
 	return fmt.Sprintf("%d shard(s) failed", int(failed))
+}
+
+// nginxAccessAggsEmpty 所有指标聚合都没有分桶（字段名选错时 ES 不报错，只返回空）。
+func nginxAccessAggsEmpty(raw map[string]any) bool {
+	aggs, _ := raw["aggregations"].(map[string]any)
+	for _, name := range []string{"uv", "status_terms_0", "uri_terms_0", "request_terms_0"} {
+		node, _ := aggs[name].(map[string]any)
+		if buckets, ok := node["buckets"].([]any); ok && len(buckets) > 0 {
+			return false
+		}
+		if v, ok := node["value"].(float64); ok && v > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func parseCardinalityAgg(raw map[string]any, name string) int64 {

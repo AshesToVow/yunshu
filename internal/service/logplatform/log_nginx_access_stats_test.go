@@ -74,12 +74,17 @@ func TestNginxAccessStatsAggBodyHasKeys(t *testing.T) {
 	body := nginxAccessStatsAggBody(
 		map[string]any{"match_all": map[string]any{}},
 		"@timestamp", "1h", 5,
-		[]string{"remote.keyword"},
-		[]string{"status.keyword"},
-		[]string{"uri.keyword"},
-		[]string{"request.keyword"},
-		[]string{"request_time"},
+		nginxAccessFieldChoice{
+			Remote:  "remote.keyword",
+			Status:  "status",
+			URI:     "uri.keyword",
+			Request: "request.keyword",
+			Latency: "request_time",
+		},
 	)
+	if _, exists := body["runtime_mappings"]; exists {
+		t.Fatal("numeric latency field must not need runtime_mappings")
+	}
 	aggs, ok := body["aggs"].(map[string]any)
 	if !ok {
 		t.Fatal("missing aggs")
@@ -96,13 +101,15 @@ func TestNginxAccessStatsRuntimeLatencyFallback(t *testing.T) {
 	body := nginxAccessStatsAggBody(
 		map[string]any{"match_all": map[string]any{}},
 		"@timestamp", "1h", 5,
-		[]string{"remote.keyword"},
-		[]string{"status.keyword"},
-		[]string{"uri.keyword"},
-		[]string{"request.keyword"},
-		[]string{"request_time_num"},
+		nginxAccessFieldChoice{
+			Remote:         "remote.keyword",
+			Status:         "status",
+			URI:            "uri.keyword",
+			Request:        "request.keyword",
+			Latency:        "request_time.keyword",
+			RuntimeLatency: true,
+		},
 	)
-	body["runtime_mappings"] = nginxAccessLatencyRuntimeMapping()
 	runtime, ok := body["runtime_mappings"].(map[string]any)
 	if !ok {
 		t.Fatal("missing runtime_mappings")
@@ -116,6 +123,67 @@ func TestNginxAccessStatsRuntimeLatencyFallback(t *testing.T) {
 	percentiles, _ := pct["percentiles"].(map[string]any)
 	if percentiles["field"] != "request_time_num" {
 		t.Fatalf("latency field=%v want request_time_num", percentiles["field"])
+	}
+}
+
+// 真实索引里 remote/uri/request 是动态映射的 text + keyword，
+// status 是模板里的 keyword，request_time 老索引是 text + keyword。
+// 选择结果必须全部落在 keyword/numeric 上，否则 terms/percentiles 会让整单 400。
+func TestResolveNginxAccessFieldsAvoidsText(t *testing.T) {
+	t.Parallel()
+	caps := map[string][]string{
+		"remote":                {"text"},
+		"remote.keyword":        {"keyword"},
+		"status":                {"keyword"},
+		"uri":                   {"text"},
+		"uri.keyword":           {"keyword"},
+		"request":               {"text"},
+		"request.keyword":       {"keyword"},
+		"request_time":          {"text"},
+		"request_time.keyword":  {"keyword"},
+		"fields.request_time":   {"double"},
+		"fields.remote":         {"text"},
+		"fields.remote.keyword": {"keyword"},
+	}
+	choice := resolveNginxAccessFields(caps)
+	if choice.Remote != "remote.keyword" || choice.Status != "status" ||
+		choice.URI != "uri.keyword" || choice.Request != "request.keyword" {
+		t.Fatalf("unexpected choice: %#v", choice)
+	}
+	if choice.Latency != "fields.request_time" || choice.RuntimeLatency {
+		t.Fatalf("should prefer numeric latency field: %#v", choice)
+	}
+
+	// 混合类型（老索引 text、新索引 keyword）同样不可选
+	mixed := map[string][]string{
+		"status":      {"keyword"},
+		"uri":         {"text", "keyword"},
+		"uri.keyword": {"keyword"},
+	}
+	choice = resolveNginxAccessFields(mixed)
+	if choice.URI != "uri.keyword" {
+		t.Fatalf("mixed-type field must not be aggregated directly: %#v", choice)
+	}
+
+	// 只有 text 的 request_time 必须走 runtime field
+	textOnly := map[string][]string{
+		"status":               {"keyword"},
+		"request_time":         {"text"},
+		"request_time.keyword": {"keyword"},
+	}
+	choice = resolveNginxAccessFields(textOnly)
+	if choice.Latency != "request_time.keyword" || !choice.RuntimeLatency {
+		t.Fatalf("text latency field should fall back to runtime mapping: %#v", choice)
+	}
+
+	// _field_caps 不可用时按映射约定退化：status 取模板裸字段，其余取 .keyword 子字段
+	choice = resolveNginxAccessFields(nil)
+	if choice.Status != "status" || choice.Remote != "remote.keyword" ||
+		choice.URI != "uri.keyword" || choice.Request != "request.keyword" {
+		t.Fatalf("unexpected fallback choice: %#v", choice)
+	}
+	if choice.Latency != "request_time.keyword" || !choice.RuntimeLatency {
+		t.Fatalf("fallback latency should use runtime mapping: %#v", choice)
 	}
 }
 
