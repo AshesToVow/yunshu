@@ -1,3 +1,5 @@
+import axios from "axios";
+
 /**
  * 与后端 internal/pkg/constants 中 BizError 数字码对齐，用于统一 Toast / extractApiErrorMessage 展示。
  * 若响应带 error_code 且命中下表，优先使用此处文案（与后端 Message 一致，避免各端漂移）。
@@ -104,4 +106,12 @@ export function resolveApiErrorDisplayMessage(
   const msg = typeof serverMessage === "string" ? serverMessage.trim() : "";
   if (msg) return msg;
   return undefined;
+}
+
+/** 后端 ErrNotFoundWithMsg（HTTP 404 / error_code 11021）：目标资源已不存在。 */
+export function isNotFoundApiError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  if (error.response?.status === 404) return true;
+  const data = error.response?.data as { error_code?: string } | undefined;
+  return data?.error_code === "11021";
 }

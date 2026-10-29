@@ -293,8 +293,9 @@ export function embedAIKnowledge(payload?: { limit?: number }) {
 }
 
 export function listAISessions(params?: { page?: number; page_size?: number }) {
+  // 会话相关调用都由 ai-assistant 页面自行提示错误，避免拦截器与页面各弹一次
   return getData<{ list: AIChatSession[]; total: number; page: number; page_size: number }>(
-    http.get("/ai/sessions", { params }),
+    http.get("/ai/sessions", { params, silentErrorToast: true }),
   );
 }
 
@@ -306,11 +307,11 @@ export function createAISession(payload?: {
   enable_tools?: boolean;
   enable_write?: boolean;
 }) {
-  return getData<AIChatSession>(http.post("/ai/sessions", payload || {}));
+  return getData<AIChatSession>(http.post("/ai/sessions", payload || {}, { silentErrorToast: true }));
 }
 
 export function getAISession(id: number) {
-  return getData<AISessionDetail>(http.get(`/ai/sessions/${id}`));
+  return getData<AISessionDetail>(http.get(`/ai/sessions/${id}`, { silentErrorToast: true }));
 }
 
 export function updateAISession(
@@ -325,15 +326,15 @@ export function updateAISession(
     namespace?: string;
   },
 ) {
-  return getData<AIChatSession>(http.patch(`/ai/sessions/${id}`, payload));
+  return getData<AIChatSession>(http.patch(`/ai/sessions/${id}`, payload, { silentErrorToast: true }));
 }
 
 export function deleteAISession(id: number) {
-  return getData<{ ok: boolean }>(http.delete(`/ai/sessions/${id}`));
+  return getData<{ ok: boolean }>(http.delete(`/ai/sessions/${id}`, { silentErrorToast: true }));
 }
 
 export function clearAISession(id: number) {
-  return getData<{ ok: boolean }>(http.post(`/ai/sessions/${id}/clear`, {}));
+  return getData<{ ok: boolean }>(http.post(`/ai/sessions/${id}/clear`, {}, { silentErrorToast: true }));
 }
 
 export function analyzePodDiagnoseAI(payload: {

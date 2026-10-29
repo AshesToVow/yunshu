@@ -30,6 +30,7 @@ import {
 import { getClusters, listNamespaces, type ClusterItem } from "../services/clusters";
 import { getProjects, type ProjectItem } from "../services/projects";
 import { extractApiErrorMessage } from "../services/http";
+import { isNotFoundApiError } from "../utils/api-error-messages";
 
 type Bubble = AIChatMessage & { id: string; meta?: string };
 
@@ -195,11 +196,12 @@ export function AiAssistantPage() {
       const list = res?.list || [];
       setSessions(list);
       if (selectLatest) {
-        if (list.length > 0) {
-          await openSession(list[0].id);
-        } else {
-          await handleNewSession();
+        // 服务端列表也可能残留已删除会话（多标签页/旧数据），打开失败就跳过，不弹错
+        for (const s of list.slice(0, 3)) {
+          const opened = await openSession(s.id);
+          if (opened !== "gone") return;
         }
+        await handleNewSession();
       }
     } catch (e) {
       message.error(extractApiErrorMessage(e, "加载会话失败"));
@@ -208,11 +210,11 @@ export function AiAssistantPage() {
     }
   }
 
-  async function openSession(id: number) {
+  async function openSession(id: number): Promise<"ok" | "gone" | "error"> {
     const req = ++sessionReqRef.current;
     try {
       const detail = await getAISession(id);
-      if (req !== sessionReqRef.current) return; // 已切换到其他会话，丢弃过期响应
+      if (req !== sessionReqRef.current) return "ok"; // 已切换到其他会话，丢弃过期响应
       setSessionId(detail.session.id);
       if (detail.session.cluster_id) setClusterId(detail.session.cluster_id);
       else setClusterId(undefined);
@@ -250,8 +252,16 @@ export function AiAssistantPage() {
       } else {
         setLastSteps([]);
       }
+      return "ok";
     } catch (e) {
+      if (req !== sessionReqRef.current) return "ok";
+      if (isNotFoundApiError(e)) {
+        // 列表里残留的会话已在服务端删除：直接剔除，不再打扰用户
+        setSessions((prev) => prev.filter((s) => s.id !== id));
+        return "gone";
+      }
       message.error(extractApiErrorMessage(e, "打开会话失败"));
+      return "error";
     }
   }
 
@@ -278,19 +288,23 @@ export function AiAssistantPage() {
   async function handleDeleteSession(id: number) {
     try {
       await deleteAISession(id);
-      const next = sessions.filter((s) => s.id !== id);
-      setSessions(next);
-      if (sessionId === id) {
-        if (next.length > 0) {
-          await openSession(next[0].id);
-        } else {
-          await handleNewSession();
-        }
-      }
-      message.success("会话已删除");
     } catch (e) {
-      message.error(extractApiErrorMessage(e, "删除会话失败"));
+      if (!isNotFoundApiError(e)) {
+        message.error(extractApiErrorMessage(e, "删除会话失败"));
+        return;
+      }
+      // 已被删除（重复确认/其他标签页删除）按成功处理，删除本身是幂等的
     }
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    if (sessionId === id) {
+      setSessionId(undefined);
+      setMessages([]);
+      setLastSteps([]);
+      setLastRag([]);
+      // 以服务端列表为准重新选会话，避免打开本地残留的已删除会话
+      await refreshSessions(true);
+    }
+    message.success("会话已删除");
   }
 
   async function handlePing() {
