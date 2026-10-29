@@ -187,6 +187,8 @@ func (s *LoggieAgentService) buildStoredConfigFromRequest(req LoggieBootstrapReq
 		MonitorPort:        defaultMonitorPort(req.MonitorPort),
 		YunshuURL:          strings.TrimSpace(req.YunshuURL),
 		DeployDir:          normalizeDeployDir(req.DeployDir),
+		RunUser:            strings.TrimSpace(req.RunUser),
+		RunGroup:           strings.TrimSpace(req.RunGroup),
 		AutoFromLogSources: autoFromLogSourcesEnabled(req.AutoFromLogSources),
 		Sources:            sources,
 		LogPaths:           req.LogPaths,
@@ -248,6 +250,7 @@ func (s *LoggieAgentService) bundleFromStored(
 		}
 	}
 	bundle := BuildMultiPipelineBundle(projectID, serverID, entries, stored.MonitorPort, esCfg, kafkaCfg, agent.Token, stored.YunshuURL, stored.DeployDir)
+	bundle.RunUser, bundle.RunGroup = resolveLoggieRunIdentity(stored.RunUser, stored.RunGroup)
 	return bundle, sources, nil
 }
 

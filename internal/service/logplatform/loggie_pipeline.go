@@ -25,6 +25,8 @@ type LoggiePipelineBundle struct {
 	PipelineFilename  string `json:"pipeline_filename"`
 	PipelinesFilename string `json:"pipelines_filename"`
 	DeployDir         string `json:"deploy_dir"`
+	RunUser           string `json:"run_user"`
+	RunGroup          string `json:"run_group"`
 	EnvFile           string `json:"env_file"`
 	EnvFilename       string `json:"env_filename"`
 	HeartbeatScript   string `json:"heartbeat_script"`

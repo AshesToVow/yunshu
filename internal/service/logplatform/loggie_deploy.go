@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,8 +18,44 @@ const loggieBinaryName = "loggie"
 const startScriptFilename = "start.sh"
 const heartbeatTimerUnit = "loggie-heartbeat.timer"
 const heartbeatOneshotUnit = "loggie-heartbeat.service"
-const loggieServiceUser = "loggie"
+const defaultLoggieRunUser = "loggie"
+const defaultLoggieRunGroup = "loggie"
 const loggieDataDir = "/data/loggie"
+
+var loggieRunIdentityPattern = regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+
+// validateLoggieRunIdentity 校验运行用户/组名：该值会写进 systemd 单元与远端 shell 脚本，
+// 必须在 SSH 下发前按 POSIX 账户名收窄字符集。
+func validateLoggieRunIdentity(user, group string) error {
+	for _, item := range []struct {
+		label string
+		value string
+	}{
+		{"运行用户", strings.TrimSpace(user)},
+		{"运行组", strings.TrimSpace(group)},
+	} {
+		if item.value == "" {
+			continue
+		}
+		if !loggieRunIdentityPattern.MatchString(item.value) {
+			return fmt.Errorf("%s只能包含小写字母、数字、下划线和短横线，以字母或下划线开头，最长 32 字符: %q", item.label, item.value)
+		}
+	}
+	return nil
+}
+
+// resolveLoggieRunIdentity 归一化运行身份：组缺省跟随用户，两者都缺省时回到内置默认值。
+func resolveLoggieRunIdentity(user, group string) (string, string) {
+	u := strings.TrimSpace(user)
+	g := strings.TrimSpace(group)
+	if u == "" {
+		u = defaultLoggieRunUser
+	}
+	if g == "" {
+		g = u
+	}
+	return u, g
+}
 
 var allowedLoggieDeployRoots = []string{
 	"/export/",
@@ -150,6 +187,7 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 	if err := validateLoggieDeployDir(deployDir); err != nil {
 		return "", "", err
 	}
+	runUser, runGroup := resolveLoggieRunIdentity(bundle.RunUser, bundle.RunGroup)
 	if _, err := cli.Exec(ctx, fmt.Sprintf("mkdir -p %q", deployDir), 4096); err != nil {
 		return "", "", fmt.Errorf("mkdir: %w", err)
 	}
@@ -167,8 +205,8 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 		{bundle.EnvFilename, []byte(bundle.EnvFile), 0o644},
 		{bundle.HeartbeatFilename, []byte(bundle.HeartbeatScript), 0o755},
 		{startScriptFilename, []byte(renderStartScript()), 0o755},
-		{"loggie.service", []byte(renderSystemdUnit(deployDir)), 0o644},
-		{"loggie-heartbeat.service", []byte(renderHeartbeatUnit(deployDir)), 0o644},
+		{"loggie.service", []byte(renderSystemdUnit(deployDir, runUser, runGroup)), 0o644},
+		{"loggie-heartbeat.service", []byte(renderHeartbeatUnit(deployDir, runUser, runGroup)), 0o644},
 		{"loggie-heartbeat.timer", []byte(renderHeartbeatTimer()), 0o644},
 	}
 	for _, f := range files {
@@ -191,7 +229,7 @@ func (s *LoggieAgentService) deployBundleOverSSH(ctx context.Context, serverID u
 			`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT" 2>/dev/null; `+
 			`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null; `+
 			`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer 2>/dev/null; `+
-			shellServiceUserProvision()+
+			shellServiceUserProvision(runUser, runGroup)+
 			`sudo systemctl daemon-reload; `+
 			`sudo systemctl reload-or-restart "$UNIT" 2>&1 || sudo systemctl restart "$UNIT" 2>&1; RC=$?; `+
 			`sudo systemctl enable loggie-heartbeat.timer >/dev/null 2>&1; `+
@@ -318,6 +356,7 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 	if err := validateLoggieDeployDir(deployDir); err != nil {
 		return "", "", err
 	}
+	runUser, runGroup := resolveLoggieRunIdentity(bundle.RunUser, bundle.RunGroup)
 	unit := s.unitName()
 	binRemote := path.Join(deployDir, loggieBinaryName)
 
@@ -354,8 +393,8 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		{bundle.EnvFilename, []byte(bundle.EnvFile), 0o644},
 		{bundle.HeartbeatFilename, []byte(bundle.HeartbeatScript), 0o755},
 		{startScriptFilename, []byte(renderStartScript()), 0o755},
-		{"loggie.service", []byte(renderSystemdUnit(deployDir)), 0o644},
-		{"loggie-heartbeat.service", []byte(renderHeartbeatUnit(deployDir)), 0o644},
+		{"loggie.service", []byte(renderSystemdUnit(deployDir, runUser, runGroup)), 0o644},
+		{"loggie-heartbeat.service", []byte(renderHeartbeatUnit(deployDir, runUser, runGroup)), 0o644},
 		{"loggie-heartbeat.timer", []byte(renderHeartbeatTimer()), 0o644},
 	}
 	for _, f := range files {
@@ -373,7 +412,7 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 	}
 	out.WriteString(fmt.Sprintf("uploaded binary %s (%d bytes)\n", binRemote, len(binData)))
 
-	res, err = cli.Exec(installCtx, buildFinalizeInstallScript(deployDir, unit), 65536)
+	res, err = cli.Exec(installCtx, buildFinalizeInstallScript(deployDir, unit, runUser, runGroup), 65536)
 	out.WriteString(res.Stdout)
 	errOut.WriteString(res.Stderr)
 	if err != nil {
@@ -393,7 +432,8 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 // 单元文件里的路径不能用 %q 拼接：systemd 的路径类指令不剥双引号，
 // WorkingDirectory="/export/loggie" 会被判为 "path is not absolute"。
 // deployDir 已由 validateLoggieDeployDir 限定为 [a-zA-Z0-9/-_.]，直接 %s 即可。
-func renderSystemdUnit(deployDir string) string {
+func renderSystemdUnit(deployDir, runUser, runGroup string) string {
+	user, group := resolveLoggieRunIdentity(runUser, runGroup)
 	bin := path.Join(deployDir, loggieBinaryName)
 	systemCfg := path.Join(deployDir, "pipeline.yml")
 	pipelineCfg := path.Join(deployDir, pipelinesOnlyFilename)
@@ -428,7 +468,7 @@ UMask=0027
 
 [Install]
 WantedBy=multi-user.target
-`, loggieServiceUser, loggieServiceUser, deployDir, bin, systemCfg, pipelineCfg)
+`, user, group, deployDir, bin, systemCfg, pipelineCfg)
 }
 
 func renderStartScript() string {
@@ -469,7 +509,8 @@ esac
 `
 }
 
-func renderHeartbeatUnit(deployDir string) string {
+func renderHeartbeatUnit(deployDir, runUser, runGroup string) string {
+	user, group := resolveLoggieRunIdentity(runUser, runGroup)
 	return fmt.Sprintf(`[Unit]
 Description=Yunshu Loggie heartbeat (oneshot)
 After=network-online.target
@@ -489,22 +530,32 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-`, loggieServiceUser, loggieServiceUser, deployDir, path.Join(deployDir, "loggie-heartbeat.env"), path.Join(deployDir, "heartbeat.sh"))
+`, user, group, deployDir, path.Join(deployDir, "loggie-heartbeat.env"), path.Join(deployDir, "heartbeat.sh"))
 }
 
-// shellServiceUserProvision 创建 loggie 系统用户并准备数据目录；
-// 用户创建失败时回退为 root 运行，避免升级后 Agent 直接起不来。
-func shellServiceUserProvision() string {
+// shellServiceUserProvision 创建运行用户/组并准备数据目录；
+// 创建失败时回退为 root 运行，避免升级后 Agent 直接起不来。
+func shellServiceUserProvision(runUser, runGroup string) string {
+	user, group := resolveLoggieRunIdentity(runUser, runGroup)
 	var b strings.Builder
-	b.WriteString(`if ! id -u ` + loggieServiceUser + ` >/dev/null 2>&1; then `)
-	b.WriteString(`sudo useradd --system --no-create-home --shell /usr/sbin/nologin ` + loggieServiceUser + ` >/dev/null 2>&1 || `)
-	b.WriteString(`sudo adduser --system --no-create-home --shell /usr/sbin/nologin ` + loggieServiceUser + ` >/dev/null 2>&1 || true; fi; `)
-	b.WriteString(`if id -u ` + loggieServiceUser + ` >/dev/null 2>&1; then `)
-	b.WriteString(`sudo install -d -o ` + loggieServiceUser + ` -g ` + loggieServiceUser + ` -m 0750 ` + loggieDataDir + ` 2>/dev/null || true; `)
-	b.WriteString(`sudo chown -R ` + loggieServiceUser + `:` + loggieServiceUser + ` ` + loggieDataDir + ` 2>/dev/null || true; `)
+	fmt.Fprintf(&b, "RUN_USER=%q; RUN_GROUP=%q; DATA_DIR=%q; ", user, group, loggieDataDir)
+	// 部分精简镜像没有 getent，组存在性判断回退到 /etc/group
+	b.WriteString(`group_exists() { getent group "$1" >/dev/null 2>&1 || grep -q "^$1:" /etc/group 2>/dev/null; }; `)
+	// 先建组：Debian 的 useradd --system 不会自动建同名组，缺组时 Group= 会让单元起不来。
+	b.WriteString(`if ! group_exists "$RUN_GROUP"; then `)
+	b.WriteString(`sudo groupadd -r "$RUN_GROUP" >/dev/null 2>&1 || sudo addgroup --system "$RUN_GROUP" >/dev/null 2>&1 || true; fi; `)
+	b.WriteString(`if ! id -u "$RUN_USER" >/dev/null 2>&1; then `)
+	b.WriteString(`sudo useradd --system --no-create-home --shell /usr/sbin/nologin --gid "$RUN_GROUP" "$RUN_USER" >/dev/null 2>&1 || `)
+	b.WriteString(`sudo adduser --system --no-create-home --shell /usr/sbin/nologin --ingroup "$RUN_GROUP" "$RUN_USER" >/dev/null 2>&1 || true; fi; `)
+	b.WriteString(`if id -u "$RUN_USER" >/dev/null 2>&1 && group_exists "$RUN_GROUP"; then `)
+	b.WriteString(`sudo install -d -o "$RUN_USER" -g "$RUN_GROUP" -m 0750 "$DATA_DIR" 2>/dev/null || true; `)
+	b.WriteString(`sudo chown -R "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || true; `)
+	// Loggie 的 registry（sqlite）落在 <部署目录>/data，属主不对会只读失败。
+	b.WriteString(`sudo install -d -o "$RUN_USER" -g "$RUN_GROUP" -m 0750 "$DEPLOY/data" 2>/dev/null || true; `)
+	b.WriteString(`sudo chown -R "$RUN_USER:$RUN_GROUP" "$DEPLOY/data" 2>/dev/null || true; `)
 	b.WriteString(`sudo chmod -R a+rX "$DEPLOY" 2>/dev/null || true; `)
-	b.WriteString(`else echo "warn: user ` + loggieServiceUser + ` unavailable; falling back to root"; `)
-	b.WriteString(`sudo sed -i '/^User=` + loggieServiceUser + `$/d;/^Group=` + loggieServiceUser + `$/d;/^AmbientCapabilities=/d;/^CapabilityBoundingSet=/d' "/etc/systemd/system/$UNIT" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null || true; fi; `)
+	b.WriteString(`else echo "warn: user $RUN_USER or group $RUN_GROUP unavailable; falling back to root"; `)
+	b.WriteString(`sudo sed -i "/^User=$RUN_USER$/d;/^Group=$RUN_GROUP$/d;/^AmbientCapabilities=/d;/^CapabilityBoundingSet=/d" "/etc/systemd/system/$UNIT" /etc/systemd/system/loggie-heartbeat.service 2>/dev/null || true; fi; `)
 	return b.String()
 }
 
@@ -523,7 +574,7 @@ WantedBy=timers.target
 `
 }
 
-func buildFinalizeInstallScript(deployDir, unit string) string {
+func buildFinalizeInstallScript(deployDir, unit, runUser, runGroup string) string {
 	var b strings.Builder
 	b.WriteString("set -euo pipefail; ")
 	b.WriteString(fmt.Sprintf("DEPLOY=%q; UNIT=%q; BIN=%q/loggie; ", deployDir, unit, deployDir))
@@ -539,7 +590,7 @@ func buildFinalizeInstallScript(deployDir, unit string) string {
 	b.WriteString(`sudo cp "$DEPLOY/loggie.service" "/etc/systemd/system/$UNIT"; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.service" /etc/systemd/system/loggie-heartbeat.service; `)
 	b.WriteString(`sudo cp "$DEPLOY/loggie-heartbeat.timer" /etc/systemd/system/loggie-heartbeat.timer; `)
-	b.WriteString(shellServiceUserProvision())
+	b.WriteString(shellServiceUserProvision(runUser, runGroup))
 	b.WriteString(`sudo systemctl daemon-reload; `)
 	b.WriteString(`sudo systemctl enable "$UNIT" loggie-heartbeat.timer; `)
 	b.WriteString(`sudo systemctl restart "$UNIT"; `)

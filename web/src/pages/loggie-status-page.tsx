@@ -60,6 +60,18 @@ const DEFAULT_YUNSHU_URL =
       ? window.location.origin
       : "http://127.0.0.1:8080";
 
+const DEFAULT_DEPLOY_DIR = "/export/loggie";
+const DEFAULT_RUN_USER = "loggie";
+const RUN_IDENTITY_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
+
+type InstallFormValues = {
+  deploy_dir: string;
+  run_user: string;
+  run_group: string;
+  monitor_port: number;
+  yunshu_url: string;
+};
+
 export function LoggieStatusPage() {
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
@@ -74,9 +86,12 @@ export function LoggieStatusPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addServerId, setAddServerId] = useState<number>();
+  const [installOpen, setInstallOpen] = useState(false);
+  const [installServer, setInstallServer] = useState<LoggieStatusItem | null>(null);
   const loadSeqRef = useRef(0);
   const sourcesSeqRef = useRef(0);
   const [form] = Form.useForm();
+  const [installForm] = Form.useForm();
 
   const projectOptions = useMemo(
     () => projects.map((p) => ({ value: p.id, label: `${p.name} (${p.code})` })),
@@ -137,6 +152,8 @@ export function LoggieStatusPage() {
     setBootstrapOpen(false);
     setBootstrapResult(null);
     setBootstrapServer(null);
+    setInstallOpen(false);
+    setInstallServer(null);
     void reload(pid);
   };
 
@@ -211,7 +228,7 @@ export function LoggieStatusPage() {
 
   type AgentAction = "sync" | "deploy" | "restart" | "start" | "stop" | "install" | "uninstall";
 
-  const runDeployAction = async (row: LoggieStatusItem, action: AgentAction) => {
+  const runDeployAction = async (row: LoggieStatusItem, action: AgentAction, installValues?: InstallFormValues) => {
     if (!projectId || !row.server_id || actionLoading) return;
     const key = `${action}-${row.server_id}`;
     setActionLoading(key);
@@ -219,12 +236,14 @@ export function LoggieStatusPage() {
       const payload = { server_id: row.server_id };
       let res;
       if (action === "install") {
-        const values = form.getFieldsValue();
+        const values = installValues;
         res = await installLoggie(projectId, {
           ...payload,
-          deploy_dir: values.deploy_dir || "/export/loggie",
-          yunshu_url: values.yunshu_url || DEFAULT_YUNSHU_URL,
-          monitor_port: values.monitor_port || row.monitor_port || 9196,
+          deploy_dir: values?.deploy_dir || DEFAULT_DEPLOY_DIR,
+          run_user: values?.run_user || DEFAULT_RUN_USER,
+          run_group: values?.run_group || values?.run_user || DEFAULT_RUN_USER,
+          yunshu_url: values?.yunshu_url || DEFAULT_YUNSHU_URL,
+          monitor_port: values?.monitor_port || row.monitor_port || 9196,
         });
       } else if (action === "uninstall") {
         res = await uninstallLoggie(projectId, payload);
@@ -249,14 +268,35 @@ export function LoggieStatusPage() {
     }
   };
 
-  const confirmAgentAction = (row: LoggieStatusItem, action: "install" | "start" | "stop" | "restart") => {
+  const openInstall = (row: LoggieStatusItem) => {
+    const runUser = row.run_user || DEFAULT_RUN_USER;
+    installForm.setFieldsValue({
+      deploy_dir: row.deploy_dir || DEFAULT_DEPLOY_DIR,
+      run_user: runUser,
+      run_group: row.run_group || runUser,
+      monitor_port: row.monitor_port ?? 9196,
+      yunshu_url: DEFAULT_YUNSHU_URL,
+    });
+    setInstallServer(row);
+    setInstallOpen(true);
+  };
+
+  const submitInstall = async () => {
+    if (!projectId || !installServer?.server_id || actionLoading) return;
+    let values: InstallFormValues;
+    try {
+      values = await installForm.validateFields();
+    } catch (e: unknown) {
+      if (typeof e === "object" && e !== null && "errorFields" in e) return;
+      message.error(extractApiErrorMessage(e, "安装参数校验失败"));
+      return;
+    }
+    setInstallOpen(false);
+    await runDeployAction(installServer, "install", values);
+  };
+
+  const confirmAgentAction = (row: LoggieStatusItem, action: "start" | "stop" | "restart") => {
     const meta = {
-      install: {
-        title: "安装 Agent？",
-        content:
-          "将上传离线包到目标机部署目录并启用 Loggie 与心跳；会覆盖部署目录中的同名二进制与配置，不删除业务日志文件。",
-        okText: "安装",
-      },
       start: {
         title: "启动 Agent？",
         content: "将在目标机启动 Loggie；不会删除任何文件。",
@@ -415,7 +455,7 @@ export function LoggieStatusPage() {
               icon={<PoweroffOutlined />}
               loading={busy("install")}
               disabled={actionLoading != null}
-              onClick={() => confirmAgentAction(r, "install")}
+              onClick={() => openInstall(r)}
             >
               安装
             </Button>
@@ -561,6 +601,87 @@ export function LoggieStatusPage() {
       </Modal>
 
       <Modal
+        title={installServer ? `安装 Agent — ${installServer.server_name}` : "安装 Agent"}
+        open={installOpen}
+        onCancel={() => {
+          if (actionLoading == null) setInstallOpen(false);
+        }}
+        okText="安装"
+        cancelText="取消"
+        confirmLoading={(actionLoading ?? "").startsWith("install-")}
+        onOk={() => void submitInstall()}
+        destroyOnHidden
+        width={560}
+      >
+        <Form form={installForm} layout="vertical">
+          <Form.Item
+            name="deploy_dir"
+            label="远端部署目录"
+            rules={[
+              { required: true, message: "请填写部署目录" },
+              {
+                pattern: /^\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/,
+                message: "必须是绝对路径，仅含字母、数字、点、下划线、短横线",
+              },
+            ]}
+            extra="仅允许 /export、/opt、/data、/app、/srv、/usr/local、/var/lib、/home、/logs、/workspace、/tmp 之下"
+          >
+            <Input placeholder={DEFAULT_DEPLOY_DIR} />
+          </Form.Item>
+          <Space wrap style={{ width: "100%" }}>
+            <Form.Item
+              name="run_user"
+              label="运行用户"
+              rules={[
+                { required: true, message: "请填写运行用户" },
+                { pattern: RUN_IDENTITY_PATTERN, message: "小写字母/数字/下划线/短横线，字母或下划线开头，≤32 字符" },
+              ]}
+              extra="不存在时自动创建系统用户"
+            >
+              <Input
+                style={{ width: 170 }}
+                placeholder={DEFAULT_RUN_USER}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  const currentGroup = installForm.getFieldValue("run_group");
+                  if (!currentGroup || currentGroup === (installServer?.run_user || DEFAULT_RUN_USER)) {
+                    installForm.setFieldsValue({ run_group: next });
+                  }
+                }}
+              />
+            </Form.Item>
+            <Form.Item
+              name="run_group"
+              label="运行组"
+              rules={[
+                { required: true, message: "请填写运行组" },
+                { pattern: RUN_IDENTITY_PATTERN, message: "小写字母/数字/下划线/短横线，字母或下划线开头，≤32 字符" },
+              ]}
+              extra="不存在时自动创建"
+            >
+              <Input style={{ width: 170 }} placeholder={DEFAULT_RUN_USER} />
+            </Form.Item>
+            <Form.Item name="monitor_port" label="监控端口">
+              <InputNumber min={1} max={65535} style={{ width: 130 }} />
+            </Form.Item>
+          </Space>
+          <Form.Item
+            name="yunshu_url"
+            label="Yunshu 后端 API 地址"
+            rules={[{ required: true, message: "请填写后端地址" }]}
+            extra="供目标机心跳上报使用，填后端地址（如 http://IP:8080），不是前端 Vite 端口"
+          >
+            <Input placeholder="http://10.10.10.103:8080" />
+          </Form.Item>
+          <Alert
+            type="warning"
+            showIcon
+            message="安装会覆盖部署目录中的同名二进制与配置并重启 Loggie；不会删除业务日志文件。部署目录及其 data 子目录会归属上面的运行用户。"
+          />
+        </Form>
+      </Modal>
+
+      <Modal
         className="loggie-bootstrap-modal"
         title={bootstrapServer ? `Agent 引导 — ${bootstrapServer.server_name}` : "Agent 引导"}
         open={bootstrapOpen}
@@ -584,7 +705,7 @@ export function LoggieStatusPage() {
                 icon={<PoweroffOutlined />}
                 loading={actionLoading?.startsWith("install-")}
                 disabled={actionLoading != null}
-                onClick={() => bootstrapServer && confirmAgentAction(bootstrapServer, "install")}
+                onClick={() => bootstrapServer && openInstall(bootstrapServer)}
               >
                 一键安装
               </Button>

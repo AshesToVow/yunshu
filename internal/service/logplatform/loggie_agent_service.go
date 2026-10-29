@@ -93,6 +93,8 @@ type LoggieBootstrapRequest struct {
 	MonitorPort          int      `json:"monitor_port"`
 	YunshuURL            string   `json:"yunshu_url"`
 	DeployDir            string   `json:"deploy_dir"`
+	RunUser              string   `json:"run_user"`
+	RunGroup             string   `json:"run_group"`
 	AutoFromLogSources   *bool    `json:"auto_from_log_sources"`
 	DeployAfterBootstrap bool     `json:"deploy_after_bootstrap"`
 }
@@ -107,6 +109,8 @@ type LoggieInstallRequest struct {
 	ServerID    uint   `json:"server_id"`
 	BinaryURL   string `json:"binary_url"`
 	DeployDir   string `json:"deploy_dir"`
+	RunUser     string `json:"run_user"`
+	RunGroup    string `json:"run_group"`
 	YunshuURL   string `json:"yunshu_url"`
 	MonitorPort int    `json:"monitor_port"`
 }
@@ -169,6 +173,8 @@ type loggieStoredBootstrapConfig struct {
 	MonitorPort        int                     `json:"monitor_port"`
 	YunshuURL          string                  `json:"yunshu_url"`
 	DeployDir          string                  `json:"deploy_dir"`
+	RunUser            string                  `json:"run_user,omitempty"`
+	RunGroup           string                  `json:"run_group,omitempty"`
 	AutoFromLogSources bool                    `json:"auto_from_log_sources"`
 	Sources            []loggieBootstrapSource `json:"sources"`
 	// legacy single-pipeline fields
@@ -199,6 +205,9 @@ type LoggieStatusItem struct {
 	ActiveFdCount       int                       `json:"active_fd_count"`
 	InactiveFdCount     int                       `json:"inactive_fd_count"`
 	MonitorDetail       string                    `json:"monitor_detail,omitempty"`
+	DeployDir           string                    `json:"deploy_dir,omitempty"`
+	RunUser             string                    `json:"run_user,omitempty"`
+	RunGroup            string                    `json:"run_group,omitempty"`
 	LiveProbe           *LoggieMonitorProbeResult `json:"live_probe,omitempty"`
 }
 
@@ -270,16 +279,27 @@ func (s *LoggieAgentService) Bootstrap(ctx context.Context, projectID uint, req 
 	if err := validateLoggieDeployDir(req.DeployDir); err != nil {
 		return nil, constants.ErrBadRequestWithMsg("部署目录不合法: " + err.Error())
 	}
+	if err := validateLoggieRunIdentity(req.RunUser, req.RunGroup); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
 	agent, err := s.ensureAgent(ctx, projectID, req.ServerID, req.MonitorPort)
 	if err != nil {
 		return nil, err
 	}
+	prev := parseStoredBootstrapConfig(agent.BootstrapConfig)
 	stored := s.buildStoredConfigFromRequest(req, nil)
 	sources, err := s.resolveBootstrapSources(ctx, projectID, req.ServerID, req, stored.AutoFromLogSources)
 	if err != nil {
 		return nil, bizerrors.Pass(ctx, "loggie", "Bootstrap", err)
 	}
 	stored = s.buildStoredConfigFromRequest(req, sources)
+	// 重新引导不覆盖已安装的运行身份，否则下次热更会把单元改回默认用户
+	if strings.TrimSpace(stored.RunUser) == "" {
+		stored.RunUser = prev.RunUser
+	}
+	if strings.TrimSpace(stored.RunGroup) == "" {
+		stored.RunGroup = prev.RunGroup
+	}
 	if raw, err := json.Marshal(stored); err == nil {
 		agent.BootstrapConfig = string(raw)
 	}
@@ -528,6 +548,9 @@ func (s *LoggieAgentService) InstallLoggie(ctx context.Context, projectID uint, 
 	if err := validateLoggieDeployDir(req.DeployDir); err != nil {
 		return nil, constants.ErrBadRequestWithMsg("部署目录不合法: " + err.Error())
 	}
+	if err := validateLoggieRunIdentity(req.RunUser, req.RunGroup); err != nil {
+		return nil, constants.ErrBadRequestWithMsg(err.Error())
+	}
 	agent, err := s.ensureAgent(ctx, projectID, req.ServerID, req.MonitorPort)
 	if err != nil {
 		return nil, err
@@ -539,6 +562,16 @@ func (s *LoggieAgentService) InstallLoggie(ctx context.Context, projectID uint, 
 	}
 	if d := strings.TrimSpace(req.DeployDir); d != "" {
 		stored.DeployDir = normalizeDeployDir(d)
+	}
+	if u := strings.TrimSpace(req.RunUser); u != "" {
+		stored.RunUser = u
+		// 只改了用户没改组时，组跟随用户，避免 Group 仍指向上一套身份
+		if strings.TrimSpace(req.RunGroup) == "" {
+			stored.RunGroup = u
+		}
+	}
+	if g := strings.TrimSpace(req.RunGroup); g != "" {
+		stored.RunGroup = g
 	}
 	if u := strings.TrimSpace(req.YunshuURL); u != "" {
 		stored.YunshuURL = u
@@ -724,6 +757,9 @@ func (s *LoggieAgentService) ListStatus(ctx context.Context, projectID uint) ([]
 			item.ActiveFdCount = ag.ActiveFdCount
 			item.InactiveFdCount = ag.InactiveFdCount
 			item.MonitorDetail = ag.MonitorDetail
+			storedCfg := parseStoredBootstrapConfig(ag.BootstrapConfig)
+			item.DeployDir = storedCfg.DeployDir
+			item.RunUser, item.RunGroup = resolveLoggieRunIdentity(storedCfg.RunUser, storedCfg.RunGroup)
 			if ag.LastSeenAt != nil && now.Sub(*ag.LastSeenAt) <= loggieHeartbeatTimeout {
 				item.Online = strings.EqualFold(ag.HealthStatus, "running") || ag.HealthStatus == "" || ag.HealthStatus == "unknown"
 			}

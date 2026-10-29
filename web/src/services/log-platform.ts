@@ -192,6 +192,9 @@ export interface LoggieStatusItem {
   active_fd_count?: number;
   inactive_fd_count?: number;
   monitor_detail?: string;
+  deploy_dir?: string;
+  run_user?: string;
+  run_group?: string;
   live_probe?: {
     reachable: boolean;
     active_fd_count: number;
@@ -364,7 +367,13 @@ export async function deployLoggieConfig(projectId: number, payload: LoggieDeplo
 
 export async function installLoggie(
   projectId: number,
-  payload: LoggieDeployPayload & { deploy_dir?: string; yunshu_url?: string; monitor_port?: number },
+  payload: LoggieDeployPayload & {
+    deploy_dir?: string;
+    run_user?: string;
+    run_group?: string;
+    yunshu_url?: string;
+    monitor_port?: number;
+  },
 ) {
   return await getData(
     http.post<any, ApiResponse<LoggieDeployResult>>(`/projects/${projectId}/loggie/install`, payload, {
