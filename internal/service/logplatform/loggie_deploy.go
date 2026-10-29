@@ -407,10 +407,11 @@ func (s *LoggieAgentService) installLoggieOverSSH(ctx context.Context, serverID 
 		}
 	}
 
-	if err := cli.UploadBytes(installCtx, binRemote, binData, 0o755); err != nil {
-		return out.String(), errOut.String(), fmt.Errorf("upload binary: %w", err)
+	pushOut, pushErr := pushLoggieBinary(installCtx, cli, binRemote, binData)
+	out.WriteString(pushOut)
+	if pushErr != nil {
+		return out.String(), errOut.String(), fmt.Errorf("上传 Loggie 二进制失败: %w", pushErr)
 	}
-	out.WriteString(fmt.Sprintf("uploaded binary %s (%d bytes)\n", binRemote, len(binData)))
 
 	res, err = cli.Exec(installCtx, buildFinalizeInstallScript(deployDir, unit, runUser, runGroup), 65536)
 	out.WriteString(res.Stdout)

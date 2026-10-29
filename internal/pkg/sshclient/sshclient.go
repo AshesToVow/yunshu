@@ -201,6 +201,63 @@ func (c *Client) Exec(ctx context.Context, cmd string, maxBytes int) (ExecResult
 	}, nil
 }
 
+// ExecWithStdin 与 Exec 相同，但把 stdin 喂给远端命令；不开 PTY，二进制安全。
+// 用于没有 SFTP 子系统（或 SFTP 写大文件失败）时以 `cat > file` 方式传输。
+func (c *Client) ExecWithStdin(ctx context.Context, cmd string, stdin io.Reader, maxBytes int) (ExecResult, error) {
+	if c == nil || c.client == nil {
+		return ExecResult{}, errors.New("ssh client not connected")
+	}
+	if strings.TrimSpace(cmd) == "" {
+		return ExecResult{}, errors.New("cmd is empty")
+	}
+	if maxBytes <= 0 {
+		maxBytes = 64 * 1024
+	}
+
+	start := time.Now()
+	session, err := c.client.NewSession()
+	if err != nil {
+		return ExecResult{}, err
+	}
+	defer session.Close()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	stdoutW := &limitedWriter{W: &stdoutBuf, N: maxBytes}
+	stderrW := &limitedWriter{W: &stderrBuf, N: maxBytes}
+	session.Stdout = stdoutW
+	session.Stderr = stderrW
+	session.Stdin = stdin
+
+	done := make(chan error, 1)
+	safeGo(func() { done <- session.Run(cmd) })
+
+	var runErr error
+	select {
+	case <-ctx.Done():
+		_ = session.Signal(ssh.SIGKILL)
+		runErr = ctx.Err()
+	case err := <-done:
+		runErr = err
+	}
+
+	exitCode := 0
+	if runErr != nil {
+		var ee *ssh.ExitError
+		if errors.As(runErr, &ee) {
+			exitCode = ee.ExitStatus()
+		} else {
+			return ExecResult{}, runErr
+		}
+	}
+	return ExecResult{
+		Stdout:    stdoutBuf.String(),
+		Stderr:    stderrBuf.String(),
+		ExitCode:  exitCode,
+		Duration:  time.Since(start),
+		Truncated: stdoutW.Truncated || stderrW.Truncated,
+	}, nil
+}
+
 // StreamLines runs a long-lived command and streams lines to handler.
 // Caller should cancel ctx to stop.
 func (c *Client) StreamLines(ctx context.Context, cmd string, onLine func(line string)) error {
