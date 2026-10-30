@@ -1,7 +1,7 @@
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Col, Form, Input, Row, Select, Space, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { createDbAccessRequest, listDbInstances, type DbInstance } from "../services/dbmgmt";
 import { extractApiErrorMessage } from "../services/http";
 import { getProjects, type ProjectItem } from "../services/projects";
@@ -66,6 +66,11 @@ function userLabel(u: UserItem) {
 }
 
 export function DbmgmtDatabaseApplyPage() {
+  // 实例详情页「创建数据库」跳转时携带项目与实例，减少重复选择。
+  const [searchParams] = useSearchParams();
+  const presetProjectId = Number(searchParams.get("project")) || undefined;
+  const presetInstanceId = Number(searchParams.get("instanceId")) || undefined;
+  const presetAppliedRef = useRef(false);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [instances, setInstances] = useState<DbInstance[]>([]);
@@ -81,9 +86,10 @@ export function DbmgmtDatabaseApplyPage() {
     void getProjects({ page: 1, page_size: 200 })
       .then((res) => {
         setProjects(res.list ?? []);
-        if (res.list?.length) {
-          setProjectId(res.list[0].id);
-          form.setFieldValue("project_id", res.list[0].id);
+        const preferred = res.list?.some((p) => p.id === presetProjectId) ? presetProjectId : res.list?.[0]?.id;
+        if (preferred) {
+          setProjectId(preferred);
+          form.setFieldValue("project_id", preferred);
         }
       })
       .catch(() => {
@@ -94,7 +100,7 @@ export function DbmgmtDatabaseApplyPage() {
       .catch(() => {
         /* 用户列表加载失败不阻断页面 */
       });
-  }, [form]);
+  }, [form, presetProjectId]);
 
   const loadInstances = useCallback(async () => {
     const seq = ++instancesSeqRef.current;
@@ -124,6 +130,13 @@ export function DbmgmtDatabaseApplyPage() {
   useEffect(() => {
     void loadInstances();
   }, [loadInstances]);
+
+  useEffect(() => {
+    if (presetAppliedRef.current || !presetInstanceId) return;
+    if (!instances.some((i) => i.id === presetInstanceId)) return;
+    presetAppliedRef.current = true;
+    form.setFieldValue("instance_id", presetInstanceId);
+  }, [instances, presetInstanceId, form]);
 
   const collationOptions = useMemo(
     () => COLLATION_BY_CHARSET[charset] ?? COLLATION_BY_CHARSET[DEFAULT_CHARSET],

@@ -1,7 +1,7 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Radio, Select, Space, Typography, message } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   APPLY_TYPE_OPTIONS,
   PRIV_LEVEL_OPTIONS,
@@ -33,6 +33,15 @@ function normalizeGrantHosts(value?: string): string | undefined {
 }
 
 export function DbmgmtAppUserApplyPage() {
+  // 实例详情页的「创建用户 / 变更权限 / 回收权限」会带着上下文跳过来，
+  // 这里把 URL 参数作为初值，避免用户再手选项目和实例。
+  const [searchParams] = useSearchParams();
+  const presetProjectId = Number(searchParams.get("project")) || undefined;
+  const presetInstanceId = Number(searchParams.get("instanceId")) || undefined;
+  const presetApplyType = searchParams.get("apply_type") ?? undefined;
+  const presetPrivLevel = searchParams.get("priv_level") ?? undefined;
+  const presetMySQLUser = searchParams.get("user") ?? undefined;
+  const presetDatabase = searchParams.get("database") ?? undefined;
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
   const [instances, setInstances] = useState<DbInstance[]>([]);
@@ -47,6 +56,7 @@ export function DbmgmtAppUserApplyPage() {
   const metadataSeqRef = useRef(0);
   const privsSeqRef = useRef(0);
   const submittingRef = useRef(false);
+  const presetAppliedRef = useRef(false);
   const [form] = Form.useForm();
   const instanceId = Form.useWatch("instance_id", form);
   const applyType = (Form.useWatch("apply_type", form) ?? "new_user") as AppUserApplyType;
@@ -57,18 +67,34 @@ export function DbmgmtAppUserApplyPage() {
   const databaseName = databaseNameRaw?.trim() || undefined;
 
   useEffect(() => {
+    const preset: Record<string, unknown> = {};
+    if (presetApplyType && APPLY_TYPE_OPTIONS.some((o) => o.value === presetApplyType)) {
+      preset.apply_type = presetApplyType;
+    }
+    if (presetPrivLevel === "global" || presetPrivLevel === "database") {
+      preset.priv_level = presetPrivLevel;
+    }
+    if (presetMySQLUser) preset.mysql_user_key = presetMySQLUser;
+    if (presetDatabase) preset.database_name = presetDatabase;
+    if (Object.keys(preset).length) form.setFieldsValue(preset);
+    // 仅在挂载时应用一次，之后以表单为准
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     void getProjects({ page: 1, page_size: 200 })
       .then((res) => {
         setProjects(res.list ?? []);
-        if (res.list?.length) {
-          setProjectId(res.list[0].id);
-          form.setFieldValue("project_id", res.list[0].id);
+        const preferred = res.list?.some((p) => p.id === presetProjectId) ? presetProjectId : res.list?.[0]?.id;
+        if (preferred) {
+          setProjectId(preferred);
+          form.setFieldValue("project_id", preferred);
         }
       })
       .catch(() => {
         /* 项目列表加载失败不阻断页面 */
       });
-  }, [form]);
+  }, [form, presetProjectId]);
 
   const loadInstances = useCallback(async () => {
     const seq = ++instancesSeqRef.current;
@@ -94,6 +120,13 @@ export function DbmgmtAppUserApplyPage() {
   useEffect(() => {
     void loadInstances();
   }, [loadInstances]);
+
+  useEffect(() => {
+    if (presetAppliedRef.current || !presetInstanceId) return;
+    if (!instances.some((i) => i.id === presetInstanceId)) return;
+    presetAppliedRef.current = true;
+    form.setFieldValue("instance_id", presetInstanceId);
+  }, [instances, presetInstanceId, form]);
 
   useEffect(() => {
     const seq = ++metadataSeqRef.current;

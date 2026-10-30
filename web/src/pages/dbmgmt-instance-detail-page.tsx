@@ -2,6 +2,7 @@ import {
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
+  KeyOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -24,7 +25,7 @@ import {
   message,
 } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { DbmgmtSectionTitle, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import {
   getDbInstance,
@@ -58,6 +59,7 @@ function statusTag(instance?: DbInstance) {
 export function DbmgmtInstanceDetailPage() {
   const { instanceId: instanceIdParam } = useParams<{ instanceId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const instanceId = Number(instanceIdParam);
   const projectFromUrl = Number(searchParams.get("project")) || undefined;
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -68,7 +70,11 @@ export function DbmgmtInstanceDetailPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dbKeyword, setDbKeyword] = useState("");
+  const [dbSearch, setDbSearch] = useState("");
   const [userKeyword, setUserKeyword] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [dbGrantFilter, setDbGrantFilter] = useState<"all" | "granted" | "ungranted">("all");
+  const [userGrantFilter, setUserGrantFilter] = useState<"all" | "granted" | "ungranted">("all");
   const [maskRules, setMaskRules] = useState<DbColumnMaskRule[]>([]);
   const [maskLoading, setMaskLoading] = useState(false);
   const [maskOpen, setMaskOpen] = useState(false);
@@ -230,7 +236,11 @@ export function DbmgmtInstanceDetailPage() {
     setUsers([]);
     setMaskRules([]);
     setDbKeyword("");
+    setDbSearch("");
     setUserKeyword("");
+    setUserSearch("");
+    setDbGrantFilter("all");
+    setUserGrantFilter("all");
     loadSeqRef.current += 1;
     usersSeqRef.current += 1;
     maskSeqRef.current += 1;
@@ -244,27 +254,69 @@ export function DbmgmtInstanceDetailPage() {
   };
 
   const projectName = projects.find((p) => p.id === (instance?.project_id ?? projectId))?.name ?? "—";
+
+  const grantAccountsForDb = useCallback(
+    (dbName: string) => {
+      const lines: string[] = [];
+      for (const u of users) {
+        const grants = u.grant_lines ?? [];
+        if (grants.some((g) => g.includes(`\`${dbName}\``) || g.includes(`${dbName}.`))) {
+          lines.push(`'${u.username}'@'${u.host}'`);
+        }
+      }
+      return lines.length ? lines.join(" ") : "—";
+    },
+    [users],
+  );
+
   const filteredDbs = useMemo(() => {
-    const kw = dbKeyword.trim().toLowerCase();
-    if (!kw) return databases;
-    return databases.filter((d) => d.name.toLowerCase().includes(kw));
-  }, [databases, dbKeyword]);
+    const kw = dbSearch.trim().toLowerCase();
+    return databases.filter((d) => {
+      if (kw && !d.name.toLowerCase().includes(kw)) return false;
+      if (dbGrantFilter !== "all") {
+        const granted = grantAccountsForDb(d.name) !== "—";
+        if (dbGrantFilter === "ungranted" ? granted : !granted) return false;
+      }
+      return true;
+    });
+  }, [databases, dbSearch, dbGrantFilter, grantAccountsForDb]);
 
   const filteredUsers = useMemo(() => {
-    const kw = userKeyword.trim().toLowerCase();
-    if (!kw) return users;
-    return users.filter((u) => `${u.username}@${u.host}`.toLowerCase().includes(kw));
-  }, [users, userKeyword]);
-
-  const grantAccountsForDb = (dbName: string) => {
-    const lines: string[] = [];
-    for (const u of users) {
-      const grants = u.grant_lines ?? [];
-      if (grants.some((g) => g.includes(`\`${dbName}\``) || g.includes(`${dbName}.`))) {
-        lines.push(`'${u.username}'@'${u.host}'`);
+    const kw = userSearch.trim().toLowerCase();
+    return users.filter((u) => {
+      if (kw && !`${u.username}@${u.host}`.toLowerCase().includes(kw)) return false;
+      if (userGrantFilter !== "all") {
+        const granted = (u.grant_lines?.length ?? 0) > 0;
+        if (userGrantFilter === "ungranted" ? granted : !granted) return false;
       }
+      return true;
+    });
+  }, [users, userSearch, userGrantFilter]);
+
+  // 账号与库的创建/变更/回收都必须走申请审批，这里统一构造跳转参数。
+  const gotoAppUserApply = (extra: Record<string, string | number | undefined>) => {
+    const q = new URLSearchParams();
+    if (projectId) q.set("project", String(projectId));
+    q.set("instanceId", String(instanceId));
+    for (const [k, v] of Object.entries(extra)) {
+      if (v !== undefined && v !== "") q.set(k, String(v));
     }
-    return lines.length ? lines.join(" ") : "—";
+    navigate(`/dbmgmt/apply/app-user?${q.toString()}`);
+  };
+
+  const gotoDatabaseApply = () => {
+    if (!projectId || !instanceId) {
+      message.warning("请先选择项目");
+      return;
+    }
+    const q = new URLSearchParams({ project: String(projectId), instanceId: String(instanceId) });
+    navigate(`/dbmgmt/apply/database?${q.toString()}`);
+  };
+
+  const gotoQueryConsole = (dbName: string) => {
+    const q = new URLSearchParams({ instanceId: String(instanceId), database: dbName });
+    if (projectId) q.set("project", String(projectId));
+    navigate(`/dbmgmt/sql/query?${q.toString()}`);
   };
 
   const infoTab = instance ? (
@@ -346,17 +398,31 @@ export function DbmgmtInstanceDetailPage() {
     <div>
       <div className="toolbar">
         <Space wrap>
-          <Button type="primary" icon={<PlusOutlined />} disabled>
+          <Button type="primary" icon={<PlusOutlined />} onClick={gotoDatabaseApply}>
             创建数据库
           </Button>
           <Input
+            allowClear
             placeholder="请输入名称进行搜索"
             value={dbKeyword}
-            onChange={(e) => setDbKeyword(e.target.value)}
+            onChange={(e) => {
+              setDbKeyword(e.target.value);
+              if (!e.target.value) setDbSearch("");
+            }}
+            onPressEnter={() => setDbSearch(dbKeyword.trim())}
             style={{ width: 200 }}
           />
-          <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
-          <Button type="primary" icon={<SearchOutlined />}>
+          <Select
+            value={dbGrantFilter}
+            style={{ width: 140 }}
+            onChange={setDbGrantFilter}
+            options={[
+              { value: "all", label: "全部" },
+              { value: "granted", label: "已授权账号" },
+              { value: "ungranted", label: "无授权账号" },
+            ]}
+          />
+          <Button type="primary" icon={<SearchOutlined />} onClick={() => setDbSearch(dbKeyword.trim())}>
             查询
           </Button>
           <Button
@@ -365,6 +431,8 @@ export function DbmgmtInstanceDetailPage() {
             disabled={loading}
             onClick={() => {
               setDbKeyword("");
+              setDbSearch("");
+              setDbGrantFilter("all");
               void load();
             }}
           >
@@ -389,12 +457,24 @@ export function DbmgmtInstanceDetailPage() {
           { title: "备注", render: () => "—" },
           {
             title: "操作",
-            width: 140,
+            width: 180,
             fixed: "right",
-            render: () => (
+            render: (_, r) => (
               <Space>
-                <Button size="small" type="primary" icon={<EditOutlined />} disabled />
-                <Button size="small" danger icon={<DeleteOutlined />} disabled />
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<KeyOutlined />}
+                  title="为该库申请应用用户授权"
+                  onClick={() =>
+                    gotoAppUserApply({ apply_type: "new_user", database: r.name, priv_level: "database" })
+                  }
+                >
+                  授权
+                </Button>
+                <Button size="small" icon={<SearchOutlined />} onClick={() => gotoQueryConsole(r.name)}>
+                  查询
+                </Button>
               </Space>
             ),
           },
@@ -410,17 +490,35 @@ export function DbmgmtInstanceDetailPage() {
       <div>
         <div className="toolbar">
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} disabled>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => gotoAppUserApply({ apply_type: "new_user" })}
+            >
               创建用户
             </Button>
             <Input
+              allowClear
               placeholder="请输入用户名称进行搜索"
               value={userKeyword}
-              onChange={(e) => setUserKeyword(e.target.value)}
+              onChange={(e) => {
+                setUserKeyword(e.target.value);
+                if (!e.target.value) setUserSearch("");
+              }}
+              onPressEnter={() => setUserSearch(userKeyword.trim())}
               style={{ width: 220 }}
             />
-            <Select defaultValue="all" style={{ width: 100 }} options={[{ value: "all", label: "全部" }]} />
-            <Button type="primary" icon={<SearchOutlined />}>
+            <Select
+              value={userGrantFilter}
+              style={{ width: 140 }}
+              onChange={setUserGrantFilter}
+              options={[
+                { value: "all", label: "全部" },
+                { value: "granted", label: "有库授权" },
+                { value: "ungranted", label: "无库授权" },
+              ]}
+            />
+            <Button type="primary" icon={<SearchOutlined />} onClick={() => setUserSearch(userKeyword.trim())}>
               搜索
             </Button>
             <Button
@@ -429,6 +527,8 @@ export function DbmgmtInstanceDetailPage() {
               disabled={usersLoading}
               onClick={() => {
                 setUserKeyword("");
+                setUserSearch("");
+                setUserGrantFilter("all");
                 void loadUsers();
               }}
             >
@@ -481,12 +581,27 @@ export function DbmgmtInstanceDetailPage() {
               title: "操作",
               width: 140,
               fixed: "right",
-              render: () => (
-                <Space>
-                  <Button size="small" type="primary" icon={<EditOutlined />} disabled />
-                  <Button size="small" danger icon={<DeleteOutlined />} disabled />
-                </Space>
-              ),
+              render: (_, r) => {
+                const userKey = `${r.username}@${r.host}`;
+                return (
+                  <Space>
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<EditOutlined />}
+                      title="申请为该账号新增权限"
+                      onClick={() => gotoAppUserApply({ apply_type: "add_priv", user: userKey })}
+                    />
+                    <Popconfirm
+                      title="提交权限回收申请？"
+                      description="回收需审批通过后才会执行"
+                      onConfirm={() => gotoAppUserApply({ apply_type: "revoke", user: userKey })}
+                    >
+                      <Button size="small" danger icon={<DeleteOutlined />} title="申请回收该账号权限" />
+                    </Popconfirm>
+                  </Space>
+                );
+              },
             },
           ]}
         />

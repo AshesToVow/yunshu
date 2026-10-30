@@ -18,7 +18,7 @@ import {
 } from "antd";
 import type { DataNode } from "antd/es/tree";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { CREATE_TABLE_SAMPLE, SQL_AUDIT_RULES, formatInstanceLabel } from "../components/dbmgmt/dbmgmt-ui-shared";
 import { envLabel } from "../utils/dbmgmt-labels";
 import { MonacoSqlEditor } from "../components/dbmgmt/monaco-sql-editor";
@@ -108,6 +108,12 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   const [historyKeyword, setHistoryKeyword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(false);
+  // 实例详情的「查询」按钮会带着项目/实例/库跳转过来，挂载时应用一次。
+  const [searchParams] = useSearchParams();
+  const presetProjectId = Number(searchParams.get("project")) || undefined;
+  const presetInstanceId = Number(searchParams.get("instanceId")) || undefined;
+  const presetDatabase = searchParams.get("database") ?? undefined;
+  const presetAppliedRef = useRef(false);
   const loadInstancesSeqRef = useRef(0);
   const treeSeqRef = useRef(0);
   const metaSeqRef = useRef(0);
@@ -143,10 +149,11 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     void getProjects({ page: 1, page_size: 200 })
       .then((res) => {
         setProjects(res.list ?? []);
-        if (res.list?.length) setProjectId(res.list[0].id);
+        const preferred = res.list?.some((p) => p.id === presetProjectId) ? presetProjectId : res.list?.[0]?.id;
+        if (preferred) setProjectId(preferred);
       })
       .catch(() => undefined);
-  }, []);
+  }, [presetProjectId]);
 
   const loadInstances = useCallback(async () => {
     const seq = ++loadInstancesSeqRef.current;
@@ -168,6 +175,14 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
   useEffect(() => {
     void loadInstances();
   }, [loadInstances]);
+
+  useEffect(() => {
+    if (presetAppliedRef.current || !presetInstanceId) return;
+    if (!instances.some((i) => i.id === presetInstanceId)) return;
+    presetAppliedRef.current = true;
+    setInstanceId(presetInstanceId);
+    if (presetDatabase) setDatabase(presetDatabase);
+  }, [instances, presetInstanceId, presetDatabase]);
 
   const buildInstanceTree = useCallback(async () => {
     const seq = ++treeSeqRef.current;
@@ -570,6 +585,13 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
     ? `${projectName}/${(currentInstance?.driver || "mysql").toLowerCase()}/${currentInstance ? instanceTreeTitle(currentInstance) : ""}/${database}`
     : "/";
 
+  const treeSelectedKeys = useMemo(() => {
+    if (!instanceId) return [];
+    if (database && selectedTable) return [`table:${instanceId}:${database}.${selectedTable}`];
+    if (database) return [`db:${instanceId}:${database}`];
+    return [`inst:${instanceId}`];
+  }, [instanceId, database, selectedTable]);
+
   return (
     <Card className="table-card" title={pageTitle}>
       <div className="dbmgmt-console-layout">
@@ -591,7 +613,13 @@ export function DbmgmtConsolePage({ mode = "all" }: { mode?: DbmgmtConsoleMode }
               resetQueryResult();
             }}
           />
-          <Tree showLine defaultExpandAll treeData={treeData} onSelect={(keys) => void onTreeSelect(keys)} />
+          <Tree
+            showLine
+            defaultExpandAll
+            treeData={treeData}
+            selectedKeys={treeSelectedKeys}
+            onSelect={(keys) => void onTreeSelect(keys)}
+          />
         </div>
         <div className="dbmgmt-console-main">
           {mode === "query" ? (
