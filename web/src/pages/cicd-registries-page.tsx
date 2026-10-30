@@ -7,6 +7,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import {
+  AutoComplete,
   Button,
   Card,
   Drawer,
@@ -26,7 +27,7 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   createCleanupPolicy,
@@ -34,6 +35,7 @@ import {
   deleteCleanupPolicy,
   deleteRegistry,
   listCleanupPolicies,
+  listHarborProjects,
   listRegistries,
   pingRegistry,
   runCleanupPolicy,
@@ -42,6 +44,7 @@ import {
   type ImageCleanupPolicy,
   type ImageRegistryItem,
 } from "../services/cicd";
+import { extractApiErrorMessage } from "../services/http";
 import { formatDateTime } from "../utils/format";
 
 type RegistryForm = {
@@ -76,6 +79,9 @@ export function CicdRegistriesPage() {
   const [policyOpen, setPolicyOpen] = useState(false);
   const [policyEditing, setPolicyEditing] = useState<ImageCleanupPolicy | null>(null);
   const [policyForm] = Form.useForm<PolicyForm>();
+  const [harborProjects, setHarborProjects] = useState<string[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,8 +102,24 @@ export function CicdRegistriesPage() {
     setPolicies(list || []);
   }, []);
 
+  const loadHarborProjects = useCallback(async (registryId: number) => {
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const list = await listHarborProjects({ registry_id: registryId });
+      setHarborProjects((list || []).map((p) => p.name).filter((name) => !!name));
+    } catch (e) {
+      setHarborProjects([]);
+      setProjectsError(extractApiErrorMessage(e, "加载 Harbor 项目失败"));
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, []);
+
   const openCreate = () => {
     setEditing(null);
+    setHarborProjects([]);
+    setProjectsError(null);
     form.resetFields();
     form.setFieldsValue({ type: "harbor", status: 1, is_default: false });
     setOpen(true);
@@ -105,6 +127,8 @@ export function CicdRegistriesPage() {
 
   const openEdit = (row: ImageRegistryItem) => {
     setEditing(row);
+    setHarborProjects([]);
+    setProjectsError(null);
     form.setFieldsValue({
       name: row.name,
       type: row.type,
@@ -117,6 +141,7 @@ export function CicdRegistriesPage() {
       remark: row.remark,
     });
     setOpen(true);
+    void loadHarborProjects(row.id);
   };
 
   const submit = async () => {
@@ -287,6 +312,11 @@ export function CicdRegistriesPage() {
     },
   ];
 
+  const harborProjectOptions = useMemo(
+    () => harborProjects.map((name) => ({ value: name, label: name })),
+    [harborProjects],
+  );
+
   return (
     <div className="page-stack">
       <PageTelemetryHeader
@@ -339,8 +369,41 @@ export function CicdRegistriesPage() {
           <Form.Item name="password" label="密码" extra={editing?.has_password ? "留空则保持原密码" : undefined}>
             <Input.Password allowClear placeholder={editing?.has_password ? "********" : undefined} />
           </Form.Item>
-          <Form.Item name="default_project" label="默认 Harbor 项目">
-            <Input allowClear />
+          <Form.Item
+            name="default_project"
+            label="默认 Harbor 项目"
+            extra={
+              editing ? (
+                <Space size={8}>
+                  <span>
+                    {projectsLoading
+                      ? "项目列表加载中…"
+                      : projectsError
+                        ? `加载失败：${projectsError}`
+                        : harborProjects.length
+                          ? `可选 ${harborProjects.length} 个项目`
+                          : "该仓库暂无可选项目，可直接输入"}
+                  </span>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0 }}
+                    onClick={() => void loadHarborProjects(editing.id)}
+                  >
+                    刷新
+                  </Button>
+                </Space>
+              ) : (
+                "保存注册中心后，可在编辑页从 Harbor 项目列表选择"
+              )
+            }
+          >
+            <AutoComplete
+              allowClear
+              options={harborProjectOptions}
+              placeholder={editing ? "选择或输入 Harbor 项目" : "可留空，保存后再选择"}
+              notFoundContent={projectsLoading ? "加载中…" : undefined}
+            />
           </Form.Item>
           <Form.Item name="is_default" label="设为默认" valuePropName="checked">
             <Switch />
