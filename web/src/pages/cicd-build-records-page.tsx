@@ -17,7 +17,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { PageTelemetryHeader } from "../components/page-telemetry-header";
 import {
   deleteBuildRun,
@@ -62,6 +62,9 @@ function buildArtifactType(row: CicdBuildRun): "minio" | "helm" | "image" | null
 
 export function CicdBuildRecordsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const presetProjectId = Number(searchParams.get("project_id")) || undefined;
+  const presetRunId = Number(searchParams.get("run_id")) || undefined;
   const { enabled: aiEnabled } = useAiEnabled();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [projectId, setProjectId] = useState<number>();
@@ -88,10 +91,12 @@ export function CicdBuildRecordsPage() {
 
   useEffect(() => {
     void getProjects({ page: 1, page_size: 200 }).then((res) => {
-      setProjects(res.list ?? []);
-      if (res.list?.length) setProjectId(res.list[0].id);
+      const list = res.list ?? [];
+      setProjects(list);
+      const preset = list.some((p) => p.id === presetProjectId) ? presetProjectId : list[0]?.id;
+      if (preset) setProjectId(preset);
     });
-  }, []);
+  }, [presetProjectId]);
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -189,6 +194,35 @@ export function CicdBuildRecordsPage() {
     }
   }
 
+  const openRunDetail = useCallback(
+    async (runId: number) => {
+      if (!projectId) return;
+      try {
+        const r = await getBuildRun(projectId, runId);
+        setDetail(r);
+        setAiResult(null);
+        setDetailOpen(true);
+        const [st, arts] = await Promise.all([
+          listBuildRunStages(projectId, runId),
+          listBuildRunArtifactsMeta(projectId, runId),
+        ]);
+        setStages(st || []);
+        setArtifactsMeta(arts || []);
+        setActiveStageId(st?.[0]?.id);
+      } catch (e) {
+        message.error(extractApiErrorMessage(e, "加载构建详情失败"));
+      }
+    },
+    [projectId],
+  );
+
+  const presetRunOpenedRef = useRef(false);
+  useEffect(() => {
+    if (presetRunOpenedRef.current || !presetRunId || !projectId) return;
+    presetRunOpenedRef.current = true;
+    void openRunDetail(presetRunId);
+  }, [presetRunId, projectId, openRunDetail]);
+
   const columns = useMemo<ColumnsType<CicdBuildRun>>(
     () => [
       { title: "应用标识符", dataIndex: "service_identifier", width: 140 },
@@ -252,20 +286,7 @@ export function CicdBuildRecordsPage() {
               type="link"
               size="small"
               icon={<EyeOutlined />}
-              onClick={async () => {
-                if (!projectId) return;
-                const r = await getBuildRun(projectId, row.id);
-                setDetail(r);
-                setAiResult(null);
-                setDetailOpen(true);
-                const [st, arts] = await Promise.all([
-                  listBuildRunStages(projectId, row.id),
-                  listBuildRunArtifactsMeta(projectId, row.id),
-                ]);
-                setStages(st || []);
-                setArtifactsMeta(arts || []);
-                setActiveStageId(st?.[0]?.id);
-              }}
+              onClick={() => void openRunDetail(row.id)}
             />
             <Button
               type="link"
@@ -278,7 +299,7 @@ export function CicdBuildRecordsPage() {
         ),
       },
     ],
-    [projectId, load],
+    [projectId, load, openRunDetail],
   );
 
   return (

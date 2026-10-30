@@ -430,13 +430,28 @@ func (r *CicdRepository) ListBuildRunsByImageAddress(ctx context.Context, imageA
 		limit = 20
 	}
 	var rows []model.CicdBuildRun
-	err := r.dbq(ctx).
+	q := r.dbq(ctx).
 		Select("id", "project_id", "service_id", "build_number", "image_address").
-		Where("image_address = ? OR image_address LIKE ?", imageAddress, imageAddress+"%").
-		Order("id DESC").
-		Limit(limit).
-		Find(&rows).Error
+		Where("image_address = ?", imageAddress)
+	// 同一 Harbor 可能以域名/IP/项目级 harbor_url 覆盖等多种主机别名出现，
+	// 构建记录里存的是推送时实际使用的地址，因此再按 <project>/<repo>:<tag> 路径后缀兜底匹配。
+	if suffix := imageAddressPathSuffix(imageAddress); suffix != "" {
+		q = q.Or("image_address = ?", suffix).
+			Or("image_address LIKE ? ESCAPE '!'", "%/"+escapeLikePattern(suffix))
+	}
+	err := q.Order("id DESC").Limit(limit).Find(&rows).Error
 	return rows, err
+}
+
+// imageAddressPathSuffix 去掉 scheme 与 registry 主机部分，返回 <project>/<repo>:<tag>。
+func imageAddressPathSuffix(imageAddress string) string {
+	v := strings.TrimSpace(imageAddress)
+	v = strings.TrimPrefix(v, "https://")
+	v = strings.TrimPrefix(v, "http://")
+	if idx := strings.Index(v, "/"); idx >= 0 {
+		return v[idx+1:]
+	}
+	return ""
 }
 
 // --- Stages / Artifacts ---
