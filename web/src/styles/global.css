@@ -5674,13 +5674,19 @@ body {
   overflow: visible;
 }
 
-/* AI 助手页自适应布局 */
+/* AI 助手页自适应布局：高度锚定视口（父链 .admin-content 均为 auto 高度），
+   88px = admin-header 56px + admin-content 上下 padding 32px */
 .ai-assistant-layout {
   display: flex;
   gap: 12px;
   align-items: stretch;
-  height: 100%;
+  height: calc(100vh - 88px);
   min-height: 520px;
+}
+
+.admin-shell.layout-compact .ai-assistant-layout {
+  /* compact 模式 admin-content 上下 padding 各 10px */
+  height: calc(100vh - 76px);
 }
 
 .admin-shell.ops-platform .ai-assistant-sessions-card.ant-card {
