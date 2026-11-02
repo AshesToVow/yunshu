@@ -532,6 +532,9 @@ export function AiAssistantPage() {
     }
   }
 
+  const hasTrace =
+    (!sending && liveTimeline.length > 0) || (lastSteps?.length ?? 0) > 0 || (lastRag?.length ?? 0) > 0;
+
   return (
     <div className="ai-assistant-layout">
       <Card
@@ -702,7 +705,7 @@ export function AiAssistantPage() {
             ref={listRef}
             style={{
               flex: 1,
-              minHeight: 420,
+              minHeight: 160,
               overflow: "auto",
               padding: 12,
               background: token.colorFillAlter,
@@ -767,56 +770,60 @@ export function AiAssistantPage() {
             )}
           </div>
 
-          {!sending && liveTimeline.length > 0 ? (
-            <Card
-              size="small"
-              title="执行轨迹"
-              extra={
-                <Button type="link" size="small" onClick={() => setLiveTimeline([])}>
-                  清除
-                </Button>
-              }
-            >
-              <pre style={{ margin: 0, fontSize: 12, maxHeight: 140, overflow: "auto", whiteSpace: "pre-wrap" }}>
-                {liveTimeline.join("\n")}
-              </pre>
-            </Card>
-          ) : null}
+          {hasTrace ? (
+            <div className="ai-assistant-trace">
+              {!sending && liveTimeline.length > 0 ? (
+                <Card
+                  size="small"
+                  title="执行轨迹"
+                  extra={
+                    <Button type="link" size="small" onClick={() => setLiveTimeline([])}>
+                      清除
+                    </Button>
+                  }
+                >
+                  <pre style={{ margin: 0, fontSize: 12, maxHeight: 140, overflow: "auto", whiteSpace: "pre-wrap" }}>
+                    {liveTimeline.join("\n")}
+                  </pre>
+                </Card>
+              ) : null}
 
-          {lastSteps && lastSteps.length > 0 ? (
-            <Card size="small" title="最近工具调用">
-              <Space direction="vertical" style={{ width: "100%" }}>
-                {lastSteps.map((s, i) => (
-                  <Alert
-                    key={`${s.name}-${i}`}
-                    type={s.ok ? "success" : "error"}
-                    showIcon
-                    message={s.name}
-                    description={
-                      <pre
-                        style={{ margin: 0, maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: 12 }}
-                      >
-                        {s.error || s.result || s.args}
-                      </pre>
-                    }
-                  />
-                ))}
-              </Space>
-            </Card>
+              {lastSteps && lastSteps.length > 0 ? (
+                <Card size="small" title="最近工具调用">
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    {lastSteps.map((s, i) => (
+                      <Alert
+                        key={`${s.name}-${i}`}
+                        type={s.ok ? "success" : "error"}
+                        showIcon
+                        message={s.name}
+                        description={
+                          <pre
+                            style={{ margin: 0, maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: 12 }}
+                          >
+                            {s.error || s.result || s.args}
+                          </pre>
+                        }
+                      />
+                    ))}
+                  </Space>
+                </Card>
+              ) : null}
+              {lastRag && lastRag.length > 0 ? (
+                <Card size="small" title="本次知识库命中">
+                  <Space direction="vertical" style={{ width: "100%" }}>
+                    {lastRag.map((h, i) => (
+                      <Typography.Paragraph key={`${h.source}-${i}`} style={{ marginBottom: 4, fontSize: 12 }}>
+                        <Tag>{h.module || "doc"}</Tag>
+                        {h.source}
+                      </Typography.Paragraph>
+                    ))}
+                  </Space>
+                </Card>
+              ) : null}
+            </div>
           ) : null}
-          {lastRag && lastRag.length > 0 ? (
-            <Card size="small" title="本次知识库命中">
-              <Space direction="vertical" style={{ width: "100%" }}>
-                {lastRag.map((h, i) => (
-                  <Typography.Paragraph key={`${h.source}-${i}`} style={{ marginBottom: 4, fontSize: 12 }}>
-                    <Tag>{h.module || "doc"}</Tag>
-                    {h.source}
-                  </Typography.Paragraph>
-                ))}
-              </Space>
-            </Card>
-          ) : null}
-          <Space align="end" style={{ width: "100%" }} wrap>
+          <Space className="ai-assistant-composer" align="end" style={{ width: "100%" }} wrap>
             <Input.TextArea
               value={input}
               onChange={(e) => setInput(e.target.value)}
